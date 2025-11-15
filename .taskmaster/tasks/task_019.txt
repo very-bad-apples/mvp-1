@@ -1,0 +1,11 @@
+# Task ID: 19
+# Title: Create Pipeline Orchestrator
+# Status: pending
+# Dependencies: 17, 18
+# Priority: medium
+# Description: Develop an orchestrator to coordinate pipeline steps and manage progress.
+# Details:
+Implement orchestrator.py to run asset generation in parallel, publish progress updates, handle errors, implement retry logic, update job status, and clean up files.
+
+# Test Strategy:
+Simulate pipeline execution to verify correct coordination and error handling.

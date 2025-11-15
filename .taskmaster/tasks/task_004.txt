@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Develop Job Status Page
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Create a dynamic page to display job status and progress.
+# Details:
+Build a page at /jobs/[id] with a progress tracker, WebSocket connection for updates, and a video player for completed jobs. Include error handling and retry options.
+
+# Test Strategy:
+Simulate job progress and verify real-time updates and error handling.

@@ -1,0 +1,11 @@
+# Task ID: 17
+# Title: Develop Video Composer with FFmpeg/MoviePy
+# Status: pending
+# Dependencies: 14, 15, 16
+# Priority: medium
+# Description: Create a video composer to assemble final video from generated assets.
+# Details:
+Implement video_composer.py to load assets, create video clips, add transitions, sync audio, add background music, overlays, and export final video.
+
+# Test Strategy:
+Test video composition to ensure all elements are correctly synchronized and exported.

@@ -1,0 +1,37 @@
+# Task ID: 10
+# Title: Set Up WebSocket for Progress Updates
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Implement WebSocket endpoint for real-time job progress updates.
+# Details:
+Create /ws/jobs/{job_id} to establish a persistent connection, subscribe to Redis pub/sub for updates, stream progress events, and manage connection cleanup and reconnection logic.
+
+# Test Strategy:
+Simulate job progress and verify real-time updates are received by the client.
+
+# Subtasks:
+## 1. Establish WebSocket Connection [pending]
+### Dependencies: None
+### Description: Set up the WebSocket endpoint to establish a persistent connection for job updates.
+### Details:
+Create the /ws/jobs/{job_id} endpoint to handle incoming WebSocket connections and maintain them persistently.
+
+## 2. Implement Redis Pub/Sub Subscription [pending]
+### Dependencies: 10.1
+### Description: Subscribe to Redis channels for job progress updates.
+### Details:
+Integrate Redis pub/sub to listen for job progress updates and ensure messages are received in real-time.
+
+## 3. Stream Progress Events to Clients [pending]
+### Dependencies: 10.2
+### Description: Stream job progress events to connected WebSocket clients.
+### Details:
+Implement logic to send progress updates to all connected clients whenever a new message is received from Redis.
+
+## 4. Manage Connection Cleanup and Reconnection [pending]
+### Dependencies: 10.1
+### Description: Handle cleanup of WebSocket connections and implement reconnection logic.
+### Details:
+Ensure connections are properly closed when a client disconnects and implement logic to handle reconnections gracefully.
+

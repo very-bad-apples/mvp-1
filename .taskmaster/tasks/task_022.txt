@@ -1,0 +1,11 @@
+# Task ID: 22
+# Title: Design Job Database Schema
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Implement database models for job and stage tracking.
+# Details:
+Design and implement SQLite models for Job and Stage tables to track job status, progress, and errors. Ensure easy migration to PostgreSQL.
+
+# Test Strategy:
+Verify database schema supports all required operations and data integrity.

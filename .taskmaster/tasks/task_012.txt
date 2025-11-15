@@ -1,0 +1,11 @@
+# Task ID: 12
+# Title: Create Scene Template System
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Develop a system for managing scene templates for video generation.
+# Details:
+Define hardcoded scene templates in templates.py for different styles (luxury, energetic, minimal, bold) with video prompts, voiceover templates, and text overlays.
+
+# Test Strategy:
+Verify templates are correctly defined and accessible for script generation.

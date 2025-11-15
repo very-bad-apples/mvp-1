@@ -1,0 +1,733 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Initialize Next.js Application",
+        "description": "Set up the Next.js 14 application with required configurations.",
+        "details": "Initialize a new Next.js 14 project with TypeScript and Tailwind CSS. Configure for standalone builds and environment variable support. Use the App Router for routing.",
+        "testStrategy": "Verify the application starts without errors and environment variables are accessible.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down the initialization of a Next.js application into subtasks focusing on TypeScript setup, Tailwind CSS integration, and environment variable configuration.",
+        "updatedAt": "2025-11-14T19:10:17.491Z"
+      },
+      {
+        "id": 2,
+        "title": "Create Landing Page",
+        "description": "Develop the landing page for the application.",
+        "details": "Use Next.js pages to create a landing page with basic navigation and layout using Tailwind CSS.",
+        "testStrategy": "Check that the landing page renders correctly on different devices.",
+        "priority": "medium",
+        "dependencies": [
+          "1"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Divide the landing page creation into subtasks for layout design and responsive testing across devices."
+      },
+      {
+        "id": 3,
+        "title": "Implement Product Upload Form",
+        "description": "Develop a form for product image upload and details input.",
+        "details": "Create a form component using Kibo UI MCP. Include drag & drop for image upload, input fields for product name, style selector, CTA text, and a submit button. Implement validation for inputs.",
+        "testStrategy": "Test form validation and ensure real-time feedback is provided for incorrect inputs.",
+        "priority": "medium",
+        "dependencies": [
+          "2"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on implement product upload form."
+      },
+      {
+        "id": 4,
+        "title": "Develop Job Status Page",
+        "description": "Create a dynamic page to display job status and progress.",
+        "status": "done",
+        "dependencies": [
+          "2"
+        ],
+        "priority": "medium",
+        "details": "The job status page is implemented at /jobs/[id] with real-time WebSocket updates, a progress tracker, and a video player for completed jobs. It includes error handling, retry options, and a responsive design. The page displays job details, progress, and status with color-coded badges and icons. It handles WebSocket connections with automatic reconnection and provides a user-friendly interface with accessibility features.",
+        "testStrategy": "A comprehensive testing guide is available at /Users/zeno/Projects/bad-apple/video/frontend/TASK_4_TESTING.md, covering scenarios like loading, errors, and responsive design. It includes expected API and WebSocket message formats, manual testing instructions, and a troubleshooting guide.",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Create Custom Video Player Component",
+        "description": "Develop a video player with advanced controls.",
+        "details": "Implement a video player with play/pause, timeline scrubbing, volume control, fullscreen toggle, and mobile-optimized controls. Add share functionality.",
+        "testStrategy": "Test video playback controls on various devices and browsers.",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on create custom video player component."
+      },
+      {
+        "id": 6,
+        "title": "Set Up shadcn/ui Components",
+        "description": "Install and configure shadcn/ui components for the application.",
+        "details": "Install shadcn/ui and configure components like Button, Input, Label, Form, Progress, Card, Badge, Dialog, Toast, Dropdown, Tabs, and Separator. Customize using Kibo UI MCP.",
+        "testStrategy": "Ensure all components render correctly and are styled as expected.",
+        "priority": "medium",
+        "dependencies": [
+          "1"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Install shadcn/ui Library",
+            "description": "Install the shadcn/ui library in the application.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use npm or yarn to install the shadcn/ui library. Ensure the package is added to the project's dependencies.",
+            "status": "done",
+            "testStrategy": "Verify the library is listed in package.json and no installation errors occur.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-14T19:12:20.969Z"
+          },
+          {
+            "id": 2,
+            "title": "Configure shadcn/ui Components",
+            "description": "Configure the shadcn/ui components for the application.",
+            "dependencies": [
+              1
+            ],
+            "details": "Set up components like Button, Input, Label, Form, Progress, Card, Badge, Dialog, Toast, Dropdown, Tabs, and Separator. Ensure each component is properly imported and configured in the application.",
+            "status": "done",
+            "testStrategy": "Render each component in a test environment to ensure they display correctly.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-14T19:12:49.683Z"
+          },
+          {
+            "id": 3,
+            "title": "Customize Components with Kibo UI MCP",
+            "description": "Customize shadcn/ui components using Kibo UI MCP.",
+            "dependencies": [
+              2
+            ],
+            "details": "Utilize Kibo UI MCP to customize the appearance and behavior of the components. Adjust styles and properties to match the application's design requirements.",
+            "status": "done",
+            "testStrategy": "Check that customizations are applied correctly and components meet design specifications.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-14T19:20:05.736Z"
+          }
+        ],
+        "complexity": 6,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Outline the setup of shadcn/ui components by focusing on installation, configuration, and customization using Kibo UI MCP.",
+        "updatedAt": "2025-11-14T19:20:05.736Z"
+      },
+      {
+        "id": 7,
+        "title": "Initialize FastAPI Application",
+        "description": "Set up the FastAPI backend with necessary configurations.",
+        "details": "Initialize FastAPI with CORS middleware, environment variable management using python-dotenv, logging with structlog, and error handling middleware. Add a health check endpoint.",
+        "testStrategy": "Verify API starts without errors and health check endpoint returns 200.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Detail the FastAPI initialization process into subtasks for middleware setup, environment management, and logging configuration.",
+        "updatedAt": "2025-11-14T19:08:42.535Z"
+      },
+      {
+        "id": 8,
+        "title": "Develop Video Generation Endpoint",
+        "description": "Create an endpoint to handle video generation requests.",
+        "details": "Implement POST /api/generate to accept multipart form data, validate inputs, generate a unique job ID, enqueue the job to Redis, and return the job ID and estimated completion time.",
+        "testStrategy": "Test endpoint with valid and invalid inputs to ensure proper validation and job queuing.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Multipart Form Data Handling",
+            "description": "Develop functionality to handle multipart form data in the POST /api/generate endpoint.",
+            "dependencies": [],
+            "details": "Use a library like multer or formidable to parse multipart form data. Ensure the endpoint can accept video files and metadata.",
+            "status": "done",
+            "testStrategy": "Test with various file types and sizes to ensure proper handling.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Develop Input Validation Logic",
+            "description": "Create validation logic for inputs received by the video generation endpoint.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement checks for required fields, file types, and size limits. Return appropriate error messages for invalid inputs.",
+            "status": "done",
+            "testStrategy": "Test with valid and invalid inputs to ensure validation logic works as expected.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Generate Unique Job ID",
+            "description": "Implement logic to generate a unique job ID for each video generation request.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use a UUID library to generate unique identifiers for each job. Ensure IDs are stored and retrievable.",
+            "status": "done",
+            "testStrategy": "Verify uniqueness of job IDs across multiple requests.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Enqueue Job to Redis",
+            "description": "Develop functionality to enqueue video generation jobs to a Redis queue.",
+            "dependencies": [
+              3
+            ],
+            "details": "Connect to Redis and enqueue jobs with the generated job ID and metadata. Ensure the queue is monitored for processing.",
+            "status": "done",
+            "testStrategy": "Test job enqueuing and retrieval from Redis to ensure correct integration.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Break down the video generation endpoint development into subtasks for input validation, job ID generation, and Redis queuing."
+      },
+      {
+        "id": 9,
+        "title": "Implement Job Status Endpoint",
+        "description": "Create an endpoint to fetch job status and progress.",
+        "details": "Develop GET /api/jobs/{job_id} to fetch job status from Redis and database, return progress, stage, errors, and video URL when completed. Handle invalid job IDs with 404.",
+        "testStrategy": "Test endpoint with various job IDs to ensure correct status and error handling.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate Redis for Job Status Retrieval",
+            "description": "Fetch job status from Redis for the endpoint.",
+            "dependencies": [],
+            "details": "Implement logic to connect to Redis and retrieve job status using job_id. Ensure connection handling and data retrieval are efficient.",
+            "status": "done",
+            "testStrategy": "Test Redis connection and data retrieval with valid and invalid job IDs.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Error Handling for Invalid Job IDs",
+            "description": "Handle errors for invalid job IDs in the endpoint.",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop error handling to return a 404 status code for invalid job IDs. Ensure the response is consistent with the API's error handling standards.",
+            "status": "done",
+            "testStrategy": "Test with non-existent job IDs to ensure a 404 response is returned.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Format API Response with Job Details",
+            "description": "Format the response to include job progress, stage, errors, and video URL.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Create a response structure that includes all necessary job details. Ensure the response is JSON formatted and includes progress, stage, errors, and video URL when available.",
+            "status": "done",
+            "testStrategy": "Test response formatting with various job statuses to ensure all fields are correctly populated.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 6,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Divide the job status endpoint implementation into subtasks for Redis integration, error handling, and response formatting."
+      },
+      {
+        "id": 10,
+        "title": "Set Up WebSocket for Progress Updates",
+        "description": "Implement WebSocket endpoint for real-time job progress updates.",
+        "details": "Create /ws/jobs/{job_id} to establish a persistent connection, subscribe to Redis pub/sub for updates, stream progress events, and manage connection cleanup and reconnection logic.",
+        "testStrategy": "Simulate job progress and verify real-time updates are received by the client.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Establish WebSocket Connection",
+            "description": "Set up the WebSocket endpoint to establish a persistent connection for job updates.",
+            "dependencies": [],
+            "details": "Create the /ws/jobs/{job_id} endpoint to handle incoming WebSocket connections and maintain them persistently.",
+            "status": "done",
+            "testStrategy": "Test connection establishment and persistence with multiple clients.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Redis Pub/Sub Subscription",
+            "description": "Subscribe to Redis channels for job progress updates.",
+            "dependencies": [
+              1
+            ],
+            "details": "Integrate Redis pub/sub to listen for job progress updates and ensure messages are received in real-time.",
+            "status": "done",
+            "testStrategy": "Simulate Redis messages and verify they are received by the WebSocket server.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Stream Progress Events to Clients",
+            "description": "Stream job progress events to connected WebSocket clients.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement logic to send progress updates to all connected clients whenever a new message is received from Redis.",
+            "status": "done",
+            "testStrategy": "Verify clients receive real-time updates by simulating job progress.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Manage Connection Cleanup and Reconnection",
+            "description": "Handle cleanup of WebSocket connections and implement reconnection logic.",
+            "dependencies": [
+              1
+            ],
+            "details": "Ensure connections are properly closed when a client disconnects and implement logic to handle reconnections gracefully.",
+            "status": "done",
+            "testStrategy": "Test connection cleanup and reconnection scenarios to ensure stability.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 8,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Outline the WebSocket setup into subtasks for connection management, Redis subscription, and event streaming."
+      },
+      {
+        "id": 11,
+        "title": "Develop File Upload Handling Service",
+        "description": "Create a service to handle file uploads and validation.",
+        "details": "Implement a service to save uploaded images to temporary storage, generate thumbnails, validate formats (PNG, JPG, WebP), and enforce size limits (max 10MB). Return file path for processing.",
+        "testStrategy": "Test file uploads with various formats and sizes to ensure correct handling and validation.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement File Format Validation",
+            "description": "Develop functionality to validate uploaded file formats (PNG, JPG, WebP).",
+            "dependencies": [],
+            "details": "Create a module to check the file extension and MIME type against allowed formats. Ensure the service rejects unsupported formats with appropriate error messages.",
+            "status": "done",
+            "testStrategy": "Test with various file formats to ensure only PNG, JPG, and WebP are accepted.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Develop Thumbnail Generation",
+            "description": "Create a process to generate thumbnails for uploaded images.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use an image processing library to generate thumbnails of a fixed size. Ensure thumbnails maintain aspect ratio and are stored in a temporary directory.",
+            "status": "done",
+            "testStrategy": "Verify thumbnails are correctly generated and stored for each valid image upload.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement File Size Validation",
+            "description": "Ensure uploaded files do not exceed the maximum size limit of 10MB.",
+            "dependencies": [],
+            "details": "Add checks to validate the file size before processing. Reject files exceeding the limit with a clear error message.",
+            "status": "done",
+            "testStrategy": "Test with files of varying sizes to ensure the 10MB limit is enforced.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Manage Temporary Storage for Uploaded Files",
+            "description": "Set up temporary storage for handling uploaded files and thumbnails.",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Configure a directory for temporary storage. Implement cleanup routines to manage storage space and remove old files.",
+            "status": "done",
+            "testStrategy": "Ensure files are stored correctly and cleanup routines effectively manage storage space.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Break down the file upload handling service into subtasks for format validation, thumbnail generation, and storage management."
+      },
+      {
+        "id": 12,
+        "title": "Create Scene Template System",
+        "description": "Develop a system for managing scene templates for video generation.",
+        "details": "Define hardcoded scene templates in templates.py for different styles (luxury, energetic, minimal, bold) with video prompts, voiceover templates, and text overlays.",
+        "testStrategy": "Verify templates are correctly defined and accessible for script generation.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Detail the scene template system creation into subtasks for template definition and accessibility verification."
+      },
+      {
+        "id": 13,
+        "title": "Build Script Generator with Claude Integration",
+        "description": "Develop a script generator using Claude API for scene generation.",
+        "details": "Implement script_generator.py to analyze product images, generate structured scene JSON, fill voiceover text, and create hooks and CTAs using Claude 3.5 Sonnet API.",
+        "testStrategy": "Test script generation with various product images and styles to ensure correct output.",
+        "priority": "medium",
+        "dependencies": [
+          "12"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on build script generator with claude integration."
+      },
+      {
+        "id": 14,
+        "title": "Develop Voiceover Generator with ElevenLabs",
+        "description": "Create a voiceover generator using ElevenLabs API.",
+        "details": "Implement voiceover_generator.py to combine voiceover text, call ElevenLabs API, download MP3, validate audio duration, and save to temporary storage.",
+        "testStrategy": "Test voiceover generation for different scripts to ensure audio quality and duration match.",
+        "priority": "medium",
+        "dependencies": [
+          "13"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on develop voiceover generator with elevenlabs."
+      },
+      {
+        "id": 15,
+        "title": "Build Video Scene Generator with Replicate/Kling",
+        "description": "Develop a video scene generator using the new ReplicateClient wrapper and Kling model to support multiple scene types with style coherence.",
+        "status": "done",
+        "dependencies": [
+          "13",
+          "26"
+        ],
+        "priority": "medium",
+        "details": "Implement backend/pipeline/video_generator.py using the ReplicateClient wrapper for all API calls. Generate video scenes using Kling model, supporting scene types like product showcase, lifestyle, and motion. Ensure style coherence across scenes with optional product image compositing for hero shots. Download video clips to temporary storage and return file paths for video composer.",
+        "testStrategy": "Verify video scenes are generated correctly, match the specified style, and integrate with the ReplicateClient wrapper. Test various scene types and styles for coherence and quality.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate ReplicateClient Wrapper",
+            "description": "Integrate the ReplicateClient wrapper from Task 26 into video_generator.py for all API interactions.",
+            "dependencies": [],
+            "details": "Ensure all Replicate API calls use the ReplicateClient wrapper for retry logic and error handling.",
+            "status": "done",
+            "testStrategy": "Test API calls using the ReplicateClient wrapper to ensure proper integration and error handling."
+          },
+          {
+            "id": 2,
+            "title": "Implement Scene Generation Methods",
+            "description": "Develop methods to generate scenes using Kling model and support multiple scene types.",
+            "dependencies": [],
+            "details": "Implement methods like generate_scene and generate_all_scenes to handle different scene types and styles.",
+            "status": "done",
+            "testStrategy": "Test scene generation for different configurations and styles to ensure correct output."
+          },
+          {
+            "id": 3,
+            "title": "Ensure Style Coherence",
+            "description": "Implement style-specific parameters for scene generation.",
+            "dependencies": [],
+            "details": "Support styles such as luxury, energetic, minimal, and bold with specific visual parameters.",
+            "status": "done",
+            "testStrategy": "Verify style coherence across scenes by testing each style's parameters."
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "title": "Create CTA Image Generator with Replicate/FLUX",
+        "description": "Develop a CTA image generator using the new ReplicateClient wrapper and FLUX model.",
+        "status": "done",
+        "dependencies": [
+          "13",
+          "26"
+        ],
+        "priority": "medium",
+        "details": "Implement backend/pipeline/cta_generator.py to generate static CTA images with text overlays using the ReplicateClient wrapper (from Task 26). Utilize the FLUX.1-schnell model for fast generation (2-5 seconds). Match visual styles from video scenes (luxury, energetic, minimal, bold) and include product images in the CTA frame. Add custom CTA text overlay and return the image path for the video composer.",
+        "testStrategy": "Test CTA image generation for various styles and text inputs to ensure correct output. Verify integration with the ReplicateClient wrapper for error handling and retry logic.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement ReplicateClient Integration",
+            "description": "Integrate ReplicateClient wrapper for API calls in cta_generator.py.",
+            "dependencies": [],
+            "details": "Ensure all API interactions use ReplicateClient for retry logic and error handling.",
+            "status": "done",
+            "testStrategy": "Test API calls using ReplicateClient to ensure proper error handling and retry logic."
+          },
+          {
+            "id": 2,
+            "title": "Develop CTA Image Generation Logic",
+            "description": "Implement logic to generate CTA images with text overlays using FLUX.1-schnell.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use FLUX.1-schnell for fast generation. Match styles and include product images.",
+            "status": "done",
+            "testStrategy": "Verify image generation speed and style matching."
+          },
+          {
+            "id": 3,
+            "title": "Add Text Overlay Functionality",
+            "description": "Implement text overlay using Pillow/PIL for precise positioning.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use a hybrid approach: FLUX for background, Pillow for text overlay.",
+            "status": "done",
+            "testStrategy": "Test text overlay positioning and style accuracy."
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "title": "Develop Video Composer with FFmpeg/MoviePy",
+        "description": "Create a video composer to assemble final video from generated assets.",
+        "details": "Implement video_composer.py to load assets, create video clips, add transitions, sync audio, add background music, overlays, and export final video.",
+        "testStrategy": "Test video composition to ensure all elements are correctly synchronized and exported.",
+        "priority": "medium",
+        "dependencies": [
+          "14",
+          "15",
+          "16"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on develop video composer with ffmpeg/moviepy."
+      },
+      {
+        "id": 18,
+        "title": "Build Asset Manager",
+        "description": "Develop an asset manager to handle file operations and cleanup.",
+        "details": "Implement asset_manager.py to create temporary directories, manage file downloads, handle cleanup, implement retry logic, and validate file integrity.",
+        "testStrategy": "Test asset management for various job scenarios to ensure correct file handling and cleanup.",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement File Operations",
+            "description": "Develop functions to handle file downloads and temporary directory creation.",
+            "dependencies": [],
+            "details": "Create functions in asset_manager.py to download files and manage temporary directories. Ensure proper error handling and logging.",
+            "status": "done",
+            "testStrategy": "Test file operations with various file types and sizes.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Cleanup Logic",
+            "description": "Develop cleanup functions to remove temporary files and directories.",
+            "dependencies": [
+              1
+            ],
+            "details": "Add cleanup functions in asset_manager.py to ensure temporary files and directories are properly deleted after use.",
+            "status": "done",
+            "testStrategy": "Test cleanup process to ensure no temporary files remain after operations.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement Retry Logic",
+            "description": "Add retry logic for file operations to handle transient errors.",
+            "dependencies": [
+              1
+            ],
+            "details": "Incorporate retry mechanisms in asset_manager.py to handle transient errors during file operations, using exponential backoff.",
+            "status": "done",
+            "testStrategy": "Test retry logic under simulated network failures to ensure robustness.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 6,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Divide the asset manager development into subtasks for file operations, cleanup, and retry logic implementation."
+      },
+      {
+        "id": 19,
+        "title": "Create Pipeline Orchestrator",
+        "description": "Develop an orchestrator to coordinate pipeline steps and manage progress.",
+        "details": "Implement orchestrator.py to run asset generation in parallel, publish progress updates, handle errors, implement retry logic, update job status, and clean up files.",
+        "testStrategy": "Simulate pipeline execution to verify correct coordination and error handling.",
+        "priority": "medium",
+        "dependencies": [
+          "17",
+          "18"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on create pipeline orchestrator."
+      },
+      {
+        "id": 20,
+        "title": "Configure Redis for Job Queue System",
+        "description": "Set up Redis for job queue management and real-time updates.",
+        "details": "Configure Redis for job queue storage, status cache, pub/sub channels, connection pooling, and automatic reconnection.",
+        "testStrategy": "Verify Redis configuration supports job queuing and real-time updates.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on configure redis for job queue system.",
+        "updatedAt": "2025-11-14T19:09:11.390Z"
+      },
+      {
+        "id": 21,
+        "title": "Develop Queue Worker",
+        "description": "Create a worker to process jobs from the Redis queue.",
+        "details": "Implement worker.py to listen to the Redis job queue, process jobs sequentially, handle failures, perform health checks, and log operations. Enable horizontal scaling.",
+        "testStrategy": "Test job processing under various conditions to ensure reliability and scalability.",
+        "priority": "medium",
+        "dependencies": [
+          "20"
+        ],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on develop queue worker."
+      },
+      {
+        "id": 22,
+        "title": "Design Job Database Schema",
+        "description": "Implement database models for job and stage tracking.",
+        "details": "Design and implement SQLite models for Job and Stage tables to track job status, progress, and errors. Ensure easy migration to PostgreSQL.",
+        "testStrategy": "Verify database schema supports all required operations and data integrity.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on design job database schema.",
+        "updatedAt": "2025-11-14T19:09:59.485Z"
+      },
+      {
+        "id": 23,
+        "title": "Set Up Development Environment Configuration",
+        "description": "Create environment configuration for development.",
+        "details": "Create a comprehensive .env.example file with API keys, Redis connection, database URL, CORS origins, debug settings, and storage paths.",
+        "testStrategy": "Ensure environment variables are correctly loaded and accessible in development.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on set up development environment configuration.",
+        "updatedAt": "2025-11-14T19:10:32.758Z"
+      },
+      {
+        "id": 24,
+        "title": "Create Docker Setup",
+        "description": "Develop Docker configuration for development and deployment.",
+        "details": "Create docker-compose.yml for Redis, backend, and frontend containers. Configure volume mounts, network settings, and environment variable passing.",
+        "testStrategy": "Verify Docker setup allows for seamless development and deployment.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on create docker setup.",
+        "updatedAt": "2025-11-14T19:10:45.775Z"
+      },
+      {
+        "id": 25,
+        "title": "Implement Error Handling System",
+        "description": "Develop a comprehensive error handling system for the application.",
+        "details": "Implement error handling at API and pipeline levels, with user-friendly messages, retry mechanisms, and fallback strategies. Log errors for analysis.",
+        "testStrategy": "Test error handling with various failure scenarios to ensure robustness and user feedback.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on implement error handling system."
+      },
+      {
+        "id": 26,
+        "title": "Create Replicate API Wrapper",
+        "description": "Build a modular, reusable wrapper class for Replicate API interactions with proper error handling, retry logic, and logging.",
+        "details": "Create backend/services/replicate_client.py with:\n\n## Core Features:\n- **ReplicateClient class** with singleton pattern for client reuse\n- **API token management** from environment variables (REPLICATE_API_TOKEN)\n- **Retry logic** with exponential backoff for transient failures\n- **Error handling** using replicate.exceptions.ModelError\n- **File output handling** with automatic download to temp storage\n- **Async support** for concurrent predictions\n- **Logging integration** with structlog\n- **Webhook support** (optional for background jobs)\n\n## Key Methods:\n1. `__init__(api_token: str = None, max_retries: int = 3)`\n2. `run_model(model_id: str, input_params: dict, use_file_output: bool = True) -> Union[FileOutput, str]`\n3. `run_model_async(model_id: str, input_params: dict) -> Any`\n4. `create_prediction(model_id: str, version_id: str, input_params: dict, webhook: str = None) -> Prediction`\n5. `download_output(output: FileOutput, save_path: str) -> str`\n6. `wait_for_prediction(prediction: Prediction, timeout: int = 600) -> Prediction`\n\n## Error Handling:\n- Catch ModelError and log prediction details\n- Retry on rate limits (with backoff)\n- Retry on network errors\n- Fail fast on validation errors\n\n## Configuration:\n- REPLICATE_API_TOKEN from env\n- MAX_RETRIES configurable\n- TIMEOUT configurable\n- Temp storage path configurable\n\n## Integration Points:\n- Use with AssetManager for file downloads\n- Use with structlog for logging\n- Compatible with Tasks 15, 16 (video/image generation)",
+        "testStrategy": "- Test initialization with/without API token\n- Test retry logic with simulated failures\n- Test file output downloads\n- Test ModelError exception handling\n- Test async operations\n- Test webhook creation\n- Integration test with actual Replicate model (FLUX Schnell for speed)",
+        "status": "done",
+        "dependencies": [
+          7,
+          18
+        ],
+        "priority": "high",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2025-11-14T19:20:05.737Z",
+      "taskCount": 25,
+      "completedCount": 10,
+      "tags": [
+        "master"
+      ],
+      "created": "2025-11-14T19:47:38.627Z",
+      "description": "Tasks for master context",
+      "updated": "2025-11-14T21:42:54.536Z"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Task ID: 2
+# Title: Create Landing Page
+# Status: pending
+# Dependencies: 1
+# Priority: medium
+# Description: Develop the landing page for the application.
+# Details:
+Use Next.js pages to create a landing page with basic navigation and layout using Tailwind CSS.
+
+# Test Strategy:
+Check that the landing page renders correctly on different devices.

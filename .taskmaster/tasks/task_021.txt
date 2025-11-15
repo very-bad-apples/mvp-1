@@ -1,0 +1,11 @@
+# Task ID: 21
+# Title: Develop Queue Worker
+# Status: pending
+# Dependencies: 20
+# Priority: medium
+# Description: Create a worker to process jobs from the Redis queue.
+# Details:
+Implement worker.py to listen to the Redis job queue, process jobs sequentially, handle failures, perform health checks, and log operations. Enable horizontal scaling.
+
+# Test Strategy:
+Test job processing under various conditions to ensure reliability and scalability.

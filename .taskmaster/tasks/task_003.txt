@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Implement Product Upload Form
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Develop a form for product image upload and details input.
+# Details:
+Create a form component using Kibo UI MCP. Include drag & drop for image upload, input fields for product name, style selector, CTA text, and a submit button. Implement validation for inputs.
+
+# Test Strategy:
+Test form validation and ensure real-time feedback is provided for incorrect inputs.

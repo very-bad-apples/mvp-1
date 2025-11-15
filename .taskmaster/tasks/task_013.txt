@@ -1,0 +1,11 @@
+# Task ID: 13
+# Title: Build Script Generator with Claude Integration
+# Status: pending
+# Dependencies: 12
+# Priority: medium
+# Description: Develop a script generator using Claude API for scene generation.
+# Details:
+Implement script_generator.py to analyze product images, generate structured scene JSON, fill voiceover text, and create hooks and CTAs using Claude 3.5 Sonnet API.
+
+# Test Strategy:
+Test script generation with various product images and styles to ensure correct output.

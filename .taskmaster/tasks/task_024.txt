@@ -1,0 +1,11 @@
+# Task ID: 24
+# Title: Create Docker Setup
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Develop Docker configuration for development and deployment.
+# Details:
+Create docker-compose.yml for Redis, backend, and frontend containers. Configure volume mounts, network settings, and environment variable passing.
+
+# Test Strategy:
+Verify Docker setup allows for seamless development and deployment.

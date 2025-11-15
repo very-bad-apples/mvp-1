@@ -1,0 +1,31 @@
+# Task ID: 18
+# Title: Build Asset Manager
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Develop an asset manager to handle file operations and cleanup.
+# Details:
+Implement asset_manager.py to create temporary directories, manage file downloads, handle cleanup, implement retry logic, and validate file integrity.
+
+# Test Strategy:
+Test asset management for various job scenarios to ensure correct file handling and cleanup.
+
+# Subtasks:
+## 1. Implement File Operations [pending]
+### Dependencies: None
+### Description: Develop functions to handle file downloads and temporary directory creation.
+### Details:
+Create functions in asset_manager.py to download files and manage temporary directories. Ensure proper error handling and logging.
+
+## 2. Implement Cleanup Logic [pending]
+### Dependencies: 18.1
+### Description: Develop cleanup functions to remove temporary files and directories.
+### Details:
+Add cleanup functions in asset_manager.py to ensure temporary files and directories are properly deleted after use.
+
+## 3. Implement Retry Logic [pending]
+### Dependencies: 18.1
+### Description: Add retry logic for file operations to handle transient errors.
+### Details:
+Incorporate retry mechanisms in asset_manager.py to handle transient errors during file operations, using exponential backoff.
+

@@ -1,0 +1,11 @@
+# Task ID: 16
+# Title: Create CTA Image Generator with Replicate/FLUX
+# Status: pending
+# Dependencies: 13
+# Priority: medium
+# Description: Develop a CTA image generator using Replicate API and FLUX model.
+# Details:
+Implement cta_generator.py to generate static CTA images with text overlay, using FLUX.1-schnell for speed. Match style from video scenes and return image path.
+
+# Test Strategy:
+Test CTA image generation for various styles and text inputs to ensure correct output.

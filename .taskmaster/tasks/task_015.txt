@@ -1,0 +1,11 @@
+# Task ID: 15
+# Title: Build Video Scene Generator with Replicate/Kling
+# Status: pending
+# Dependencies: 13
+# Priority: medium
+# Description: Develop a video scene generator using Replicate API and Kling model.
+# Details:
+Implement video_generator.py to generate scenes using Kling, ensuring style coherence and product image compositing. Download clips and return file paths.
+
+# Test Strategy:
+Verify video scenes are generated correctly and match the specified style.

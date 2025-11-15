@@ -1,0 +1,37 @@
+# Task ID: 11
+# Title: Develop File Upload Handling Service
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create a service to handle file uploads and validation.
+# Details:
+Implement a service to save uploaded images to temporary storage, generate thumbnails, validate formats (PNG, JPG, WebP), and enforce size limits (max 10MB). Return file path for processing.
+
+# Test Strategy:
+Test file uploads with various formats and sizes to ensure correct handling and validation.
+
+# Subtasks:
+## 1. Implement File Format Validation [pending]
+### Dependencies: None
+### Description: Develop functionality to validate uploaded file formats (PNG, JPG, WebP).
+### Details:
+Create a module to check the file extension and MIME type against allowed formats. Ensure the service rejects unsupported formats with appropriate error messages.
+
+## 2. Develop Thumbnail Generation [pending]
+### Dependencies: 11.1
+### Description: Create a process to generate thumbnails for uploaded images.
+### Details:
+Use an image processing library to generate thumbnails of a fixed size. Ensure thumbnails maintain aspect ratio and are stored in a temporary directory.
+
+## 3. Implement File Size Validation [pending]
+### Dependencies: None
+### Description: Ensure uploaded files do not exceed the maximum size limit of 10MB.
+### Details:
+Add checks to validate the file size before processing. Reject files exceeding the limit with a clear error message.
+
+## 4. Manage Temporary Storage for Uploaded Files [pending]
+### Dependencies: 11.1, 11.2, 11.3
+### Description: Set up temporary storage for handling uploaded files and thumbnails.
+### Details:
+Configure a directory for temporary storage. Implement cleanup routines to manage storage space and remove old files.
+

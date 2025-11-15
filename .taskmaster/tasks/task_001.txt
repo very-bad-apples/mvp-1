@@ -1,0 +1,11 @@
+# Task ID: 1
+# Title: Initialize Next.js Application
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Set up the Next.js 14 application with required configurations.
+# Details:
+Initialize a new Next.js 14 project with TypeScript and Tailwind CSS. Configure for standalone builds and environment variable support. Use the App Router for routing.
+
+# Test Strategy:
+Verify the application starts without errors and environment variables are accessible.

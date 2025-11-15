@@ -1,0 +1,31 @@
+# Task ID: 9
+# Title: Implement Job Status Endpoint
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create an endpoint to fetch job status and progress.
+# Details:
+Develop GET /api/jobs/{job_id} to fetch job status from Redis and database, return progress, stage, errors, and video URL when completed. Handle invalid job IDs with 404.
+
+# Test Strategy:
+Test endpoint with various job IDs to ensure correct status and error handling.
+
+# Subtasks:
+## 1. Integrate Redis for Job Status Retrieval [pending]
+### Dependencies: None
+### Description: Fetch job status from Redis for the endpoint.
+### Details:
+Implement logic to connect to Redis and retrieve job status using job_id. Ensure connection handling and data retrieval are efficient.
+
+## 2. Implement Error Handling for Invalid Job IDs [pending]
+### Dependencies: 9.1
+### Description: Handle errors for invalid job IDs in the endpoint.
+### Details:
+Develop error handling to return a 404 status code for invalid job IDs. Ensure the response is consistent with the API's error handling standards.
+
+## 3. Format API Response with Job Details [pending]
+### Dependencies: 9.1, 9.2
+### Description: Format the response to include job progress, stage, errors, and video URL.
+### Details:
+Create a response structure that includes all necessary job details. Ensure the response is JSON formatted and includes progress, stage, errors, and video URL when available.
+

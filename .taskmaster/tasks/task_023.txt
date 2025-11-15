@@ -1,0 +1,11 @@
+# Task ID: 23
+# Title: Set Up Development Environment Configuration
+# Status: pending
+# Dependencies: None
+# Priority: medium
+# Description: Create environment configuration for development.
+# Details:
+Create a comprehensive .env.example file with API keys, Redis connection, database URL, CORS origins, debug settings, and storage paths.
+
+# Test Strategy:
+Ensure environment variables are correctly loaded and accessible in development.
