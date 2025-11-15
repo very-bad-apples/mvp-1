@@ -238,9 +238,8 @@ class PipelineOrchestrator:
                 StageNames.SCRIPT_GENERATION, 10, "Analyzing product..."
             )
 
-            # Run script generation in thread pool (blocking operation)
-            script = await asyncio.to_thread(
-                self.script_generator.generate_script,
+            # Run script generation (async operation)
+            script = await self.script_generator.generate_script(
                 product_name=product_name,
                 style=style,
                 cta_text=cta_text,
