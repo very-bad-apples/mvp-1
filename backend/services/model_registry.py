@@ -119,7 +119,7 @@ class ModelRegistry:
     # Video Scene Generation Models (via Replicate)
     VIDEO_MODELS: Dict[str, ModelConfig] = {
         "minimax-video-01": ModelConfig(
-            model_id="minimax/video-01",
+            model_id="minimax",
             display_name="Minimax Video-01 (Kling)",
             description="High-quality video generation (6s clips)",
             default_params={
@@ -130,7 +130,7 @@ class ModelRegistry:
             avg_duration=180.0
         ),
         "ltx-video": ModelConfig(
-            model_id="lightricks/ltx-video",
+            model_id="ltxv",
             display_name="LTX Video",
             description="Fast video generation (5s clips)",
             default_params={
@@ -141,7 +141,7 @@ class ModelRegistry:
             avg_duration=90.0
         ),
         "stable-video-diffusion": ModelConfig(
-            model_id="stability-ai/stable-video-diffusion",
+            model_id="svd",
             display_name="Stable Video Diffusion",
             description="Image-to-video generation",
             default_params={
@@ -152,7 +152,7 @@ class ModelRegistry:
             avg_duration=60.0
         ),
         "zeroscope-v2": ModelConfig(
-            model_id="cerspense/zeroscope-v2-xl",
+            model_id="zeroscope",
             display_name="Zeroscope V2 XL",
             description="Text-to-video generation",
             default_params={
