@@ -12,6 +12,7 @@ node_modules/
 # Python
 venv/
 env/
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,6 +21,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Backend generated outputs
+backend/mv/outputs/
 
 # Environment variables
 .env

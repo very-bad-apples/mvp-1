@@ -1,0 +1,6 @@
+# Default parameters for music video scene generation
+character_characteristics: "sarcastic, dramatic, emotional, and lovable"
+video_type: "video"
+video_characteristics: "vlogging, realistic, 4k, cinematic"
+camera_angle: "front"
+number_of_scenes: 4
