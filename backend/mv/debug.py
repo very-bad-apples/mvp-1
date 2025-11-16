@@ -65,3 +65,30 @@ def log_image_prompt(prompt: str):
 def log_replicate_response(response_info: dict):
     """Log information about the Replicate API response."""
     debug_log("replicate_response", **response_info)
+
+
+# Video generation specific debug logging
+
+def log_video_request_args(request_data: dict):
+    """Log the video generation request arguments received."""
+    debug_log("video_request_args_received", **request_data)
+
+
+def log_video_defaults_applied(defaults: dict):
+    """Log the default video parameters that were applied."""
+    debug_log("video_defaults_applied", **defaults)
+
+
+def log_video_prompt(prompt: str):
+    """Log the full prompt with video rules applied."""
+    debug_log("video_full_prompt", prompt=prompt)
+
+
+def log_video_backend_selected(backend: str):
+    """Log which video generation backend was selected."""
+    debug_log("video_backend_selected", backend=backend)
+
+
+def log_video_generation_result(result_info: dict):
+    """Log the result of video generation."""
+    debug_log("video_generation_result", **result_info)

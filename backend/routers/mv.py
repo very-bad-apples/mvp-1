@@ -4,9 +4,13 @@ Music Video (MV) endpoint router.
 Handles scene generation and related music video pipeline operations.
 """
 
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
 import structlog
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from mv.scene_generator import (
     CreateScenesRequest,
@@ -17,6 +21,11 @@ from mv.image_generator import (
     GenerateCharacterReferenceRequest,
     GenerateCharacterReferenceResponse,
     generate_character_reference_image,
+)
+from mv.video_generator import (
+    GenerateVideoRequest,
+    GenerateVideoResponse,
+    generate_video,
 )
 
 logger = structlog.get_logger()
@@ -324,3 +333,325 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                 "details": str(e)
             }
         )
+
+
+@router.post(
+    "/generate_video",
+    response_model=GenerateVideoResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Video generated successfully"},
+        400: {"description": "Invalid request parameters"},
+        500: {"description": "Internal server error or API failure"},
+        503: {"description": "Backend service unavailable"}
+    },
+    summary="Generate Video Clip",
+    description="""
+Generate a single video clip from a text prompt using Replicate or Gemini backends.
+
+**IMPORTANT: This is a synchronous endpoint that may take 20-400+ seconds to complete.**
+
+This endpoint generates individual scene clips. Call it multiple times to create
+separate clips for a multi-scene music video.
+
+**Limitations:**
+- Synchronous processing (20-400s response times)
+- No progress tracking (client waits for completion)
+- File-based storage (videos saved with UUID filenames)
+- Base64 reference images (large payload size)
+- No authentication (videos accessible by UUID)
+
+**Required Fields:**
+- prompt: Text prompt describing the video content
+
+**Optional Fields (defaults from config):**
+- negative_prompt: Elements to exclude from the video
+- aspect_ratio: Video aspect ratio (default: "16:9")
+- duration: Video duration in seconds (default: 8)
+- generate_audio: Whether to generate audio (default: true)
+- seed: Random seed for reproducibility
+- reference_image_base64: Base64 encoded reference image for character consistency
+- video_rules_template: Custom rules to append to prompt
+- backend: Backend to use - "replicate" (default) or "gemini"
+"""
+)
+async def generate_video_endpoint(request: GenerateVideoRequest):
+    """
+    Generate a single video clip.
+
+    This endpoint:
+    1. Validates the request parameters
+    2. Applies defaults from YAML config for optional fields
+    3. Generates video using selected backend (Replicate or Gemini)
+    4. Saves video to filesystem with UUID-based filename
+    5. Returns video ID, path, URL, and metadata
+
+    **Example Request:**
+    ```json
+    {
+        "prompt": "A silver robot walks through a futuristic city at sunset",
+        "duration": 8,
+        "generate_audio": true
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "video_path": "/path/to/videos/a1b2c3d4...mp4",
+        "video_url": "/api/mv/get_video/a1b2c3d4...",
+        "metadata": {
+            "prompt": "A silver robot walks...",
+            "backend_used": "replicate",
+            "model_used": "google/veo-3.1",
+            "parameters_used": {...},
+            "generation_timestamp": "2025-11-16T10:30:25Z",
+            "processing_time_seconds": 45.7
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "generate_video_request_received",
+            prompt=request.prompt[:100] + "..." if len(request.prompt) > 100 else request.prompt,
+            backend=request.backend,
+            has_reference_image=request.reference_image_base64 is not None
+        )
+
+        # Validate required fields
+        if not request.prompt or not request.prompt.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Prompt is required",
+                    "details": "The 'prompt' field cannot be empty"
+                }
+            )
+
+        # Validate backend
+        if request.backend and request.backend not in ["replicate", "gemini"]:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": f"Invalid backend: {request.backend}",
+                    "details": "Supported backends: 'replicate', 'gemini'"
+                }
+            )
+
+        # Generate video
+        video_id, video_path, video_url, metadata = generate_video(
+            prompt=request.prompt.strip(),
+            negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
+            aspect_ratio=request.aspect_ratio.strip() if request.aspect_ratio else None,
+            duration=request.duration,
+            generate_audio=request.generate_audio,
+            seed=request.seed,
+            reference_image_base64=request.reference_image_base64,
+            video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
+            backend=request.backend or "replicate",
+        )
+
+        response = GenerateVideoResponse(
+            video_id=video_id,
+            video_path=video_path,
+            video_url=video_url,
+            metadata=metadata
+        )
+
+        logger.info(
+            "generate_video_request_completed",
+            video_id=video_id,
+            video_path=video_path,
+            processing_time_seconds=metadata.get("processing_time_seconds"),
+            backend_used=metadata.get("backend_used")
+        )
+
+        return response
+
+    except ValueError as e:
+        # Handle configuration errors (e.g., missing API token)
+        logger.error("generate_video_config_error", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "ConfigurationError",
+                "message": str(e),
+                "details": "Check your environment configuration"
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except TimeoutError as e:
+        logger.error("generate_video_timeout", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ServiceTimeout",
+                "message": str(e),
+                "details": "Video generation service timed out"
+            }
+        )
+
+    except Exception as e:
+        logger.error("generate_video_unexpected_error", error=str(e), exc_info=True)
+
+        # Try to provide structured error information
+        error_code = "UNKNOWN_ERROR"
+        if "content" in str(e).lower() and "policy" in str(e).lower():
+            error_code = "CONTENT_POLICY_VIOLATION"
+        elif "rate" in str(e).lower() and "limit" in str(e).lower():
+            error_code = "RATE_LIMIT_EXCEEDED"
+        elif "authentication" in str(e).lower() or "auth" in str(e).lower():
+            error_code = "AUTHENTICATION_ERROR"
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "VideoGenerationError",
+                "error_code": error_code,
+                "message": "An unexpected error occurred during video generation",
+                "backend_used": request.backend or "replicate",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": str(e)
+            }
+        )
+
+
+@router.get(
+    "/get_video/{video_id}",
+    responses={
+        200: {"description": "Video file", "content": {"video/mp4": {}}},
+        404: {"description": "Video not found"}
+    },
+    summary="Retrieve Generated Video",
+    description="""
+Retrieve a generated video by its UUID.
+
+Returns the video file directly for download or streaming.
+Supports HEAD requests to check if video exists without downloading.
+
+**Example:**
+```
+GET /api/mv/get_video/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+"""
+)
+async def get_video(video_id: str):
+    """
+    Retrieve a generated video by ID.
+
+    This endpoint:
+    1. Validates the video_id format
+    2. Checks if the video file exists
+    3. Returns the video file as a streaming response
+
+    The video is served with Content-Type: video/mp4
+    """
+    # Validate video_id format (basic UUID validation)
+    if not video_id or len(video_id) != 36 or video_id.count("-") != 4:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Invalid video_id format",
+                "details": "video_id must be a valid UUID"
+            }
+        )
+
+    # Construct video path
+    video_dir = Path(__file__).parent.parent / "mv" / "outputs" / "videos"
+    video_path = video_dir / f"{video_id}.mp4"
+
+    if not video_path.exists():
+        logger.warning("get_video_not_found", video_id=video_id)
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "NotFound",
+                "message": f"Video with ID {video_id} not found",
+                "details": "The video may have been deleted or the ID is incorrect"
+            }
+        )
+
+    logger.info("get_video_serving", video_id=video_id, video_path=str(video_path))
+
+    return FileResponse(
+        path=str(video_path),
+        media_type="video/mp4",
+        filename=f"{video_id}.mp4"
+    )
+
+
+@router.get(
+    "/get_video/{video_id}/info",
+    responses={
+        200: {"description": "Video metadata"},
+        404: {"description": "Video not found"}
+    },
+    summary="Get Video Information",
+    description="""
+Get metadata about a generated video without downloading it.
+
+Returns information like file size, creation time, and whether the file exists.
+
+**Example Response:**
+```json
+{
+    "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "file_size_bytes": 15234567,
+    "created_at": "2025-11-16T10:30:25Z",
+    "exists": true
+}
+```
+"""
+)
+async def get_video_info(video_id: str):
+    """
+    Get metadata about a generated video.
+
+    This endpoint:
+    1. Validates the video_id format
+    2. Checks if the video file exists
+    3. Returns metadata about the video (size, creation time)
+    """
+    # Validate video_id format
+    if not video_id or len(video_id) != 36 or video_id.count("-") != 4:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Invalid video_id format",
+                "details": "video_id must be a valid UUID"
+            }
+        )
+
+    # Construct video path
+    video_dir = Path(__file__).parent.parent / "mv" / "outputs" / "videos"
+    video_path = video_dir / f"{video_id}.mp4"
+
+    if not video_path.exists():
+        return {
+            "video_id": video_id,
+            "exists": False,
+            "file_size_bytes": None,
+            "created_at": None
+        }
+
+    # Get file stats
+    stat = video_path.stat()
+    created_at = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+
+    logger.info("get_video_info", video_id=video_id, file_size_bytes=stat.st_size)
+
+    return {
+        "video_id": video_id,
+        "exists": True,
+        "file_size_bytes": stat.st_size,
+        "created_at": created_at
+    }

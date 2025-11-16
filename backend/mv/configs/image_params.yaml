@@ -18,3 +18,31 @@ person_generation: "allow_adult"
 # Output image format
 # Options: "png", "jpg", "webp"
 output_format: "png"
+
+# =============================================================================
+# Video Generation Parameters
+# =============================================================================
+
+# Replicate model to use for video generation
+video_model: "google/veo-3.1"
+
+# Video aspect ratio
+# Options: "16:9", "9:16", "1:1"
+video_aspect_ratio: "16:9"
+
+# Video duration in seconds
+video_duration: 8
+
+# Whether to generate audio for the video
+video_generate_audio: true
+
+# Person generation setting for videos
+# Options: "allow_all", "dont_allow"
+video_person_generation: "allow_all"
+
+# Default video rules template (appended to prompt)
+# Use {aspect_ratio} placeholder for dynamic aspect ratio
+video_rules_template: |
+  - No subtitles or camera directions.
+  - The video should be in {aspect_ratio} aspect ratio.
+  - Keep it short, visual, simple, cinematic.

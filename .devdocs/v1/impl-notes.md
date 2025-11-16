@@ -176,3 +176,198 @@
 - Verify file write operations
 - Test with both single output and list outputs from Replicate
 - Ensure MV_DEBUG_MODE logging works for image generation
+
+---
+
+# Implementation Notes - v3
+
+## `/api/mv/generate_video` Endpoint
+
+### Current Limitations
+
+#### 1. Synchronous Processing with Long Response Times
+**Current Implementation**: The endpoint processes requests synchronously, blocking until Replicate/Gemini returns the generated video.
+
+**Limitation**: Video generation typically takes **20-400+ seconds** (significantly longer than image generation), which causes:
+- Very long HTTP request timeouts required (420+ seconds)
+- Client connection may drop during long waits
+- No progress feedback to user during generation
+- Server resources blocked for extended periods
+- Poor UX when waiting for multiple concurrent scene generations
+
+**Future Improvement**: Convert to asynchronous job-based processing:
+- Accept request and return job ID immediately (202 Accepted)
+- Queue video generation to Redis for worker processing
+- Follow same pattern as `/api/generate` endpoint
+- Allow progress tracking via WebSocket or polling
+- Enable parallel processing with worker pool
+- Support cancellation of in-progress jobs
+
+---
+
+#### 2. UUID-Based File Storage (No Database)
+**Current Implementation**: Generated videos are stored with UUID-based filenames in the filesystem under `backend/mv/outputs/videos/`.
+
+**Limitation**:
+- No database persistence means limited queryability
+- No association with user accounts or projects
+- Videos accessible by anyone who knows the UUID (no auth)
+- No expiration/cleanup policy (disk space grows indefinitely)
+- Cannot search by prompt, parameters, or metadata
+- No tracking of generation history
+- No batch operations across videos
+
+**Future Improvement**: Implement database persistence:
+- Create `Video` database model linking UUID to metadata
+- Store video metadata in PostgreSQL/SQLite
+- Link to user sessions/projects
+- Implement TTL-based cleanup policies
+- Add search and filtering capabilities
+- Store generation parameters for reproducibility
+- Enable video management (list, delete, rename)
+
+---
+
+#### 3. No Authentication
+**Current Implementation**: Videos are accessible to anyone with the UUID via `/api/mv/get_video/{video_id}`.
+
+**Limitation**:
+- Security through obscurity only (UUID is hard to guess)
+- No user ownership tracking
+- Cannot restrict access to specific users
+- No audit trail of who accessed videos
+- Potential for unauthorized access if UUID is leaked
+
+**Future Improvement**:
+- Implement user authentication (JWT, session-based)
+- Link videos to authenticated users
+- Add access control lists (ACL)
+- Generate signed/expiring URLs for sharing
+- Audit logging for compliance
+- Rate limiting per user
+
+---
+
+#### 4. Base64 Reference Images (Large Payloads)
+**Current Implementation**: Reference images are passed as base64-encoded strings in the request body.
+
+**Limitation**:
+- Large request payloads (1-4MB+ for base64 images)
+- Increased memory usage during request processing
+- Slower network transfer times
+- May hit API gateway size limits in production
+- Not integrated with character reference storage (v2 endpoint)
+
+**Future Improvement**:
+- Allow reference to stored character reference by ID (from v2 endpoint)
+- Support pre-uploaded images via separate endpoint
+- Implement image URL references (presigned URLs)
+- Add image compression/optimization
+- Cache frequently used reference images
+
+---
+
+#### 5. No Progress Updates
+**Current Implementation**: Client blocks and waits for the entire generation to complete.
+
+**Limitation**:
+- User has no visibility into generation progress
+- Cannot estimate completion time
+- No indication if generation is stuck or processing
+- Poor user experience for long waits
+
+**Future Improvement**:
+- WebSocket connection for real-time status updates
+- Server-Sent Events (SSE) for progress streaming
+- Polling endpoint for job status
+- Estimated time remaining calculation
+- Step-by-step progress (e.g., "Generating frame 50/200")
+
+---
+
+#### 6. Client-Side Video Merging
+**Current Implementation**: Each call generates a single video clip. Clients must handle merging multiple scene videos themselves.
+
+**Limitation**:
+- Frontend must implement video merging logic
+- Browser-based video editing can be slow/memory intensive
+- No server-side video processing (transitions, effects)
+- Inconsistent results based on client capabilities
+
+**Future Improvement**:
+- Add `/api/mv/merge_videos` endpoint
+- Server-side merging using MoviePy/FFmpeg
+- Support transitions between clips
+- Audio mixing and normalization
+- Final video optimization and compression
+
+---
+
+#### 7. No Rate Limiting or Cost Controls
+**Current Implementation**: No throttling on video generation requests.
+
+**Limitation**:
+- Each video generation costs API credits (~$0.10-1.00+)
+- No protection against accidental overuse
+- Potential for API cost runaway
+- No usage quotas per user/project
+- Could exhaust Replicate rate limits under load
+
+**Future Improvement**:
+- Implement per-user rate limiting
+- Add cost tracking and budgeting
+- Usage quotas per project/user
+- Credit system for video generations
+- Admin dashboard for monitoring costs
+
+---
+
+#### 8. Limited Gemini Backend Support
+**Current Implementation**: Gemini backend is basic and doesn't support all parameters (duration, audio, reference images).
+
+**Limitation**:
+- Feature parity not achieved between backends
+- Users may not understand which features work with which backend
+- Gemini polling implementation may not handle all edge cases
+- No automatic failover between backends
+
+**Future Improvement**:
+- Document feature matrix clearly
+- Implement automatic backend selection based on features needed
+- Add failover logic (try Replicate, fall back to Gemini)
+- Improve Gemini backend to support more parameters
+- Add backend health monitoring
+
+---
+
+### Architecture Decisions
+
+1. **Backend factory pattern**: Clean abstraction for switching between video generation services
+2. **UUID-based video IDs**: Unique, URL-safe identifiers for video retrieval
+3. **Dual endpoint pattern**: Separate generation and retrieval endpoints for flexibility
+4. **Config reuse**: Video parameters stored in same YAML file as image parameters
+5. **Debug mode integration**: Reuses `MV_DEBUG_MODE` for consistency across MV module
+6. **FileResponse streaming**: Efficient video delivery without loading entire file into memory
+7. **Proof-of-concept focus**: Prioritized working implementation over production-ready features
+
+---
+
+### Dependencies Added
+
+- `replicate`: Already present from v2, used for Veo 3.1 video generation
+- `google-genai`: Already present from v1, used for Gemini video generation
+- `uuid`: Standard library, for unique video identifiers
+
+---
+
+### Testing Considerations
+
+- Mock Replicate and Gemini API responses for unit tests
+- Test UUID generation and format validation
+- Verify backend factory correctly routes requests
+- Test base64 image decoding for reference images
+- Validate processing time tracking
+- Test video file serving (FileResponse)
+- Test info endpoint metadata accuracy
+- Verify error handling for various failure modes
+- Ensure MV_DEBUG_MODE logging covers all stages
