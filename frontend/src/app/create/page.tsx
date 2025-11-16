@@ -1,256 +1,123 @@
-"use client"
+'use client'
 
-import { useState, useCallback, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import Link from "next/link"
-import { Video, Upload, X, Loader2, ChevronLeft } from "lucide-react"
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
+import { ImageUploadZone } from '@/components/ImageUploadZone'
+import { AudioUploadZone } from '@/components/AudioUploadZone'
+import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
-import { Button } from "@/components/ui/button"
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-
-// Types for model data from backend
-interface ModelInfo {
-  model_id: string
-  display_name: string
-  description: string
-  cost_per_run: number
-  avg_duration: number
-  is_default: boolean
-}
-
-interface TaskModelsResponse {
-  task: string
-  default_model: string
-  models: ModelInfo[]
-}
-
-// Form validation schema
-const formSchema = z.object({
-  product_name: z.string().min(2, {
-    message: "Product name must be at least 2 characters.",
-  }).max(100, {
-    message: "Product name must not exceed 100 characters.",
-  }),
-  style: z.enum(["luxury", "energetic", "minimal", "bold"], {
-    message: "Please select a video style.",
-  }),
-  video_model: z.string().min(1, {
-    message: "Please select a video model.",
-  }),
-  cta_text: z.string().min(2, {
-    message: "CTA text must be at least 2 characters.",
-  }).max(50, {
-    message: "CTA text must not exceed 50 characters.",
-  }),
-  product_image: z.instanceof(File).optional().refine(
-    (file) => {
-      if (!file) return true;
-      return file.size <= 10 * 1024 * 1024; // 10MB
-    },
-    { message: "File size must be less than 10MB" }
-  ).refine(
-    (file) => {
-      if (!file) return true;
-      return ["image/png", "image/jpeg", "image/webp"].includes(file.type);
-    },
-    { message: "Only PNG, JPG, and WebP formats are supported" }
-  ),
-})
-
-type FormValues = z.infer<typeof formSchema>
-
-const STYLE_DESCRIPTIONS = {
-  luxury: "Elegant and sophisticated with premium visuals",
-  energetic: "Dynamic and vibrant with fast-paced action",
-  minimal: "Clean and simple with focused messaging",
-  bold: "Strong and impactful with dramatic elements",
-}
+type Mode = 'ad-creative' | 'music-video'
 
 export default function CreatePage() {
   const router = useRouter()
   const { toast } = useToast()
+  const [mode, setMode] = useState<Mode>('ad-creative')
+  const [prompt, setPrompt] = useState('')
+  const [characterDescription, setCharacterDescription] = useState('')
+  const [uploadedImages, setUploadedImages] = useState<File[]>([])
+  const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [videoModels, setVideoModels] = useState<ModelInfo[]>([])
-  const [isLoadingModels, setIsLoadingModels] = useState(true)
+  const [useAICharacter, setUseAICharacter] = useState(false)
+  const [generatedImages, setGeneratedImages] = useState<string[]>([])
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false)
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      product_name: "",
-      style: undefined,
-      video_model: "",
-      cta_text: "",
-      product_image: undefined,
-    },
-  })
+  // Check if form is valid and ready to submit
+  const isFormValid = () => {
+    // Check video description
+    if (!prompt.trim()) return false
 
-  // Fetch available video models from backend
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-        const response = await fetch(`${apiUrl}/api/models/tasks/video_scene/models`)
+    // Check mode-specific requirements
+    if (mode === 'ad-creative' && uploadedImages.length === 0) return false
+    if (mode === 'music-video' && !uploadedAudio) return false
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch models")
-        }
+    // Check AI character requirements
+    if (useAICharacter && selectedImageIndex === null) return false
 
-        const data: TaskModelsResponse = await response.json()
-        setVideoModels(data.models)
+    return true
+  }
 
-        // Set default model (the one marked as default from backend)
-        const defaultModel = data.models.find(m => m.is_default)
-        if (defaultModel) {
-          form.setValue("video_model", defaultModel.model_id)
-        } else if (data.models.length > 0) {
-          // Fallback to first model if no default is set
-          form.setValue("video_model", data.models[0].model_id)
-        }
-      } catch (error) {
-        console.error("Error fetching models:", error)
-        toast({
-          title: "Warning",
-          description: "Failed to load video models. Please refresh the page.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoadingModels(false)
-      }
-    }
-
-    fetchModels()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleFileChange = useCallback((file: File | null) => {
-    if (file) {
-      // Validate file
-      const isValidType = ["image/png", "image/jpeg", "image/webp"].includes(file.type)
-      const isValidSize = file.size <= 10 * 1024 * 1024
-
-      if (!isValidType) {
-        toast({
-          title: "Invalid file type",
-          description: "Please upload a PNG, JPG, or WebP image.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!isValidSize) {
-        toast({
-          title: "File too large",
-          description: "Please upload an image smaller than 10MB.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Set the file in the form
-      form.setValue("product_image", file, { shouldValidate: true })
-
-      // Create preview URL
-      const url = URL.createObjectURL(file)
-      setPreviewUrl(url)
-    } else {
-      form.setValue("product_image", undefined)
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-        setPreviewUrl(null)
-      }
-    }
-  }, [form, toast, previewUrl])
-
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsDragging(true)
-  }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      handleFileChange(files[0])
+    // Validation with detailed error messages
+    if (!prompt.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a video description",
+        variant: "destructive",
+      })
+      return
     }
-  }
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      handleFileChange(files[0])
+    if (mode === 'ad-creative' && uploadedImages.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload at least one product image",
+        variant: "destructive",
+      })
+      return
     }
-  }
 
-  const clearImage = () => {
-    handleFileChange(null)
-  }
+    if (mode === 'music-video' && !uploadedAudio) {
+      toast({
+        title: "Error",
+        description: "Please upload a music file",
+        variant: "destructive",
+      })
+      return
+    }
 
-  async function onSubmit(values: FormValues) {
+    if (useAICharacter && selectedImageIndex === null) {
+      toast({
+        title: "Error",
+        description: "Please generate and select a character image",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
+      // Prepare FormData for the API
       const formData = new FormData()
-      formData.append("product_name", values.product_name)
-      formData.append("style", values.style)
-      formData.append("video_model", values.video_model)
-      formData.append("cta_text", values.cta_text)
+      formData.append('mode', mode)
+      formData.append('prompt', prompt)
+      formData.append('characterDescription', characterDescription)
 
-      if (values.product_image) {
-        formData.append("product_image", values.product_image)
+      if (mode === 'ad-creative') {
+        uploadedImages.forEach((image, index) => {
+          formData.append(`images`, image)
+        })
+      } else {
+        if (uploadedAudio) {
+          formData.append('audio', uploadedAudio)
+        }
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-      const response = await fetch(`${apiUrl}/api/generate`, {
-        method: "POST",
-        body: formData,
-      })
+      // Mock API call (simulating network delay)
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Failed to create video job")
-      }
-
-      const data = await response.json()
+      // Generate a mock job ID
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
       toast({
         title: "Video generation started!",
-        description: `Job ID: ${data.job_id}. Estimated time: ${data.estimated_completion_time}s`,
+        description: `Job ID: ${jobId}`,
       })
 
-      // Redirect to job status page
-      router.push(`/job/${data.job_id}`)
+      // Navigate to the mock result page
+      router.push(`/result/${jobId}`)
     } catch (error) {
-      console.error("Error submitting form:", error)
+      console.error('Error submitting form:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to start video generation",
@@ -260,6 +127,50 @@ export default function CreatePage() {
       setIsSubmitting(false)
     }
   }
+
+  const handleGenerateImages = async () => {
+    if (!characterDescription.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter or generate a character description first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGeneratingImages(true)
+    setSelectedImageIndex(null) // Reset selection
+
+    try {
+      // Mock image generation (simulating API call)
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      // Generate mock image URLs (in production, these would be actual generated images)
+      const mockImages = [
+        `https://placehold.co/512x512/1e40af/ffffff?text=Character+1`,
+        `https://placehold.co/512x512/7c3aed/ffffff?text=Character+2`,
+        `https://placehold.co/512x512/0891b2/ffffff?text=Character+3`,
+        `https://placehold.co/512x512/059669/ffffff?text=Character+4`,
+      ]
+
+      setGeneratedImages(mockImages)
+
+      toast({
+        title: "Images Generated",
+        description: "Select an image or regenerate to get new options",
+      })
+    } catch (error) {
+      console.error('Error generating images:', error)
+      toast({
+        title: "Error",
+        description: "Failed to generate character images. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingImages(false)
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -282,257 +193,294 @@ export default function CreatePage() {
       </nav>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              Create Your Video
+      <main className="min-h-screen p-4 md:p-8 flex items-center justify-center">
+        <div className="w-full max-w-3xl">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
+              AI Video Generation
             </h1>
-            <p className="text-xl text-gray-300">
-              Upload your product image and customize your AI-generated video
+            <p className="text-gray-300">
+              Create stunning video content with AI-powered generation
             </p>
           </div>
 
-          <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-white">Video Details</CardTitle>
-              <CardDescription className="text-gray-400">
-                Fill in the details below to generate your video
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                  {/* Product Image Upload */}
-                  <FormField
-                    control={form.control}
-                    name="product_image"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white">Product Image (Optional)</FormLabel>
-                        <FormControl>
-                          <div>
-                            {previewUrl ? (
-                              <div className="relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={previewUrl}
-                                  alt="Preview"
-                                  className="w-full h-64 object-contain rounded-lg border-2 border-gray-600 bg-gray-900/50"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="icon"
-                                  className="absolute top-2 right-2"
-                                  onClick={clearImage}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onDrop={handleDrop}
-                                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                                  isDragging
-                                    ? "border-blue-500 bg-blue-500/10"
-                                    : "border-gray-600 hover:border-gray-500"
-                                }`}
-                              >
-                                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                <p className="text-gray-300 mb-2">
-                                  Drag and drop your image here, or
-                                </p>
-                                <label htmlFor="file-upload">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="border-gray-600 text-white hover:bg-gray-700"
-                                    onClick={() => document.getElementById("file-upload")?.click()}
-                                  >
-                                    Browse Files
-                                  </Button>
-                                </label>
-                                <input
-                                  id="file-upload"
-                                  type="file"
-                                  accept="image/png,image/jpeg,image/webp"
-                                  className="hidden"
-                                  onChange={handleFileInputChange}
-                                />
-                                <p className="text-sm text-gray-500 mt-4">
-                                  PNG, JPG, or WebP (max 10MB)
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </FormControl>
-                        <FormDescription className="text-gray-400">
-                          Upload a clear image of your product for best results
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Product Name */}
-                  <FormField
-                    control={form.control}
-                    name="product_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white">Product Name *</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g., Premium Wireless Headphones"
-                            className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription className="text-gray-400">
-                          The name of your product or service
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Style Selector */}
-                  <FormField
-                    control={form.control}
-                    name="style"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white">Video Style *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-gray-900/50 border-gray-600 text-white">
-                              <SelectValue placeholder="Select a style" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-gray-800 border-gray-700">
-                            {Object.entries(STYLE_DESCRIPTIONS).map(([value, description]) => (
-                              <SelectItem
-                                key={value}
-                                value={value}
-                                className="text-white focus:bg-gray-700 focus:text-white"
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-medium capitalize">{value}</span>
-                                  <span className="text-sm text-gray-400">{description}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription className="text-gray-400">
-                          Choose the visual style for your video
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Video Model Selector */}
-                  <FormField
-                    control={form.control}
-                    name="video_model"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white">Video Generation Model *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingModels}>
-                          <FormControl>
-                            <SelectTrigger className="bg-gray-900/50 border-gray-600 text-white">
-                              <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select a model"} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-gray-800 border-gray-700 max-h-[300px]">
-                            {videoModels.length === 0 && !isLoadingModels && (
-                              <div className="text-gray-400 px-2 py-8 text-center text-sm">
-                                No models available. Please check backend connection.
-                              </div>
-                            )}
-                            {videoModels.map((model) => (
-                              <SelectItem
-                                key={model.model_id}
-                                value={model.model_id}
-                                className="text-white focus:bg-gray-700 focus:text-white"
-                              >
-                                <div className="flex flex-col py-1">
-                                  <span className="font-medium">{model.display_name}</span>
-                                  <span className="text-xs text-gray-400">{model.description}</span>
-                                  <span className="text-xs text-blue-400 mt-1">
-                                    ${model.cost_per_run.toFixed(4)} • ~{Math.round(model.avg_duration)}s
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription className="text-gray-400">
-                          Choose the AI model for video generation. Costs and generation times shown below each option.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* CTA Text */}
-                  <FormField
-                    control={form.control}
-                    name="cta_text"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-white">Call-to-Action Text *</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g., Shop Now, Learn More, Get Started"
-                            className="bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription className="text-gray-400">
-                          The action you want viewers to take
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Submit Button */}
-                  <div className="flex gap-4 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 border-gray-600 text-white hover:bg-gray-700"
-                      onClick={() => router.push("/")}
-                      disabled={isSubmitting}
+          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 md:p-8 shadow-lg backdrop-blur-sm">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Mode Toggle */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-white">Generation Mode</Label>
+                <Tabs
+                  value={mode}
+                  onValueChange={(value) => setMode(value as Mode)}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-900/50">
+                    <TabsTrigger
+                      value="ad-creative"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={isSubmitting}
+                      Ad Creative
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="music-video"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating Video...
-                        </>
-                      ) : (
-                        "Create Video"
-                      )}
-                    </Button>
+                      Music Video
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Mode-Specific Upload Zone */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-sm font-medium text-white">
+                    {mode === 'ad-creative' ? 'Product Images' : 'Music File'}
+                  </Label>
+                  <span className="text-red-400 text-sm">*</span>
+                </div>
+                {mode === 'ad-creative' ? (
+                  <div>
+                    <ImageUploadZone
+                      onFilesChange={setUploadedImages}
+                      files={uploadedImages}
+                    />
+                    {uploadedImages.length === 0 && (
+                      <p className="text-xs text-red-400 mt-2">
+                        At least one product image is required
+                      </p>
+                    )}
                   </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+                ) : (
+                  <div>
+                    <AudioUploadZone
+                      onFileChange={setUploadedAudio}
+                      file={uploadedAudio}
+                    />
+                    {!uploadedAudio && (
+                      <p className="text-xs text-red-400 mt-2">
+                        Music file is required
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* User Prompt */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="prompt" className="text-sm font-medium text-white">
+                    Video Description
+                  </Label>
+                  <span className="text-red-400 text-sm">*</span>
+                </div>
+                <Textarea
+                  id="prompt"
+                  placeholder={
+                    mode === 'ad-creative'
+                      ? 'Describe your product video ad... e.g., "Show the product rotating 360 degrees with dramatic lighting and smooth camera movements"'
+                      : 'Describe your music video vision... e.g., "Create a cinematic music video with urban street scenes and dynamic transitions"'
+                  }
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="min-h-[120px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
+                  required
+                />
+                <p className="text-xs text-gray-400">
+                  Be specific about scenes, camera angles, and visual style
+                </p>
+              </div>
+
+              {/* Character Description with AI Toggle */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="character" className="text-sm font-medium text-white">
+                    Character & Style
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="ai-toggle" className="text-sm text-gray-400 cursor-pointer">
+                      Use AI Generation
+                    </Label>
+                    <Switch
+                      id="ai-toggle"
+                      checked={useAICharacter}
+                      onCheckedChange={setUseAICharacter}
+                      className="data-[state=checked]:bg-blue-600"
+                    />
+                  </div>
+                </div>
+
+                {useAICharacter && (
+                  <div className="space-y-4">
+                    {/* Character Description Input */}
+                    <Textarea
+                      id="character"
+                      placeholder={
+                        mode === 'ad-creative'
+                          ? 'Describe visual style, colors, mood... e.g., "Modern minimalist aesthetic with bold colors and clean backgrounds"'
+                          : 'Describe performers, setting, atmosphere... e.g., "Solo artist in black and white cinematography with moody lighting"'
+                      }
+                      value={characterDescription}
+                      onChange={(e) => {
+                        setCharacterDescription(e.target.value)
+                        // Reset generated images when description changes
+                        if (generatedImages.length > 0) {
+                          setGeneratedImages([])
+                          setSelectedImageIndex(null)
+                        }
+                      }}
+                      className="min-h-[100px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
+                    />
+
+                    {/* Generated Images Grid - Above the button */}
+                    {generatedImages.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          {generatedImages.map((imageUrl, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => setSelectedImageIndex(index)}
+                              className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                selectedImageIndex === index
+                                  ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
+                                  : 'border-gray-600 hover:border-gray-500'
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={imageUrl}
+                                alt={`Character option ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {selectedImageIndex === index && (
+                                <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                  <div className="bg-blue-500 rounded-full p-2">
+                                    <CheckCircle2 className="h-6 w-6 text-white" />
+                                  </div>
+                                </div>
+                              )}
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
+                                <span className="text-xs text-white">Option {index + 1}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+
+                        {selectedImageIndex !== null && (
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
+                            <p className="text-sm text-blue-400 font-medium">
+                              Character image selected! You can now generate your video.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Generate/Regenerate Images Button */}
+                    <div>
+                      <Button
+                        type="button"
+                        onClick={handleGenerateImages}
+                        disabled={isGeneratingImages || !characterDescription.trim()}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {isGeneratingImages ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating Character Images...
+                          </>
+                        ) : (
+                          <>
+                            {generatedImages.length > 0 ? (
+                              <>
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Regenerate Character Images
+                              </>
+                            ) : (
+                              <>
+                                <ImageIcon className="mr-2 h-4 w-4" />
+                                Generate Character Images
+                              </>
+                            )}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <p className="text-xs text-gray-400">
+                      {!characterDescription.trim()
+                        ? "Enter character style details, then click 'Generate Character Images'"
+                        : generatedImages.length === 0
+                        ? "Click 'Generate Character Images' to create visual options"
+                        : "Select an image to proceed, or click the button to regenerate"}
+                    </p>
+                  </div>
+                )}
+
+                {!useAICharacter && (
+                  <p className="text-xs text-gray-400">
+                    Enable &quot;Use AI Generation&quot; to add character and style details
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting || !isFormValid()}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Generating Video...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-5 w-5" />
+                      Generate Video
+                    </>
+                  )}
+                </Button>
+
+                {/* Validation Messages */}
+                {!isFormValid() && !isSubmitting && (
+                  <div className="space-y-1">
+                    {!prompt.trim() && (
+                      <p className="text-xs text-yellow-400 text-center">
+                        Video description is required
+                      </p>
+                    )}
+                    {mode === 'ad-creative' && uploadedImages.length === 0 && (
+                      <p className="text-xs text-yellow-400 text-center">
+                        Please upload at least one product image
+                      </p>
+                    )}
+                    {mode === 'music-video' && !uploadedAudio && (
+                      <p className="text-xs text-yellow-400 text-center">
+                        Please upload a music file
+                      </p>
+                    )}
+                    {useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
+                      <p className="text-xs text-yellow-400 text-center">
+                        Please select a character image to continue
+                      </p>
+                    )}
+                    {useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
+                      <p className="text-xs text-yellow-400 text-center">
+                        Please generate and select a character image to continue
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

@@ -527,11 +527,10 @@ class PipelineOrchestrator:
         }
 
         try:
-            # Publish to Redis channel
-            channel = "job_progress_updates"
+            # Publish to Redis channel using the wrapper method
             await asyncio.to_thread(
-                self.redis_client.publish,
-                channel,
+                self.redis_client.get_client().publish,
+                "job_progress_updates",
                 json.dumps(update)
             )
 
