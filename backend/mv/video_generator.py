@@ -6,7 +6,9 @@ using either Replicate or Gemini backends. Designed to be called multiple times 
 generate individual scene clips for a music video.
 """
 
+import asyncio
 import base64
+import logging
 import os
 import tempfile
 import time
@@ -19,6 +21,8 @@ import yaml
 from pydantic import BaseModel, Field
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # Module-level config storage (loaded at startup)
@@ -260,7 +264,28 @@ def generate_video(
     with open(video_path, "wb") as f:
         f.write(video_data)
 
-    # Construct video URL
+    # Upload to cloud storage if configured
+    cloud_url = None
+    try:
+        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
+            from services.storage_backend import get_storage_backend
+            
+            async def upload_to_cloud():
+                storage = get_storage_backend()
+                cloud_path = f"mv/videos/{video_id}.mp4"
+                return await storage.upload_file(
+                    str(video_path),
+                    cloud_path
+                )
+            
+            # Run async upload in sync context
+            cloud_url = asyncio.run(upload_to_cloud())
+            logger.info(f"Uploaded video {video_id} to cloud storage: {cloud_url}")
+    except Exception as e:
+        logger.warning(f"Failed to upload video {video_id} to cloud storage: {e}")
+        # Continue without cloud upload - local file is still available
+
+    # Construct video URL (local API endpoint)
     video_url = f"/api/mv/get_video/{video_id}"
 
     # Build metadata
@@ -275,7 +300,12 @@ def generate_video(
         },
         "generation_timestamp": datetime.now(timezone.utc).isoformat(),
         "processing_time_seconds": round(processing_time, 2),
+        "local_path": str(video_path),
     }
+    
+    # Add cloud URL to metadata if upload succeeded
+    if cloud_url:
+        metadata["cloud_url"] = cloud_url
 
     if negative_prompt:
         metadata["parameters_used"]["negative_prompt"] = negative_prompt

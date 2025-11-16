@@ -5,6 +5,8 @@ When MOCK_VID_GENS is enabled, this module provides mock video generation
 functionality that simulates processing delay and returns pre-staged videos.
 """
 
+import asyncio
+import logging
 import os
 import random
 import time
@@ -14,6 +16,8 @@ from pathlib import Path
 from typing import Optional
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_mock_videos_directory() -> Path:
@@ -130,6 +134,27 @@ def generate_mock_video(
     video_path = str(mock_dir / mock_video_filename)
     video_url = f"/api/mv/get_video/{video_id}"
 
+    # Upload to cloud storage if configured
+    cloud_url = None
+    try:
+        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
+            from services.storage_backend import get_storage_backend
+            
+            async def upload_to_cloud():
+                storage = get_storage_backend()
+                cloud_path = f"mv/videos/{video_id}.mp4"
+                return await storage.upload_file(
+                    video_path,
+                    cloud_path
+                )
+            
+            # Run async upload in sync context
+            cloud_url = asyncio.run(upload_to_cloud())
+            logger.info(f"Uploaded mock video {video_id} to cloud storage: {cloud_url}")
+    except Exception as e:
+        logger.warning(f"Failed to upload mock video {video_id} to cloud storage: {e}")
+        # Continue without cloud upload - local file is still available
+
     # Apply defaults
     if aspect_ratio is None:
         aspect_ratio = "16:9"
@@ -152,7 +177,12 @@ def generate_mock_video(
         },
         "generation_timestamp": datetime.now(timezone.utc).isoformat(),
         "processing_time_seconds": round(actual_delay, 2),
+        "local_path": video_path,
     }
+    
+    # Add cloud URL to metadata if upload succeeded
+    if cloud_url:
+        metadata["cloud_url"] = cloud_url
 
     if negative_prompt:
         metadata["parameters_used"]["negative_prompt"] = negative_prompt
