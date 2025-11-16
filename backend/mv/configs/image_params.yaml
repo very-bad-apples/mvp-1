@@ -1,0 +1,20 @@
+# Default parameters for character reference image generation
+# These values are used when optional parameters are not provided in the request
+
+# Replicate model to use for image generation
+model: "google/imagen-4"
+
+# Image aspect ratio (e.g., "1:1", "16:9", "9:16", "4:3", "3:4")
+aspect_ratio: "1:1"
+
+# Safety filter level for content moderation
+# Options: "block_low_and_above", "block_medium_and_above", "block_high_and_above", "block_none"
+safety_filter_level: "block_medium_and_above"
+
+# Person generation setting
+# Options: "allow_adult", "dont_allow"
+person_generation: "allow_adult"
+
+# Output image format
+# Options: "png", "jpg", "webp"
+output_format: "png"
