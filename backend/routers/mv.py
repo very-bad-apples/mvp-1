@@ -27,6 +27,7 @@ from mv.video_generator import (
     GenerateVideoResponse,
     generate_video,
 )
+from config import settings
 
 logger = structlog.get_logger()
 
@@ -564,7 +565,33 @@ async def get_video(video_id: str):
             }
         )
 
-    # Construct video path
+    # Check if mock mode is enabled
+    if settings.MOCK_VID_GENS:
+        # In mock mode, serve from mock directory (return any available mock video)
+        mock_dir = Path(__file__).parent.parent / "mv" / "outputs" / "mock"
+        mock_videos = list(mock_dir.glob("*.mp4"))
+
+        if not mock_videos:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": "No mock videos available",
+                    "details": "Add .mp4 files to backend/mv/outputs/mock/ for mock mode"
+                }
+            )
+
+        # Return first available mock video (in real scenario, could track which was assigned)
+        video_path = mock_videos[0]
+        logger.info("get_video_serving_mock", video_id=video_id, video_path=str(video_path))
+
+        return FileResponse(
+            path=str(video_path),
+            media_type="video/mp4",
+            filename=f"{video_id}.mp4"
+        )
+
+    # Normal mode: Construct video path
     video_dir = Path(__file__).parent.parent / "mv" / "outputs" / "videos"
     video_path = video_dir / f"{video_id}.mp4"
 
@@ -631,7 +658,34 @@ async def get_video_info(video_id: str):
             }
         )
 
-    # Construct video path
+    # Check if mock mode is enabled
+    if settings.MOCK_VID_GENS:
+        mock_dir = Path(__file__).parent.parent / "mv" / "outputs" / "mock"
+        mock_videos = list(mock_dir.glob("*.mp4"))
+
+        if not mock_videos:
+            return {
+                "video_id": video_id,
+                "exists": False,
+                "file_size_bytes": None,
+                "created_at": None,
+                "is_mock": True
+            }
+
+        # Return info for first mock video
+        video_path = mock_videos[0]
+        stat = video_path.stat()
+        created_at = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+
+        return {
+            "video_id": video_id,
+            "exists": True,
+            "file_size_bytes": stat.st_size,
+            "created_at": created_at,
+            "is_mock": True
+        }
+
+    # Normal mode: Construct video path
     video_dir = Path(__file__).parent.parent / "mv" / "outputs" / "videos"
     video_path = video_dir / f"{video_id}.mp4"
 

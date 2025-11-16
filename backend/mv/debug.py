@@ -92,3 +92,20 @@ def log_video_backend_selected(backend: str):
 def log_video_generation_result(result_info: dict):
     """Log the result of video generation."""
     debug_log("video_generation_result", **result_info)
+
+
+# Mock video generation specific debug logging
+
+def log_mock_mode_enabled():
+    """Log when mock mode is active."""
+    debug_log("mock_mode_enabled", message="Using mock video generation mode")
+
+
+def log_mock_video_selected(video_filename: str):
+    """Log which mock video was selected."""
+    debug_log("mock_video_selected", video_filename=video_filename)
+
+
+def log_mock_delay(delay_seconds: float):
+    """Log simulated processing delay."""
+    debug_log("mock_delay", delay_seconds=round(delay_seconds, 2))

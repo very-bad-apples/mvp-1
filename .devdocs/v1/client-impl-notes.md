@@ -510,3 +510,65 @@ async function mergeVideos(videoBlobs) {
 7. **Set appropriate timeouts** - At least 420 seconds (7 minutes)
 8. **Validate prompts** - Check prompts before sending to avoid content policy violations
 9. **Monitor costs** - Track how many generations users are making
+
+---
+
+## Mock Mode for Development Testing
+
+The backend supports a **mock mode** (`MOCK_VID_GENS=true`) for frontend development without consuming API credits or waiting for real video generation.
+
+### How Mock Mode Works
+
+When the backend has `MOCK_VID_GENS=true`:
+- `/api/mv/generate_video` returns pre-staged mock videos
+- Processing time is simulated (5-10 seconds instead of 20-400 seconds)
+- Response includes `is_mock: true` in metadata
+
+### Detecting Mock Responses
+
+```javascript
+const response = await fetch('/api/mv/generate_video', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ prompt: 'Test prompt' })
+}).then(r => r.json());
+
+if (response.metadata.is_mock) {
+  console.log('Using mock mode');
+  console.log(`Mock source: ${response.metadata.mock_video_source}`);
+  // Optionally show indicator to user during development
+}
+```
+
+### Mock Response Structure
+
+```json
+{
+  "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "video_url": "/api/mv/get_video/a1b2c3d4...",
+  "metadata": {
+    "backend_used": "mock",         // Instead of "replicate" or "gemini"
+    "model_used": "mock",
+    "is_mock": true,                // Always true in mock mode
+    "mock_video_source": "mock_video_1.mp4",
+    "processing_time_seconds": 7.34 // Simulated 5-10s delay
+  }
+}
+```
+
+### Development Workflow with Mock Mode
+
+1. **Enable mock mode on backend**: Set `MOCK_VID_GENS=true` in `.env`
+2. **Add mock videos**: Place MP4 files in `backend/mv/outputs/mock/`
+3. **Develop frontend**: Test full workflow without API costs
+4. **Handle mock indicator**: Optionally show "Development Mode" UI
+5. **Switch to real mode**: Set `MOCK_VID_GENS=false` for production testing
+
+### Mock Mode Considerations
+
+- **Faster responses**: 5-10 seconds vs 20-400 seconds
+- **No API costs**: Free to test as many times as needed
+- **Same response structure**: API contract remains identical
+- **Limited variety**: Returns same videos regardless of prompt
+- **No reference image effect**: Mock ignores reference images
+- **Shorter timeouts OK**: Can use 15-second timeout in mock mode

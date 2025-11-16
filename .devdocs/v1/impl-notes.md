@@ -371,3 +371,110 @@
 - Test info endpoint metadata accuracy
 - Verify error handling for various failure modes
 - Ensure MV_DEBUG_MODE logging covers all stages
+
+---
+
+# Implementation Notes - v4
+
+## Mock Video Generation Mode
+
+### Purpose
+
+The `MOCK_VID_GENS` environment variable enables a mock mode for video generation endpoints to facilitate frontend development and testing without:
+- Consuming Replicate/Gemini API credits
+- Waiting 20-400+ seconds for real video generation
+- Requiring external API connectivity
+
+### How It Works
+
+When `MOCK_VID_GENS=true`:
+
+1. **Generate Video Endpoint** (`/api/mv/generate_video`):
+   - Bypasses real backend calls (Replicate/Gemini)
+   - Randomly selects from pre-staged mock videos in `backend/mv/outputs/mock/`
+   - Simulates 5-10 second processing delay (random per request)
+   - Returns proper response structure with `is_mock: true` in metadata
+   - Generates real UUID for video_id
+
+2. **Get Video Endpoint** (`/api/mv/get_video/{video_id}`):
+   - Serves videos from mock directory instead of real outputs
+   - No additional simulated delay (instant serving)
+   - Returns first available mock video for any UUID requested
+
+3. **Get Video Info Endpoint** (`/api/mv/get_video/{video_id}/info`):
+   - Returns metadata from mock directory
+   - Includes `is_mock: true` in response
+
+### Setup Instructions
+
+1. Enable mock mode:
+   ```bash
+   # In backend/.env
+   MOCK_VID_GENS=true
+   ```
+
+2. Add mock videos to `backend/mv/outputs/mock/`:
+   - At least 1 MP4 file required
+   - Can be any resolution/duration
+   - Suggested: Use small file sizes (5-20MB)
+   - See `README.txt` in that directory for details
+
+3. Create test videos using ffmpeg:
+   ```bash
+   # Generate 5-second test pattern video
+   ffmpeg -f lavfi -i testsrc=duration=5:size=1280x720:rate=30 \
+     -c:v libx264 mock_video_1.mp4
+   ```
+
+### Mock Response Structure
+
+```json
+{
+  "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "video_path": "/path/to/mock/mock_video_1.mp4",
+  "video_url": "/api/mv/get_video/a1b2c3d4...",
+  "metadata": {
+    "prompt": "Original prompt...",
+    "backend_used": "mock",
+    "model_used": "mock",
+    "is_mock": true,
+    "mock_video_source": "mock_video_1.mp4",
+    "parameters_used": { ... },
+    "generation_timestamp": "2025-11-16T10:30:25Z",
+    "processing_time_seconds": 7.34  // Actual simulated delay
+  }
+}
+```
+
+### Current Limitations
+
+1. **Manual video setup**: Developers must add their own mock MP4 files (gitignored)
+2. **No parameter variation**: Returns same videos regardless of prompt/parameters
+3. **Limited video variety**: Only as many mock responses as manually added videos
+4. **No reference image validation**: Mock mode ignores reference images
+5. **UUID-to-file mapping**: All UUIDs return the same (first) mock video in get_video
+6. **No prompt-based selection**: Cannot simulate different videos for different prompts
+
+### Architecture Decisions
+
+1. **Environment variable control**: Simple toggle via `MOCK_VID_GENS` boolean
+2. **Early return pattern**: Check mock mode at start of `generate_video()` function
+3. **Simulated delay on generation**: Mimics real API behavior (5-10s vs 20-400s)
+4. **No delay on serving**: Real video serving is instant, mock matches this
+5. **Metadata transparency**: `is_mock: true` clearly indicates mock response
+6. **Gitignored mock videos**: Each developer manages their own mock files
+
+### Debug Logging
+
+When `MV_DEBUG_MODE=true`, mock mode logs:
+- `mock_mode_enabled`: When mock mode is activated
+- `mock_video_selected`: Which mock video was randomly chosen
+- `mock_delay`: The simulated processing delay
+
+### Testing Considerations
+
+- 13 unit tests cover mock functionality
+- Tests verify delay range (5-10 seconds)
+- Tests validate metadata structure includes mock indicators
+- Tests ensure proper toggle between mock and real modes
+- Tests handle missing mock videos gracefully

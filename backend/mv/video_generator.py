@@ -159,6 +159,20 @@ def generate_video(
         ValueError: If API token is not configured
         Exception: If video generation fails
     """
+    # Check for mock mode first
+    if settings.MOCK_VID_GENS:
+        from mv.mock_video_generator import generate_mock_video
+        return generate_mock_video(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            aspect_ratio=aspect_ratio,
+            duration=duration,
+            generate_audio=generate_audio,
+            seed=seed,
+            reference_image_base64=reference_image_base64,
+            video_rules_template=video_rules_template,
+        )
+
     from mv.video_backends import get_video_backend
 
     # Debug logging
