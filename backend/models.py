@@ -3,7 +3,7 @@ SQLAlchemy database models
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -31,7 +31,13 @@ class Job(Base):
     product_image_path = Column(String, nullable=True)
 
     # Output
-    video_url = Column(String, nullable=True)
+    video_url = Column(String, nullable=True)  # Cloud storage URL for final video
+
+    # Cloud storage and versioning
+    cloud_urls = Column(JSON, nullable=True)  # Dict of all cloud URLs (scenes, audio, etc.)
+    version = Column(Integer, default=1, nullable=False)  # Version number for edits
+    previous_version_url = Column(String, nullable=True)  # Backup of previous final video
+    edit_history = Column(JSON, nullable=True, default=list)  # List of edit operations
 
     # Error handling
     error_message = Column(Text, nullable=True)
@@ -57,6 +63,10 @@ class Job(Base):
             "cta_text": self.cta_text,
             "product_image_path": self.product_image_path,
             "video_url": self.video_url,
+            "cloud_urls": self.cloud_urls,
+            "version": self.version,
+            "previous_version_url": self.previous_version_url,
+            "edit_history": self.edit_history,
             "error_message": self.error_message,
             "cost_usd": self.cost_usd,
             "stages": [stage.to_dict() for stage in self.stages] if self.stages else []

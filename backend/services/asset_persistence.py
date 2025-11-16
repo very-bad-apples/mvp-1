@@ -1,0 +1,454 @@
+"""
+Asset persistence service for managing cloud storage of video generation assets.
+
+Handles uploading and downloading of complete job asset sets including:
+- Final videos
+- Intermediate scenes
+- Audio files
+- Scripts and metadata
+- Product images
+
+Supports hybrid versioning with backup of replaced assets.
+"""
+
+import os
+import logging
+import json
+from pathlib import Path
+from typing import Dict, List, Optional
+import asyncio
+
+from .storage_backend import StorageBackend, get_storage_backend
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class AssetPersistenceService:
+    """
+    Manages persisting video generation job assets to cloud storage.
+    
+    Provides methods to upload complete job workspaces, download assets
+    for regeneration, and manage versioning/backups.
+    
+    Example:
+        >>> service = AssetPersistenceService()
+        >>> urls = await service.persist_job_assets("job-123", "/tmp/video_jobs/job-123")
+        >>> print(urls["final_video"])
+        'https://storage.googleapis.com/bucket/videos/job-123/final.mp4'
+    """
+    
+    def __init__(self, storage_backend: Optional[StorageBackend] = None):
+        """
+        Initialize asset persistence service.
+        
+        Args:
+            storage_backend: Optional custom storage backend. If None, uses factory.
+        """
+        self.storage = storage_backend or get_storage_backend()
+        logger.info("AssetPersistenceService initialized")
+    
+    async def persist_job_assets(
+        self,
+        job_id: str,
+        local_base_path: str
+    ) -> Dict[str, any]:
+        """
+        Upload all job assets from local filesystem to cloud storage.
+        
+        Uploads complete job workspace including:
+        - Final video
+        - Scene videos/images
+        - Audio files
+        - Script and metadata JSONs
+        - Product images
+        
+        Args:
+            job_id: Unique job identifier
+            local_base_path: Base path to job directory (e.g., "/tmp/video_jobs/job-123")
+            
+        Returns:
+            Dict with cloud URLs for all assets:
+            {
+                "final_video": "https://...",
+                "scenes": ["https://...", ...],
+                "audio": ["https://...", ...],
+                "metadata": "https://...",
+                "script": "https://...",
+                "uploads": ["https://...", ...]
+            }
+            
+        Example:
+            >>> urls = await service.persist_job_assets(
+            ...     "job-123",
+            ...     "/tmp/video_jobs/job-123"
+            ... )
+        """
+        base_path = Path(local_base_path)
+        
+        if not base_path.exists():
+            raise FileNotFoundError(f"Job directory not found: {local_base_path}")
+        
+        logger.info(f"Persisting assets for job {job_id} from {local_base_path}")
+        
+        result = {
+            "final_video": None,
+            "scenes": [],
+            "audio": [],
+            "metadata": None,
+            "script": None,
+            "uploads": []
+        }
+        
+        try:
+            # Upload final video
+            final_dir = base_path / "final"
+            if final_dir.exists():
+                result["final_video"] = await self._upload_directory(
+                    job_id,
+                    final_dir,
+                    "final",
+                    single_file=True
+                )
+            
+            # Upload scenes
+            scenes_dir = base_path / "scenes"
+            if scenes_dir.exists():
+                result["scenes"] = await self._upload_directory(
+                    job_id,
+                    scenes_dir,
+                    "intermediate/scenes"
+                )
+            
+            # Upload audio
+            audio_dir = base_path / "audio"
+            if audio_dir.exists():
+                result["audio"] = await self._upload_directory(
+                    job_id,
+                    audio_dir,
+                    "intermediate/audio"
+                )
+            
+            # Upload product images
+            uploads_dir = base_path / "uploads"
+            if uploads_dir.exists():
+                result["uploads"] = await self._upload_directory(
+                    job_id,
+                    uploads_dir,
+                    "intermediate/uploads"
+                )
+            
+            # Upload metadata if exists
+            metadata_file = base_path / "metadata.json"
+            if metadata_file.exists():
+                result["metadata"] = await self.storage.upload_file(
+                    str(metadata_file),
+                    f"videos/{job_id}/intermediate/metadata.json"
+                )
+            
+            # Upload script if exists
+            script_file = base_path / "script.json"
+            if script_file.exists():
+                result["script"] = await self.storage.upload_file(
+                    str(script_file),
+                    f"videos/{job_id}/intermediate/script.json"
+                )
+            
+            logger.info(f"Successfully persisted all assets for job {job_id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to persist assets for job {job_id}: {e}")
+            raise
+    
+    async def _upload_directory(
+        self,
+        job_id: str,
+        local_dir: Path,
+        cloud_subpath: str,
+        single_file: bool = False
+    ) -> any:
+        """
+        Upload all files from a directory to cloud storage.
+        
+        Args:
+            job_id: Job identifier
+            local_dir: Local directory to upload
+            cloud_subpath: Subpath in cloud (e.g., "intermediate/scenes")
+            single_file: If True, return single URL instead of list
+            
+        Returns:
+            List of URLs or single URL if single_file=True
+        """
+        urls = []
+        
+        # Get all files in directory (non-recursive)
+        files = [f for f in local_dir.iterdir() if f.is_file()]
+        
+        if not files:
+            logger.warning(f"No files found in {local_dir}")
+            return None if single_file else []
+        
+        # Upload files in parallel for speed
+        upload_tasks = []
+        for file in files:
+            cloud_path = f"videos/{job_id}/{cloud_subpath}/{file.name}"
+            upload_tasks.append(
+                self.storage.upload_file(str(file), cloud_path)
+            )
+        
+        urls = await asyncio.gather(*upload_tasks)
+        
+        if single_file:
+            # For final video, return just the first (only) URL
+            return urls[0] if urls else None
+        
+        return urls
+    
+    async def download_job_assets(
+        self,
+        job_id: str,
+        local_base_path: str
+    ) -> None:
+        """
+        Download all job assets from cloud storage for regeneration.
+        
+        Recreates the job workspace locally with all intermediate assets.
+        
+        Args:
+            job_id: Job identifier
+            local_base_path: Where to download (e.g., "/tmp/video_jobs/job-123")
+            
+        Example:
+            >>> await service.download_job_assets("job-123", "/tmp/video_jobs/job-123")
+            >>> # Now /tmp/video_jobs/job-123/ has all assets
+        """
+        base_path = Path(local_base_path)
+        base_path.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Downloading assets for job {job_id} to {local_base_path}")
+        
+        try:
+            # List all files for this job
+            files = await self.storage.list_files(f"videos/{job_id}/")
+            
+            if not files:
+                raise FileNotFoundError(f"No assets found for job {job_id}")
+            
+            # Download all files in parallel
+            download_tasks = []
+            for cloud_path in files:
+                # Determine local path based on cloud structure
+                # videos/job-123/final/video.mp4 -> /tmp/video_jobs/job-123/final/video.mp4
+                # videos/job-123/intermediate/scenes/scene_1.mp4 -> /tmp/.../scenes/scene_1.mp4
+                
+                rel_path = cloud_path.replace(f"videos/{job_id}/", "")
+                
+                # Simplify path: intermediate/scenes/... -> scenes/...
+                if rel_path.startswith("intermediate/"):
+                    rel_path = rel_path.replace("intermediate/", "")
+                
+                local_path = base_path / rel_path
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                download_tasks.append(
+                    self.storage.download_file(cloud_path, str(local_path))
+                )
+            
+            await asyncio.gather(*download_tasks)
+            
+            logger.info(f"Successfully downloaded {len(files)} assets for job {job_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to download assets for job {job_id}: {e}")
+            raise
+    
+    async def backup_asset(
+        self,
+        job_id: str,
+        asset_type: str,
+        asset_name: str
+    ) -> str:
+        """
+        Create backup of an asset before replacing it.
+        
+        Copies the current asset to an "_original" version for rollback.
+        
+        Args:
+            job_id: Job identifier
+            asset_type: Type of asset ("scenes", "audio", "final")
+            asset_name: Name of asset file (e.g., "scene_3.mp4")
+            
+        Returns:
+            URL of the backup
+            
+        Example:
+            >>> url = await service.backup_asset("job-123", "scenes", "scene_3.mp4")
+            >>> # Now scene_3.mp4 AND scene_3_original.mp4 exist in cloud
+        """
+        # Determine paths based on asset type
+        if asset_type == "final":
+            src_path = f"videos/{job_id}/final/{asset_name}"
+            # Backup final videos with version number (final_v1.mp4)
+            name_parts = asset_name.rsplit(".", 1)
+            backup_name = f"{name_parts[0]}_v1.{name_parts[1]}"
+            dest_path = f"videos/{job_id}/final/{backup_name}"
+        else:
+            src_path = f"videos/{job_id}/intermediate/{asset_type}/{asset_name}"
+            # Backup intermediate assets with _original suffix
+            name_parts = asset_name.rsplit(".", 1)
+            backup_name = f"{name_parts[0]}_original.{name_parts[1]}"
+            dest_path = f"videos/{job_id}/intermediate/{asset_type}/{backup_name}"
+        
+        logger.info(f"Backing up {src_path} to {dest_path}")
+        
+        # Check if source exists
+        if not await self.storage.exists(src_path):
+            raise FileNotFoundError(f"Asset not found: {src_path}")
+        
+        # Copy to backup
+        backup_url = await self.storage.copy_file(src_path, dest_path)
+        
+        logger.info(f"Backup created: {backup_url}")
+        return backup_url
+    
+    async def backup_final_video(self, job_id: str) -> Optional[str]:
+        """
+        Backup current final video before replacing with new version.
+        
+        Args:
+            job_id: Job identifier
+            
+        Returns:
+            URL of backup, or None if no final video exists
+        """
+        # Find the final video (could be video.mp4, final_video.mp4, etc.)
+        files = await self.storage.list_files(f"videos/{job_id}/final/")
+        
+        # Find the main video file (not a backup)
+        video_file = None
+        for f in files:
+            filename = f.split("/")[-1]
+            if not filename.endswith("_v1.mp4") and filename.endswith(".mp4"):
+                video_file = filename
+                break
+        
+        if not video_file:
+            logger.warning(f"No final video found for job {job_id}")
+            return None
+        
+        return await self.backup_asset(job_id, "final", video_file)
+    
+    async def get_asset_metadata(self, job_id: str) -> Optional[Dict]:
+        """
+        Get metadata for a job from cloud storage.
+        
+        Args:
+            job_id: Job identifier
+            
+        Returns:
+            Metadata dict or None if not found
+        """
+        metadata_path = f"videos/{job_id}/intermediate/metadata.json"
+        
+        if not await self.storage.exists(metadata_path):
+            return None
+        
+        # Download to temp location
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp:
+            tmp_path = tmp.name
+        
+        try:
+            await self.storage.download_file(metadata_path, tmp_path)
+            
+            with open(tmp_path, 'r') as f:
+                metadata = json.load(f)
+            
+            return metadata
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+    
+    async def update_metadata(
+        self,
+        job_id: str,
+        metadata: Dict,
+        local_path: Optional[str] = None
+    ) -> str:
+        """
+        Update job metadata in cloud storage.
+        
+        Args:
+            job_id: Job identifier
+            metadata: Updated metadata dict
+            local_path: Optional local path to save before uploading
+            
+        Returns:
+            Cloud URL of updated metadata
+        """
+        import tempfile
+        
+        # If local path provided, save there
+        if local_path:
+            with open(local_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            upload_path = local_path
+        else:
+            # Otherwise use temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                json.dump(metadata, tmp, indent=2)
+                upload_path = tmp.name
+        
+        try:
+            cloud_path = f"videos/{job_id}/intermediate/metadata.json"
+            url = await self.storage.upload_file(upload_path, cloud_path)
+            
+            logger.info(f"Updated metadata for job {job_id}")
+            return url
+        finally:
+            # Clean up temp file if we created one
+            if not local_path and os.path.exists(upload_path):
+                os.remove(upload_path)
+    
+    async def cleanup_old_backups(self, job_id: str) -> None:
+        """
+        Remove old backup versions beyond the configured limit.
+        
+        Keeps only the most recent backups according to ASSET_BACKUP_LIMIT.
+        
+        Args:
+            job_id: Job identifier
+        """
+        limit = settings.ASSET_BACKUP_LIMIT
+        
+        logger.info(f"Cleaning up old backups for job {job_id} (limit: {limit})")
+        
+        try:
+            # List all files for job
+            files = await self.storage.list_files(f"videos/{job_id}/")
+            
+            # Find backup files (contain _v2, _v3, etc. or _original)
+            # Only delete if we have more than the limit
+            final_backups = [f for f in files if "/final/" in f and "_v" in f and f.endswith(".mp4")]
+            
+            # Sort by version number (newest first)
+            final_backups.sort(reverse=True)
+            
+            # Delete old versions beyond limit
+            if len(final_backups) > limit:
+                to_delete = final_backups[limit:]
+                
+                for file in to_delete:
+                    logger.info(f"Deleting old backup: {file}")
+                    await self.storage.delete_file(file)
+                
+                logger.info(f"Cleaned up {len(to_delete)} old backups")
+        
+        except Exception as e:
+            logger.error(f"Error cleaning up backups: {e}")
+            # Don't raise - cleanup failure shouldn't break the main flow
+
+
+

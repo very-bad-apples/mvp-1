@@ -51,6 +51,22 @@ class Settings:
     REPLICATE_MAX_RETRIES: int = int(os.getenv("REPLICATE_MAX_RETRIES", "3"))
     REPLICATE_TIMEOUT: int = int(os.getenv("REPLICATE_TIMEOUT", "600"))
 
+    # Cloud Storage Configuration
+    STORAGE_BACKEND: str = os.getenv("STORAGE_BACKEND", "firebase")  # Options: "firebase" or "s3"
+    STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "")
+    
+    # Firebase Storage (Google Cloud Storage)
+    FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+    
+    # AWS S3 Configuration
+    AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    
+    # Asset Retention Policy
+    KEEP_INTERMEDIATE_ASSETS: bool = os.getenv("KEEP_INTERMEDIATE_ASSETS", "true").lower() == "true"
+    ASSET_BACKUP_LIMIT: int = int(os.getenv("ASSET_BACKUP_LIMIT", "1"))  # Keep 1 previous version
+
     # Job Queue
     JOB_QUEUE_NAME: str = "video_generation_queue"
     JOB_STATUS_CHANNEL: str = "job_status_updates"
