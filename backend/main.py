@@ -40,6 +40,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("database_init_error", error=str(e))
 
+    # Load MV (Music Video) module configs
+    try:
+        from mv.scene_generator import load_configs
+        load_configs()
+        logger.info("mv_configs_loaded", message="Music Video configs loaded successfully")
+    except Exception as e:
+        logger.error("mv_config_load_error", error=str(e))
+
     yield
 
     logger.info("application_shutdown", message="FastAPI application shutting down")
@@ -145,12 +153,13 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models
+from routers import generate, jobs, websocket, models, mv
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
 app.include_router(websocket.router)
 app.include_router(models.router)
+app.include_router(mv.router)
 
 
 # Root endpoint
@@ -165,7 +174,8 @@ async def root():
         "endpoints": {
             "generate": "/api/generate",
             "job_status": "/api/jobs/{job_id}",
-            "websocket": "/ws/jobs/{job_id}"
+            "websocket": "/ws/jobs/{job_id}",
+            "mv_create_scenes": "/api/mv/create_scenes"
         }
     }
 

@@ -37,6 +37,10 @@ class Settings:
     REPLICATE_API_KEY: str = os.getenv("REPLICATE_API_KEY", "")
     REPLICATE_API_TOKEN: str = os.getenv("REPLICATE_API_TOKEN", "")  # Alternative naming
     ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
+    # Music Video Module
+    MV_DEBUG_MODE: bool = os.getenv("MV_DEBUG_MODE", "false").lower() == "true"
 
     # ElevenLabs settings
     # Default voice: Sarah - Clear, professional, neutral tone
