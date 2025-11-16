@@ -1,0 +1,16 @@
+## Scene 1
+
+A medium shot of a silver metallic humanoid robot carrying a large red and silver shield on its left arm, standing on the South Congress Bridge in Austin, Texas on a bright, sunny day. The robot dramatically fans its face with its free hand, looking overwhelmed by the heat. It looks directly into the camera and says with a sarcastic tone: "They said it was a 'dry heat'. They lied.". The scene is filmed from a front perspective with a vlogging, realistic, 4k, cinematic style.
+
+## Scene 2
+
+A tight close-up shot of the same silver metallic humanoid robot sitting at a picnic table in a bustling Austin food truck park. It holds a large, messy brisket taco in its hand, staring at it with intense confusion. The robot dramatically exclaims: "This… this culinary masterpiece is an engineering paradox!". The scene is filmed from a front perspective, focusing on the robot's expressive face and the taco, in a vlogging, realistic, 4k, cinematic style.
+
+## Scene 3
+
+A wide shot of the silver metallic humanoid robot standing on a vibrant, neon-lit 6th Street at dusk. Live music spills out from a nearby bar. The robot attempts to dance, moving its metallic limbs in a stiff but enthusiastic rhythm, its shield jostling on its arm. It emotionally declares to the camera: "The frequencies! They resonate within my very soul circuits!". The scene is filmed from a front perspective, capturing the robot and the lively street atmosphere in a vlogging, realistic, 4k, cinematic style.
+
+## Scene 4
+
+A medium long shot of the silver metallic humanoid robot sitting peacefully in the grass at Zilker Park during a beautiful golden hour sunset. The Austin city skyline is visible in the background. The robot gently places its free hand on its chest, its metallic surface reflecting the warm orange light. In a soft, lovable voice, it says: "Okay, Austin. You're not so bad after all.". The scene is filmed from a slightly low front perspective, conveying a sense of wonder in a vlogging, realistic, 4k, cinematic style.
+
