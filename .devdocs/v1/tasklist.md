@@ -534,3 +534,210 @@ GET /api/mv/get_video/{scene2_video_id}
 6. **No Progress Updates**: Client cannot track generation progress
 7. **Client-side Merging**: Server doesn't merge multiple scene videos
 8. **No Rate Limiting**: Potential for API cost overruns
+
+# v4 Feature: Mock Video Generation Mode
+
+## Overview
+Add a mock mode for video generation endpoints to enable frontend testing without consuming API credits or waiting for real video generation. When `MOCK_VID_GENS=true`, the system returns pre-staged mock videos instead of calling external APIs.
+
+**Key Design Decisions:**
+- Mock mode controlled by `MOCK_VID_GENS` environment variable
+- Mock videos stored in `backend/mv/outputs/mock/`
+- Simulated processing delay of 5-10 seconds (random per request)
+- Response metadata indicates mock mode with `is_mock: true`
+- Only affects video generation endpoints (not scene/character reference)
+
+---
+
+## Task List
+
+### 1. Environment Configuration
+- [ ] **1.1** Add `MOCK_VID_GENS` to `backend/.env` with default `false`
+- [ ] **1.2** Add `MOCK_VID_GENS` to `backend/config.py` Settings class as boolean
+- [ ] **1.3** Document `MOCK_VID_GENS` in `.env.example` or relevant documentation
+
+### 2. Mock Videos Directory Setup
+- [ ] **2.1** Create `backend/mv/outputs/mock/` directory
+- [ ] **2.2** Create `backend/mv/outputs/mock/README.txt` with:
+  - Instructions for adding mock videos
+  - Suggested UUID-based filenames for MP4 files
+  - Example: `mock_video_1.mp4`, `mock_video_2.mp4`, etc.
+- [ ] **2.3** Add placeholder/sample mock video files (or document where to obtain them)
+- [ ] **2.4** Ensure mock directory is gitignored (already covered by `backend/mv/outputs/`)
+
+### 3. Mock Video Generator Implementation
+- [ ] **3.1** Create `backend/mv/mock_video_generator.py` with:
+  - Function to list available mock videos from mock directory
+  - Function to randomly select a mock video
+  - Function to simulate processing delay (5-10 seconds random)
+  - Function to generate mock response with proper metadata
+  - Metadata should include:
+    - Real video_id (UUID)
+    - Real video_path and video_url
+    - `is_mock: true` field
+    - Simulated `processing_time_seconds` (the actual delay)
+    - Original request parameters in metadata
+
+### 4. Update Video Generator Module
+- [ ] **4.1** Modify `backend/mv/video_generator.py`:
+  - Import settings to check `MOCK_VID_GENS`
+  - At start of `generate_video()`, check if mock mode enabled
+  - If mock mode: call mock generator instead of real backends
+  - If real mode: proceed with existing logic
+  - Add debug logging for mock mode detection
+
+### 5. Update Get Video Endpoint
+- [ ] **5.1** Modify `backend/routers/mv.py` `get_video` endpoint:
+  - Check if `MOCK_VID_GENS` is enabled
+  - If mock mode: serve from `backend/mv/outputs/mock/` directory
+  - If real mode: serve from `backend/mv/outputs/videos/` directory
+  - Note: No simulated delay on get_video (instant serving)
+
+- [ ] **5.2** Modify `backend/routers/mv.py` `get_video_info` endpoint:
+  - Same directory switching logic as get_video
+  - Return mock video metadata when in mock mode
+
+### 6. Debug Logging
+- [ ] **6.1** Add mock-specific debug logging to `backend/mv/debug.py`:
+  - `log_mock_mode_enabled()` - Log when mock mode is active
+  - `log_mock_video_selected()` - Log which mock video was chosen
+  - `log_mock_delay()` - Log simulated delay time
+
+### 7. Testing
+- [ ] **7.1** Create `backend/mv/test_mock_video_generator.py`:
+  - Test mock video listing
+  - Test random video selection
+  - Test simulated delay (verify it's within 5-10s range)
+  - Test mock metadata structure includes `is_mock: true`
+  - Test mock mode toggle via settings
+- [ ] **7.2** Update existing video generator tests to handle mock mode
+- [ ] **7.3** Create `/.devdocs/scripts/test_mock_video.sh` curl script for mock mode testing
+
+### 8. Documentation
+- [ ] **8.1** Update `.devdocs/v1/impl-notes.md` with v4 section:
+  - Mock mode purpose and usage
+  - Limitations of mock mode
+  - How to add custom mock videos
+
+- [ ] **8.2** Update `.devdocs/v1/client-impl-notes.md`:
+  - How to detect mock responses (`is_mock` field)
+  - Testing workflow with mock mode
+  - Differences in response times (5-10s vs 20-400s)
+
+- [ ] **8.3** Update `.env.example` or create if not exists:
+  - Document MOCK_VID_GENS variable
+  - Usage instructions
+
+---
+
+## API Changes
+
+### Generate Video Response (Mock Mode)
+
+```json
+{
+  "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "video_path": "/path/to/backend/mv/outputs/mock/mock_video_1.mp4",
+  "video_url": "/api/mv/get_video/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "metadata": {
+    "prompt": "Original user prompt...",
+    "backend_used": "mock",
+    "model_used": "mock",
+    "is_mock": true,
+    "mock_video_source": "mock_video_1.mp4",
+    "parameters_used": {
+      "aspect_ratio": "16:9",
+      "duration": 8,
+      "generate_audio": true
+    },
+    "generation_timestamp": "2025-11-16T10:30:25Z",
+    "processing_time_seconds": 7.34
+  }
+}
+```
+
+### Key Differences in Mock Mode
+- `backend_used`: "mock" instead of "replicate" or "gemini"
+- `model_used`: "mock" instead of actual model name
+- `is_mock`: true (new field, always present in mock mode)
+- `mock_video_source`: original filename of mock video used
+- `processing_time_seconds`: actual simulated delay (5-10s)
+
+---
+
+## Environment Variable Documentation
+
+```bash
+# Mock Video Generation Mode
+# When enabled, video generation endpoints return pre-staged mock videos
+# instead of calling external APIs. Useful for frontend development and testing.
+# Simulates 5-10 second processing delay per request.
+MOCK_VID_GENS=false  # Set to 'true' to enable mock mode
+```
+
+---
+
+## Mock Videos Directory Structure
+
+```
+backend/mv/outputs/mock/
+├── README.txt           # Instructions and suggested filenames
+├── mock_video_1.mp4     # Sample mock video
+├── mock_video_2.mp4     # Another sample
+├── mock_video_3.mp4     # Additional variety
+└── ...                  # Add more as needed
+```
+
+### README.txt Content Suggestion
+
+```
+Mock Videos for Testing
+========================
+
+Place MP4 video files in this directory to use with MOCK_VID_GENS=true mode.
+
+When mock mode is enabled:
+- /api/mv/generate_video will randomly select from available videos
+- Returns proper response structure with is_mock: true
+- Simulates 5-10 second processing delay
+
+Suggested Filenames:
+- mock_video_1.mp4
+- mock_video_2.mp4
+- mock_video_3.mp4
+- mock_robot_walking.mp4
+- mock_character_scene.mp4
+
+Requirements:
+- Must be valid MP4 files
+- Any resolution/duration works
+- At least 1 video file required for mock mode to function
+
+Note: These files are gitignored. Each developer needs their own mock videos.
+```
+
+---
+
+## Client Detection of Mock Mode
+
+Frontend can detect mock responses by checking:
+
+```javascript
+const response = await generateVideo(prompt);
+
+if (response.metadata.is_mock) {
+  console.log('Mock mode detected - using pre-staged video');
+  console.log(`Mock source: ${response.metadata.mock_video_source}`);
+  // Show indicator to user that this is mock data
+}
+```
+
+---
+
+## Known Limitations
+
+1. **Manual video setup** - Developers must add their own mock videos
+2. **No parameter variation** - Same videos returned regardless of prompt/params
+3. **File size** - Mock videos should be small to avoid repo bloat (gitignored)
+4. **Limited variety** - Only as many mock videos as manually added
+5. **No reference image simulation** - Mock doesn't validate/use reference images

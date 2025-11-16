@@ -45,3 +45,15 @@ We'll need some new logic here to address this local python script which we're p
         - note the limitations of this approach into .devdocs/v1/impl-notes.md for future improvment
             - we currently don't auth implemented on the backend or client but will add down the road.
         - add notes about this approach and its limitations to .devdocs/v1/client-impl-notes.md which will be given to the frontend team to integrate these endpoints to the frontend.
+
+## v4
+
+Enable a env var MOCK_VID_GENS that enable us to test the endpoints from the client without having to call the service?
+- document this var in the relevant .env.example 
+- setup a mock videos directory where i'll place some example mock videos, add a text file in this directory with suggested filename of uuid's for the mp4's
+- when in mock mode:
+    - the generate_video endpoint should:
+        - randomly select from one of the avialble video files and return a a proper response indicating success
+    - the get_video endpoint should:
+        - return the data for the mock video directory instead of the real video outputs directory
+        - should simulate a processing time by generating a random wait time of 5-10 seconds during each request (generate a new random number each request) 
