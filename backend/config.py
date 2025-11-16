@@ -41,6 +41,7 @@ class Settings:
 
     # Music Video Module
     MV_DEBUG_MODE: bool = os.getenv("MV_DEBUG_MODE", "false").lower() == "true"
+    MOCK_VID_GENS: bool = os.getenv("MOCK_VID_GENS", "false").lower() == "true"
 
     # ElevenLabs settings
     # Default voice: Sarah - Clear, professional, neutral tone

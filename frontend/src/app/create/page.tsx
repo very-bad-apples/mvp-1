@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
-import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 type Mode = 'ad-creative' | 'music-video'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function CreatePage() {
   const router = useRouter()
@@ -28,6 +32,19 @@ export default function CreatePage() {
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
+  const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
+  const [generationAttempts, setGenerationAttempts] = useState(0)
+
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      generatedImages.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url)
+        }
+      })
+    }
+  }, [generatedImages])
 
   // Check if form is valid and ready to submit
   const isFormValid = () => {
@@ -107,7 +124,7 @@ export default function CreatePage() {
       await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Generate a mock job ID
-      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
       toast({
         title: "Video generation started!",
@@ -140,30 +157,62 @@ export default function CreatePage() {
 
     setIsGeneratingImages(true)
     setSelectedImageIndex(null) // Reset selection
+    setImageGenerationError(null) // Clear previous errors
+
+    // Clean up previous blob URLs to prevent memory leaks
+    generatedImages.forEach(url => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url)
+      }
+    })
+    setGeneratedImages([])
 
     try {
-      // Mock image generation (simulating API call)
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          character_description: characterDescription.trim(),
+        }),
+      })
 
-      // Generate mock image URLs (in production, these would be actual generated images)
-      const mockImages = [
-        `https://placehold.co/512x512/1e40af/ffffff?text=Character+1`,
-        `https://placehold.co/512x512/7c3aed/ffffff?text=Character+2`,
-        `https://placehold.co/512x512/0891b2/ffffff?text=Character+3`,
-        `https://placehold.co/512x512/059669/ffffff?text=Character+4`,
-      ]
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character image')
+      }
 
-      setGeneratedImages(mockImages)
+      const data = await response.json()
+
+      // Convert base64 to blob URL for better performance
+      const base64Image = data.image_base64
+      const byteCharacters = atob(base64Image)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const blob = new Blob([byteArray], { type: 'image/png' })
+      const blobUrl = URL.createObjectURL(blob)
+
+      // For now, we're generating one image, but you could generate multiple
+      // by calling the API multiple times in parallel or modifying the backend
+      setGeneratedImages([blobUrl])
+      setGenerationAttempts(prev => prev + 1)
 
       toast({
-        title: "Images Generated",
-        description: "Select an image or regenerate to get new options",
+        title: "Character Image Generated",
+        description: "Your character reference is ready. Click to select it.",
       })
     } catch (error) {
       console.error('Error generating images:', error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate character images. Please try again."
+      setImageGenerationError(errorMessage)
+
       toast({
-        title: "Error",
-        description: "Failed to generate character images. Please try again.",
+        title: "Generation Failed",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -332,8 +381,30 @@ export default function CreatePage() {
                       className="min-h-[100px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
                     />
 
+                    {/* Error Display */}
+                    {imageGenerationError && !isGeneratingImages && (
+                      <Alert variant="destructive" className="bg-red-950/50 border-red-900">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-red-300">
+                          {imageGenerationError}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Loading Skeleton */}
+                    {isGeneratingImages && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Skeleton className="aspect-square rounded-lg bg-gray-700/50" />
+                        </div>
+                        <p className="text-sm text-gray-400 text-center">
+                          Generating character image... This may take 30-60 seconds.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Generated Images Grid - Above the button */}
-                    {generatedImages.length > 0 && (
+                    {generatedImages.length > 0 && !isGeneratingImages && (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           {generatedImages.map((imageUrl, index) => (

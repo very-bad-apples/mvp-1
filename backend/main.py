@@ -44,8 +44,10 @@ async def lifespan(app: FastAPI):
     try:
         from mv.scene_generator import load_configs
         from mv.image_generator import load_image_configs
+        from mv.video_generator import load_video_configs
         load_configs()
         load_image_configs()
+        load_video_configs()
         logger.info("mv_configs_loaded", message="Music Video configs loaded successfully")
     except Exception as e:
         logger.error("mv_config_load_error", error=str(e))
@@ -178,7 +180,9 @@ async def root():
             "job_status": "/api/jobs/{job_id}",
             "websocket": "/ws/jobs/{job_id}",
             "mv_create_scenes": "/api/mv/create_scenes",
-            "mv_generate_character_reference": "/api/mv/generate_character_reference"
+            "mv_generate_character_reference": "/api/mv/generate_character_reference",
+            "mv_generate_video": "/api/mv/generate_video",
+            "mv_get_video": "/api/mv/get_video/{video_id}"
         }
     }
 
