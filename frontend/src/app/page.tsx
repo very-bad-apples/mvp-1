@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles, Video, Zap, CheckCircle } from "lucide-react";
+import { HeroSection } from "@/components/HeroSection";
 
 export default function Home() {
   return (
@@ -30,53 +31,7 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20 md:py-32">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-8">
-            <Sparkles className="h-4 w-4" />
-            <span className="text-sm font-medium">AI-Powered Video Creation</span>
-          </div>
-
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            Create Stunning Videos
-            <span className="block bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-              In Minutes
-            </span>
-          </h1>
-
-          <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto">
-            Transform your product images into professional video ads with AI.
-            Upload your image, describe your vision, and let our AI do the rest.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/create">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg w-full sm:w-auto">
-                Start Creating Free
-                <Zap className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
-            <Button size="lg" variant="outline" className="border-gray-600 text-white hover:bg-gray-800 px-8 py-6 text-lg">
-              Watch Demo
-            </Button>
-          </div>
-
-          <div className="mt-12 grid grid-cols-3 gap-8 max-w-2xl mx-auto">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">30s</div>
-              <div className="text-sm text-gray-400">Generation Time</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">$1.50</div>
-              <div className="text-sm text-gray-400">Cost Per Video</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">9:16</div>
-              <div className="text-sm text-gray-400">Vertical Format</div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HeroSection />
 
       {/* Features Section */}
       <section id="features" className="container mx-auto px-4 py-20">
