@@ -2,12 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { ZoomIn, ZoomOut, RefreshCw, Edit3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { TimelineItemSheet, TimelineItem } from './TimelineItemSheet'
 
 interface TimelineProps {
   jobId: string
@@ -105,9 +103,7 @@ export function Timeline({
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
   const [segments, setSegments] = useState<VideoSegment[]>(mockSegments)
   const [isRegenerating, setIsRegenerating] = useState<string | null>(null)
-  const [isEditPromptOpen, setIsEditPromptOpen] = useState(false)
-  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null)
-  const [editPromptValue, setEditPromptValue] = useState('')
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const { toast } = useToast()
@@ -152,36 +148,36 @@ export function Timeline({
     })
   }
 
-  const handleOpenEditPrompt = (segmentId: string) => {
-    const segment = segments.find(s => s.id === segmentId)
-    if (segment) {
-      setEditingSegmentId(segmentId)
-      setEditPromptValue(segment.prompt)
-      setIsEditPromptOpen(true)
-    }
+  const handleOpenSheet = (segmentId: string) => {
+    setSelectedSegmentId(segmentId)
+    setIsSheetOpen(true)
   }
 
-  const handleSavePrompt = () => {
-    if (editingSegmentId) {
-      setSegments(prev => prev.map(seg =>
-        seg.id === editingSegmentId
-          ? { ...seg, prompt: editPromptValue }
-          : seg
-      ))
-      toast({
-        title: "Prompt Updated",
-        description: "Scene prompt has been updated successfully!",
-      })
-    }
-    setIsEditPromptOpen(false)
-    setEditingSegmentId(null)
-    setEditPromptValue('')
+  const handleCloseSheet = () => {
+    setIsSheetOpen(false)
+    // Keep the segment selected briefly so the sheet can animate out
+    setTimeout(() => setSelectedSegmentId(null), 300)
   }
 
-  const handleCancelEdit = () => {
-    setIsEditPromptOpen(false)
-    setEditingSegmentId(null)
-    setEditPromptValue('')
+  const handleSaveSegment = (segmentId: string, updates: Partial<TimelineItem>) => {
+    setSegments(prev => prev.map(seg =>
+      seg.id === segmentId
+        ? { ...seg, ...updates }
+        : seg
+    ))
+    toast({
+      title: "Changes Saved",
+      description: "Scene has been updated successfully!",
+    })
+  }
+
+  const handleDeleteSegment = (segmentId: string) => {
+    setSegments(prev => prev.filter(seg => seg.id !== segmentId))
+    toast({
+      title: "Scene Deleted",
+      description: "The scene has been removed from the timeline.",
+      variant: "destructive",
+    })
   }
 
   useEffect(() => {
@@ -302,50 +298,22 @@ export function Timeline({
                       className="h-full w-full object-cover opacity-60"
                     />
 
-                    {/* Hover overlay with info */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 opacity-0 transition-opacity group-hover:opacity-100 p-2">
-                      <span className="text-sm font-medium text-white mb-1">
-                        Scene {segment.sceneNumber}
-                      </span>
-                      <span className="text-xs text-gray-300 mb-2">
-                        {formatTime(segment.duration)}
-                      </span>
-                      <div className="flex flex-col gap-1.5 w-full px-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white w-full"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenEditPrompt(segment.id)
-                          }}
-                        >
-                          <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-                          Edit Prompt
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs border-green-500 text-green-400 hover:bg-green-500 hover:text-white w-full"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRegenerateSegment(segment.id)
-                          }}
-                          disabled={isRegenerating === segment.id}
-                        >
-                          {isRegenerating === segment.id ? (
-                            <>
-                              <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                              Regenerating...
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                              Regenerate
-                            </>
-                          )}
-                        </Button>
+                    {/* Hover overlay with prompt */}
+                    <div className="absolute inset-0 flex flex-col items-start justify-center bg-black/85 backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 p-3 overflow-hidden">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+                          Scene {segment.sceneNumber}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {formatTime(segment.duration)}
+                        </span>
                       </div>
+                      <p className="text-sm text-gray-200 leading-relaxed line-clamp-4">
+                        {segment.prompt}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-2 italic">
+                        Click to edit
+                      </p>
                     </div>
 
                     {/* Scene number label */}
@@ -398,7 +366,7 @@ export function Timeline({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => selectedSegmentId && handleOpenEditPrompt(selectedSegmentId)}
+                onClick={() => selectedSegmentId && handleOpenSheet(selectedSegmentId)}
                 className="border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white"
               >
                 <Edit3 className="mr-2 h-4 w-4" />
@@ -428,52 +396,23 @@ export function Timeline({
         </div>
       )}
 
-      {/* Edit Prompt Modal */}
-      <Dialog open={isEditPromptOpen} onOpenChange={setIsEditPromptOpen}>
-        <DialogContent className="sm:max-w-[525px] bg-gray-800 border-gray-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">
-              Edit Scene {segments.find(s => s.id === editingSegmentId)?.sceneNumber} Prompt
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Modify the text prompt for this scene. This will be used when regenerating the scene.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="prompt" className="text-white">
-                Scene Prompt
-              </Label>
-              <Textarea
-                id="prompt"
-                value={editPromptValue}
-                onChange={(e) => setEditPromptValue(e.target.value)}
-                placeholder="Enter scene description..."
-                className="bg-gray-900 border-gray-600 text-white placeholder:text-gray-500 min-h-[120px] resize-none"
-                rows={5}
-              />
-              <p className="text-xs text-gray-400">
-                Describe what you want to see in this scene. Be specific about the visuals, actions, and atmosphere.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleCancelEdit}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSavePrompt}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Save Prompt
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Timeline Item Sheet */}
+      <TimelineItemSheet
+        item={
+          selectedSegmentId
+            ? {
+                ...segments.find(s => s.id === selectedSegmentId)!,
+                type: 'scene' as const,
+              }
+            : null
+        }
+        isOpen={isSheetOpen}
+        onClose={handleCloseSheet}
+        onSave={handleSaveSegment}
+        onRegenerate={handleRegenerateSegment}
+        onDelete={handleDeleteSegment}
+        isRegenerating={isRegenerating === selectedSegmentId}
+      />
     </div>
   )
 }
