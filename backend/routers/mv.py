@@ -13,6 +13,11 @@ from mv.scene_generator import (
     CreateScenesResponse,
     generate_scenes,
 )
+from mv.image_generator import (
+    GenerateCharacterReferenceRequest,
+    GenerateCharacterReferenceResponse,
+    generate_character_reference_image,
+)
 
 logger = structlog.get_logger()
 
@@ -181,6 +186,141 @@ async def create_scenes(request: CreateScenesRequest):
             detail={
                 "error": "InternalError",
                 "message": "An unexpected error occurred during scene generation",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/generate_character_reference",
+    response_model=GenerateCharacterReferenceResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Character reference image generated successfully"},
+        400: {"description": "Invalid request parameters"},
+        500: {"description": "Internal server error or API failure"}
+    },
+    summary="Generate Character Reference Image",
+    description="""
+Generate a character reference image using Google Imagen 4 via Replicate API.
+
+This endpoint creates a full-body character reference image based on a visual
+description, suitable for maintaining character consistency across video scenes.
+
+**Limitations:**
+- Synchronous processing (may take 10-60+ seconds)
+- File-based storage (images saved to filesystem)
+- Large response size (base64 encoded image)
+
+**Required Fields:**
+- character_description: Visual description of the character
+
+**Optional Fields (defaults from config):**
+- aspect_ratio: Image aspect ratio (default: "1:1")
+- safety_filter_level: Content moderation level (default: "block_medium_and_above")
+- person_generation: Person generation setting (default: "allow_adult")
+- output_format: Output format (default: "png")
+- negative_prompt: Elements to exclude from the image
+- seed: Random seed for reproducibility
+"""
+)
+async def generate_character_reference(request: GenerateCharacterReferenceRequest):
+    """
+    Generate a character reference image.
+
+    This endpoint:
+    1. Validates the request parameters
+    2. Applies defaults from YAML config for optional fields
+    3. Generates image using Replicate API with Google Imagen 4
+    4. Saves image to files with timestamp-based filename
+    5. Returns base64-encoded image, file path, and metadata
+
+    **Example Request:**
+    ```json
+    {
+        "character_description": "Silver metallic humanoid robot with a red shield"
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
+        "output_file": "/path/to/character_ref_20251115_143025.png",
+        "metadata": {
+            "character_description": "Silver metallic humanoid robot...",
+            "model_used": "google/imagen-4",
+            "parameters_used": {...},
+            "generation_timestamp": "2025-11-15T14:30:25Z"
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "generate_character_reference_request_received",
+            character_description=request.character_description[:100] + "..." if len(request.character_description) > 100 else request.character_description,
+            aspect_ratio=request.aspect_ratio
+        )
+
+        # Validate required fields
+        if not request.character_description or not request.character_description.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Character description is required",
+                    "details": "The 'character_description' field cannot be empty"
+                }
+            )
+
+        # Generate character reference image
+        image_base64, output_file, metadata = generate_character_reference_image(
+            character_description=request.character_description.strip(),
+            aspect_ratio=request.aspect_ratio.strip() if request.aspect_ratio else None,
+            safety_filter_level=request.safety_filter_level.strip() if request.safety_filter_level else None,
+            person_generation=request.person_generation.strip() if request.person_generation else None,
+            output_format=request.output_format.strip() if request.output_format else None,
+            negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
+            seed=request.seed,
+        )
+
+        response = GenerateCharacterReferenceResponse(
+            image_base64=image_base64,
+            output_file=output_file,
+            metadata=metadata
+        )
+
+        logger.info(
+            "generate_character_reference_request_completed",
+            output_file=output_file,
+            image_size_bytes=len(image_base64)
+        )
+
+        return response
+
+    except ValueError as e:
+        # Handle configuration errors (e.g., missing API token)
+        logger.error("generate_character_reference_config_error", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "ConfigurationError",
+                "message": str(e),
+                "details": "Check your environment configuration"
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error("generate_character_reference_unexpected_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "An unexpected error occurred during image generation",
                 "details": str(e)
             }
         )
