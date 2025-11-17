@@ -12,3 +12,12 @@ This page should utilize the layout and styling of the result/job_<id> page but 
 - the "character and style"
 - the id of the character reference image.
 These fields should de displayed in a card on that page above the other sections. Don't worry about styling these, in future these fields will be used as payloads in requests to the backend from that /quick-gen-page.
+
+## v3
+
+on /quick-gen-page let's kickoff a call to /api/mv/create_scenes and display the response json in cards on the page when it's created.
+- Create a progress bar like on the /result/job_id page waiting for the scenes json to be returned (expected 10-30 seconds).
+- Utilize only the following field for the request:
+    - "idea": <video description data>,
+    - "character_description": <character and style data>
+    

@@ -141,3 +141,58 @@ Add a "Quick Job" button to the create page that navigates to a new `/quick-gen-
   - Test with missing/empty fields
   - Test direct URL access (no state)
   - Test "Back to Create" navigation
+
+---
+
+## v3 - Scene Generation API Integration
+
+### Summary
+Integrate `/api/mv/create_scenes` API call on `/quick-gen-page`, showing simulated progress bar during request and displaying generated scenes in cards.
+
+### Frontend Tasks
+
+- [ ] **Add API call on page load**
+  - Call `/api/mv/create_scenes` immediately when page mounts
+  - Request body: `{ "idea": videoDescription, "character_description": characterDescription }`
+  - Only call if both fields are non-empty
+  - Handle case where data is missing (skip API call)
+
+- [ ] **Implement simulated progress bar**
+  - Show progress bar during API call (10-30 second expected duration)
+  - Simulate progress from 0% to ~90% over time
+  - Jump to 100% when response arrives
+  - Use same Progress component as `/result/[id]/page.tsx`
+  - Show "Generating scenes..." status message
+
+- [ ] **Display scenes in cards**
+  - Parse response: `response.scenes` array
+  - Each scene contains: `description` and `negative_description`
+  - Create card for each scene with:
+    - Scene number/title
+    - Description text
+    - Negative description text (clearly labeled)
+  - Use same Card styling as existing cards (gray-800/50, border-gray-700)
+
+- [ ] **Handle loading states**
+  - Show progress bar card while loading
+  - Replace with scene cards when complete
+  - Show status indicators (pending → processing → completed)
+
+- [ ] **Error handling**
+  - Display error message in card area if API fails
+  - Show error details (network error, server error, etc.)
+  - Use Alert component with destructive variant
+  - Allow retry or navigation back to create page
+
+- [ ] **Update state management**
+  - Track: isLoading, progress, scenes array, error state
+  - Clear progress simulation interval on response/error
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Test API call triggers on page load
+  - Verify progress bar animates during wait
+  - Check scene cards display correctly with both fields
+  - Test error scenarios (backend down, invalid data)
+  - Test with missing input data (no API call)
