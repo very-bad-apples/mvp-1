@@ -20,4 +20,13 @@ on /quick-gen-page let's kickoff a call to /api/mv/create_scenes and display the
 - Utilize only the following field for the request:
     - "idea": <video description data>,
     - "character_description": <character and style data>
-    
+
+## v4
+
+on the /quick-gen-page we'll await the scenes.json to arrive and when they do quick off a call to /api/mv/generate_video, one request per scene, we'll pass each scenes's field to respective endpoint 
+    - description -> prompt
+    - negative_description -> negative_prompt
+omit all other endpoint params.
+
+return the generated videos by calling the /api/mv/get_video with uuid / video_url and display each video clip in it's own card.
+    - create the cards for the videos immediately and show loading status for them until the video is generated and loaded.

@@ -8,9 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Video, ChevronLeft, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Video, ChevronLeft, Loader2, CheckCircle, AlertCircle, Film } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// Configuration
+const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 // Expected time for video generation
 
 interface QuickJobData {
   videoDescription: string
@@ -21,6 +24,14 @@ interface QuickJobData {
 interface Scene {
   description: string
   negative_description: string
+}
+
+interface VideoState {
+  sceneIndex: number
+  status: 'loading' | 'completed' | 'error'
+  videoId?: string
+  videoUrl?: string
+  error?: string
 }
 
 type GenerationStatus = 'idle' | 'loading' | 'completed' | 'error'
@@ -40,6 +51,10 @@ export default function QuickGenPage() {
   const [error, setError] = useState<string | null>(null)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const hasStartedRef = useRef(false)
+
+  // Video generation state
+  const [videoStates, setVideoStates] = useState<VideoState[]>([])
+  const hasStartedVideoGenRef = useRef(false)
 
   // Load job data from sessionStorage
   useEffect(() => {
@@ -79,6 +94,20 @@ export default function QuickGenPage() {
       }
     }
   }, [jobData])
+
+  // Start video generation when scenes are ready
+  useEffect(() => {
+    if (
+      hasStartedVideoGenRef.current ||
+      scenes.length === 0 ||
+      generationStatus !== 'completed'
+    ) {
+      return
+    }
+
+    hasStartedVideoGenRef.current = true
+    generateVideos()
+  }, [scenes, generationStatus])
 
   const generateScenes = async () => {
     setGenerationStatus('loading')
@@ -137,6 +166,88 @@ export default function QuickGenPage() {
       setGenerationStatus('error')
       console.error('Scene generation error:', err)
     }
+  }
+
+  const generateVideos = async () => {
+    // Initialize video states with loading status
+    const initialStates: VideoState[] = scenes.map((_, index) => ({
+      sceneIndex: index,
+      status: 'loading',
+    }))
+    setVideoStates(initialStates)
+
+    // Generate videos in parallel
+    // LIMITATION: Character reference image is not passed to generate_video
+    // This would require fetching the image by ID and converting to base64
+    // Deferred for future implementation
+    const videoPromises = scenes.map((scene, index) =>
+      generateSingleVideo(scene, index)
+    )
+
+    await Promise.allSettled(videoPromises)
+  }
+
+  const generateSingleVideo = async (scene: Scene, sceneIndex: number) => {
+    try {
+      const response = await fetch(`${API_URL}/api/mv/generate_video`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: scene.description,
+          negative_prompt: scene.negative_description,
+          // LIMITATION: reference_image_base64 is omitted
+          // Character reference image integration deferred
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(errorData.detail?.message || errorData.detail || 'Failed to generate video')
+      }
+
+      const data = await response.json()
+
+      // Update state for this specific video
+      // Prepend API_URL to the relative video_url path
+      const fullVideoUrl = `${API_URL}${data.video_url}`
+      setVideoStates(prev =>
+        prev.map(state =>
+          state.sceneIndex === sceneIndex
+            ? {
+                ...state,
+                status: 'completed',
+                videoId: data.video_id,
+                videoUrl: fullVideoUrl,
+              }
+            : state
+        )
+      )
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate video'
+      console.error(`Video generation error for scene ${sceneIndex + 1}:`, err)
+
+      // Update state with error for this specific video
+      setVideoStates(prev =>
+        prev.map(state =>
+          state.sceneIndex === sceneIndex
+            ? {
+                ...state,
+                status: 'error',
+                error: errorMessage,
+              }
+            : state
+        )
+      )
+    }
+  }
+
+  // Calculate video generation summary stats
+  const videoSummary = {
+    loading: videoStates.filter(v => v.status === 'loading').length,
+    succeeded: videoStates.filter(v => v.status === 'completed').length,
+    failed: videoStates.filter(v => v.status === 'error').length,
   }
 
   const getStatusBadge = () => {
@@ -327,6 +438,107 @@ export default function QuickGenPage() {
                           </div>
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Video Generation Section */}
+            {videoStates.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Generated Videos</h2>
+                  {/* Status Summary Bar */}
+                  <div className="flex items-center gap-2">
+                    {videoSummary.loading > 0 && (
+                      <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        {videoSummary.loading} loading
+                      </Badge>
+                    )}
+                    {videoSummary.succeeded > 0 && (
+                      <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
+                        {videoSummary.succeeded} succeeded
+                      </Badge>
+                    )}
+                    {videoSummary.failed > 0 && (
+                      <Badge className="bg-red-500/10 text-red-400 border-red-500/20">
+                        {videoSummary.failed} failed
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Cards */}
+                {videoStates.map((videoState) => (
+                  <Card key={videoState.sceneIndex} className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-white text-lg">
+                          Video {videoState.sceneIndex + 1}
+                        </CardTitle>
+                        {videoState.status === 'loading' && (
+                          <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                            Generating
+                          </Badge>
+                        )}
+                        {videoState.status === 'completed' && (
+                          <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
+                            Ready
+                          </Badge>
+                        )}
+                        {videoState.status === 'error' && (
+                          <Badge className="bg-red-500/10 text-red-400 border-red-500/20">
+                            Failed
+                          </Badge>
+                        )}
+                      </div>
+                      {videoState.videoId && (
+                        <CardDescription className="text-gray-400 font-mono text-xs">
+                          ID: {videoState.videoId}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      {/* Loading State */}
+                      {videoState.status === 'loading' && (
+                        <div className="space-y-4">
+                          <div className="aspect-video bg-gray-900/50 rounded-lg flex items-center justify-center border border-gray-700">
+                            <div className="text-center space-y-3">
+                              <Loader2 className="h-12 w-12 text-blue-400 animate-spin mx-auto" />
+                              <p className="text-gray-400 text-sm">
+                                Generating video... (expected ~{VIDEO_EXPECTED_LOAD_TIME_SECONDS}s)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Completed State - Video Player */}
+                      {videoState.status === 'completed' && videoState.videoUrl && (
+                        <div className="space-y-2">
+                          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+                            <video
+                              src={videoState.videoUrl}
+                              controls
+                              className="w-full h-full"
+                              preload="metadata"
+                            >
+                              Your browser does not support the video tag.
+                            </video>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error State */}
+                      {videoState.status === 'error' && videoState.error && (
+                        <Alert variant="destructive" className="bg-red-950/50 border-red-900">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-red-300">
+                            Scene {videoState.sceneIndex + 1} failed: {videoState.error}
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </CardContent>
                   </Card>
                 ))}

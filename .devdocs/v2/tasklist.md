@@ -196,3 +196,78 @@ Integrate `/api/mv/create_scenes` API call on `/quick-gen-page`, showing simulat
   - Check scene cards display correctly with both fields
   - Test error scenarios (backend down, invalid data)
   - Test with missing input data (no API call)
+
+---
+
+## v4 - Video Generation from Scenes
+
+### Summary
+After scenes are generated, automatically trigger parallel video generation for each scene via `/api/mv/generate_video`. Display videos in individual cards with loading states and an overall status summary bar.
+
+### Frontend Tasks
+
+- [ ] **Trigger video generation after scenes complete**
+  - After scenes array is populated, automatically start video generation
+  - One API call per scene, all in parallel
+  - Request body per scene:
+    - `prompt`: scene.description
+    - `negative_prompt`: scene.negative_description
+  - Omit all other parameters (reference_image_base64, etc.)
+  - NOTE: Character reference image integration deferred (document as limitation)
+
+- [ ] **Create video cards immediately**
+  - Create placeholder cards for each video before generation starts
+  - Show loading state per card (spinner, "Generating video...")
+  - Display scene number in card header
+  - Use configurable expected load time (default: 7 seconds)
+
+- [ ] **Handle individual video responses**
+  - Track state per video: loading | completed | error
+  - On success: store video_id and video_url from response
+  - On error: store error message for that specific card
+  - Update card state as each response arrives
+
+- [ ] **Display videos in cards**
+  - Replace loading state with video player when ready
+  - Video controls: enabled, sound enabled, no autoplay
+  - Show video metadata (video_id, etc.)
+  - Use video URL from response (or fetch via `/api/mv/get_video/{id}`)
+
+- [ ] **Implement overall status summary bar**
+  - Show at top of videos section
+  - Display counts: "X loading / Y succeeded / Z failed"
+  - Update in real-time as videos complete
+  - Use Badge components for status colors:
+    - Blue: loading
+    - Green: succeeded
+    - Red: failed
+
+- [ ] **Error handling per card**
+  - Display error message within the specific video card
+  - Show which scene number failed
+  - Keep other videos unaffected
+  - Use Alert component within card
+
+- [ ] **State management**
+  - Track array of video states (one per scene)
+  - Each entry: { sceneIndex, status, videoId?, videoUrl?, error? }
+  - Calculate summary stats from this array
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document character reference image limitation
+  - Note that reference_image_base64 is not passed to generate_video
+  - Document parallel generation approach
+  - Document expected load time configuration
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Verify video generation triggers after scenes complete
+  - Check all videos generate in parallel
+  - Test loading states display correctly
+  - Verify videos play with controls and sound
+  - Test error scenarios (some videos fail, all fail)
+  - Check status summary bar updates correctly
+  - Test with mock mode enabled (MOCK_VID_GENS=true)
