@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
+import { YouTubeAudioDownloader } from '@/components/YouTubeAudioDownloader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
@@ -27,6 +28,9 @@ export default function CreatePage() {
   const [characterDescription, setCharacterDescription] = useState('')
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
+  const [downloadedAudioId, setDownloadedAudioId] = useState<string>('')
+  const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
+  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [useAICharacter, setUseAICharacter] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
@@ -54,7 +58,10 @@ export default function CreatePage() {
 
     // Check mode-specific requirements
     if (mode === 'ad-creative' && uploadedImages.length === 0) return false
-    if (mode === 'music-video' && !uploadedAudio) return false
+    if (mode === 'music-video') {
+      if (audioSource === 'upload' && !uploadedAudio) return false
+      if (audioSource === 'youtube' && !downloadedAudioId) return false
+    }
 
     // Check AI character requirements
     if (useAICharacter && selectedImageIndex === null) return false
@@ -84,13 +91,23 @@ export default function CreatePage() {
       return
     }
 
-    if (mode === 'music-video' && !uploadedAudio) {
-      toast({
-        title: "Error",
-        description: "Please upload a music file",
-        variant: "destructive",
-      })
-      return
+    if (mode === 'music-video') {
+      if (audioSource === 'upload' && !uploadedAudio) {
+        toast({
+          title: "Error",
+          description: "Please upload a music file",
+          variant: "destructive",
+        })
+        return
+      }
+      if (audioSource === 'youtube' && !downloadedAudioId) {
+        toast({
+          title: "Error",
+          description: "Please download audio from YouTube",
+          variant: "destructive",
+        })
+        return
+      }
     }
 
     if (useAICharacter && selectedImageIndex === null) {
@@ -310,7 +327,7 @@ export default function CreatePage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-1">
                   <Label className="text-sm font-medium text-white">
-                    {mode === 'ad-creative' ? 'Product Images' : 'Music File'}
+                    {mode === 'ad-creative' ? 'Product Images' : 'Music Source'}
                   </Label>
                   <span className="text-red-400 text-sm">*</span>
                 </div>
@@ -327,15 +344,63 @@ export default function CreatePage() {
                     )}
                   </div>
                 ) : (
-                  <div>
-                    <AudioUploadZone
-                      onFileChange={setUploadedAudio}
-                      file={uploadedAudio}
-                    />
-                    {!uploadedAudio && (
-                      <p className="text-xs text-red-400 mt-2">
-                        Music file is required
-                      </p>
+                  <div className="space-y-4">
+                    {/* Audio Source Tabs */}
+                    <Tabs
+                      value={audioSource}
+                      onValueChange={(value) => {
+                        setAudioSource(value as 'upload' | 'youtube')
+                        // Clear the other source when switching
+                        if (value === 'upload') {
+                          setDownloadedAudioId('')
+                          setDownloadedAudioUrl('')
+                        } else {
+                          setUploadedAudio(null)
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
+                        <TabsTrigger
+                          value="upload"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          Upload File
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="youtube"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          YouTube URL
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {/* Audio Upload Zone */}
+                    {audioSource === 'upload' && (
+                      <div>
+                        <AudioUploadZone
+                          onFileChange={setUploadedAudio}
+                          file={uploadedAudio}
+                        />
+                        {!uploadedAudio && (
+                          <p className="text-xs text-red-400 mt-2">
+                            Music file is required
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* YouTube Downloader */}
+                    {audioSource === 'youtube' && (
+                      <div>
+                        <YouTubeAudioDownloader
+                          onAudioDownloaded={(audioId, audioUrl) => {
+                            setDownloadedAudioId(audioId)
+                            setDownloadedAudioUrl(audioUrl)
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                 )}
@@ -570,10 +635,19 @@ export default function CreatePage() {
                         Please upload at least one product image
                       </p>
                     )}
-                    {mode === 'music-video' && !uploadedAudio && (
-                      <p className="text-xs text-yellow-400 text-center">
-                        Please upload a music file
-                      </p>
+                    {mode === 'music-video' && (
+                      <>
+                        {audioSource === 'upload' && !uploadedAudio && (
+                          <p className="text-xs text-yellow-400 text-center">
+                            Please upload a music file
+                          </p>
+                        )}
+                        {audioSource === 'youtube' && !downloadedAudioId && (
+                          <p className="text-xs text-yellow-400 text-center">
+                            Audio is required
+                          </p>
+                        )}
+                      </>
                     )}
                     {useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
                       <p className="text-xs text-yellow-400 text-center">
