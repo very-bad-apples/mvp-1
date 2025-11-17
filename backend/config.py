@@ -58,7 +58,8 @@ class Settings:
     REPLICATE_TIMEOUT: int = int(os.getenv("REPLICATE_TIMEOUT", "600"))
 
     # Cloud Storage Configuration
-    STORAGE_BACKEND: str = os.getenv("STORAGE_BACKEND", "firebase")  # Options: "firebase" or "s3"
+    # Default to S3 for new MV pipeline; Firebase still supported for legacy endpoints
+    STORAGE_BACKEND: str = os.getenv("STORAGE_BACKEND", "s3")  # Options: "firebase" or "s3"
     STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "")
     
     # Firebase Storage (Google Cloud Storage)
@@ -76,6 +77,35 @@ class Settings:
     DYNAMODB_TABLE_NAME: str = os.getenv("DYNAMODB_TABLE_NAME", "MVProjects")
     # Use local DynamoDB for development
     USE_LOCAL_DYNAMODB: bool = os.getenv("USE_LOCAL_DYNAMODB", "true").lower() == "true"
+    
+    @property
+    def dynamodb_access_key_id(self) -> str:
+        """Get DynamoDB access key, using fake credentials for local dev if not set."""
+        if self.USE_LOCAL_DYNAMODB:
+            # Local development: use fake credentials if not provided
+            return self.AWS_ACCESS_KEY_ID if self.AWS_ACCESS_KEY_ID else "fakeAccessKey"
+        # Production: return actual credentials (validation happens at startup)
+        return self.AWS_ACCESS_KEY_ID
+    
+    @property
+    def dynamodb_secret_access_key(self) -> str:
+        """Get DynamoDB secret key, using fake credentials for local dev if not set."""
+        if self.USE_LOCAL_DYNAMODB:
+            # Local development: use fake credentials if not provided
+            return self.AWS_SECRET_ACCESS_KEY if self.AWS_SECRET_ACCESS_KEY else "fakeSecretKey"
+        # Production: return actual credentials (validation happens at startup)
+        return self.AWS_SECRET_ACCESS_KEY
+    
+    def validate_dynamodb_config(self) -> None:
+        """
+        Validate DynamoDB configuration at startup.
+        Raises ValueError if production mode lacks required credentials.
+        """
+        if not self.USE_LOCAL_DYNAMODB:
+            if not self.AWS_ACCESS_KEY_ID:
+                raise ValueError("AWS_ACCESS_KEY_ID is required when USE_LOCAL_DYNAMODB=false")
+            if not self.AWS_SECRET_ACCESS_KEY:
+                raise ValueError("AWS_SECRET_ACCESS_KEY is required when USE_LOCAL_DYNAMODB=false")
     
     # Video Serving Configuration
     SERVE_FROM_CLOUD: bool = os.getenv("SERVE_FROM_CLOUD", "false").lower() == "true"  # Serve videos from cloud storage

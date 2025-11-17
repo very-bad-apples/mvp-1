@@ -38,9 +38,9 @@ services:
     container_name: dynamodb-local
     ports:
       - "8001:8000"
-    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
-    volumes:
-      - dynamodb-data:/home/dynamodblocal/data
+    # Using in-memory mode to avoid SQLite file permission issues
+    # Note: Data is lost on container restart. For persistence, use -dbPath with volume mount
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
     networks:
       - video-network
     restart: unless-stopped

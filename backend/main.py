@@ -35,6 +35,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("application_startup", message="FastAPI application starting up")
 
+    # Validate configuration
+    try:
+        from config import settings
+        settings.validate_dynamodb_config()
+        logger.info("config_validated", message="Configuration validated successfully")
+    except ValueError as e:
+        logger.error("config_validation_failed", error=str(e))
+        raise
+
     # Initialize database
     try:
         from database import init_db
