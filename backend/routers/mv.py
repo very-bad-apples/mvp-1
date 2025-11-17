@@ -211,26 +211,28 @@ async def create_scenes(request: CreateScenesRequest):
     response_model=GenerateCharacterReferenceResponse,
     status_code=200,
     responses={
-        200: {"description": "Character reference image generated successfully"},
+        200: {"description": "Character reference images generated successfully"},
         400: {"description": "Invalid request parameters"},
         500: {"description": "Internal server error or API failure"}
     },
-    summary="Generate Character Reference Image",
+    summary="Generate Character Reference Images",
     description="""
-Generate a character reference image using Google Imagen 4 via Replicate API.
+Generate 1-4 character reference images using Google Imagen 4 via Replicate API.
 
-This endpoint creates a full-body character reference image based on a visual
+This endpoint creates full-body character reference images based on a visual
 description, suitable for maintaining character consistency across video scenes.
+Multiple images allow users to select the best representation.
 
 **Limitations:**
 - Synchronous processing (may take 10-60+ seconds)
-- File-based storage (images saved to filesystem)
-- Large response size (base64 encoded image)
+- File-based storage (images saved to filesystem with UUID filenames)
+- Large response size (base64 encoded images)
 
 **Required Fields:**
 - character_description: Visual description of the character
 
 **Optional Fields (defaults from config):**
+- num_images: Number of images to generate (1-4, default: 4)
 - aspect_ratio: Image aspect ratio (default: "1:1")
 - safety_filter_level: Content moderation level (default: "block_medium_and_above")
 - person_generation: Person generation setting (default: "allow_adult")
@@ -241,30 +243,39 @@ description, suitable for maintaining character consistency across video scenes.
 )
 async def generate_character_reference(request: GenerateCharacterReferenceRequest):
     """
-    Generate a character reference image.
+    Generate character reference images.
 
     This endpoint:
     1. Validates the request parameters
     2. Applies defaults from YAML config for optional fields
-    3. Generates image using Replicate API with Google Imagen 4
-    4. Saves image to files with timestamp-based filename
-    5. Returns base64-encoded image, file path, and metadata
+    3. Generates images using Replicate API with Google Imagen 4
+    4. Saves images to files with UUID-based filenames
+    5. Returns list of images with IDs, paths, and base64 data
 
     **Example Request:**
     ```json
     {
-        "character_description": "Silver metallic humanoid robot with a red shield"
+        "character_description": "Silver metallic humanoid robot with a red shield",
+        "num_images": 4
     }
     ```
 
     **Example Response:**
     ```json
     {
-        "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-        "output_file": "/path/to/character_ref_20251115_143025.png",
+        "images": [
+            {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "path": "/path/to/a1b2c3d4...png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAA..."
+            },
+            ...
+        ],
         "metadata": {
             "character_description": "Silver metallic humanoid robot...",
             "model_used": "google/imagen-4",
+            "num_images_requested": 4,
+            "num_images_generated": 4,
             "parameters_used": {...},
             "generation_timestamp": "2025-11-15T14:30:25Z"
         }
@@ -275,6 +286,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         logger.info(
             "generate_character_reference_request_received",
             character_description=request.character_description[:100] + "..." if len(request.character_description) > 100 else request.character_description,
+            num_images=request.num_images,
             aspect_ratio=request.aspect_ratio
         )
 
@@ -289,9 +301,10 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                 }
             )
 
-        # Generate character reference image
-        image_base64, output_file, metadata = generate_character_reference_image(
+        # Generate character reference images
+        images, metadata = generate_character_reference_image(
             character_description=request.character_description.strip(),
+            num_images=request.num_images,
             aspect_ratio=request.aspect_ratio.strip() if request.aspect_ratio else None,
             safety_filter_level=request.safety_filter_level.strip() if request.safety_filter_level else None,
             person_generation=request.person_generation.strip() if request.person_generation else None,
@@ -301,15 +314,15 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         )
 
         response = GenerateCharacterReferenceResponse(
-            image_base64=image_base64,
-            output_file=output_file,
+            images=images,
             metadata=metadata
         )
 
         logger.info(
             "generate_character_reference_request_completed",
-            output_file=output_file,
-            image_size_bytes=len(image_base64)
+            num_images_requested=request.num_images,
+            num_images_generated=len(images),
+            image_ids=[img.id for img in images]
         )
 
         return response
@@ -339,6 +352,80 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                 "details": str(e)
             }
         )
+
+
+@router.get(
+    "/get_character_reference/{image_id}",
+    responses={
+        200: {"description": "Character reference image", "content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}}},
+        404: {"description": "Image not found"}
+    },
+    summary="Retrieve Character Reference Image",
+    description="""
+Retrieve a character reference image by its UUID.
+
+Returns the image file directly for download or display.
+
+**Example:**
+```
+GET /api/mv/get_character_reference/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+"""
+)
+async def get_character_reference(image_id: str):
+    """
+    Retrieve a character reference image by ID.
+
+    This endpoint:
+    1. Validates the image_id format
+    2. Searches for the image file (supports png, jpg, webp)
+    3. Returns the image file as a streaming response
+    """
+    # Validate image_id format (basic UUID validation)
+    if not image_id or len(image_id) != 36 or image_id.count("-") != 4:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Invalid image_id format",
+                "details": "image_id must be a valid UUID"
+            }
+        )
+
+    # Search for image file (could be png, jpg, or webp)
+    image_dir = Path(__file__).parent.parent / "mv" / "outputs" / "character_reference"
+
+    # Try different extensions
+    for ext in ["png", "jpg", "jpeg", "webp"]:
+        image_path = image_dir / f"{image_id}.{ext}"
+        if image_path.exists():
+            # Determine media type
+            media_type_map = {
+                "png": "image/png",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "webp": "image/webp"
+            }
+            media_type = media_type_map.get(ext, "application/octet-stream")
+
+            logger.info("get_character_reference_serving", image_id=image_id, image_path=str(image_path))
+
+            return FileResponse(
+                path=str(image_path),
+                media_type=media_type,
+                filename=f"{image_id}.{ext}"
+            )
+
+    # Not found
+    logger.warning("get_character_reference_not_found", image_id=image_id)
+    raise HTTPException(
+        status_code=404,
+        detail={
+            "error": "NotFound",
+            "message": f"Character reference image with ID {image_id} not found",
+            "details": "The image may have been deleted or the ID is incorrect"
+        }
+    )
 
 
 @router.post(
