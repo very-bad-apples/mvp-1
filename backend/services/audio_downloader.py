@@ -169,39 +169,56 @@ class AudioDownloader:
             # Run yt-dlp in thread pool to avoid blocking
             result = await asyncio.to_thread(self._download_with_ytdlp, url, ydl_opts)
 
-            # Find the downloaded audio file (could be mp3, m4a, opus, webm, etc.)
+            # Find the downloaded audio file (check MP3 first, then other formats)
+            # Priority: MP3 first (if yt-dlp converted it), then other formats
             audio_extensions = ['mp3', 'm4a', 'opus', 'webm', 'ogg', 'aac']
             audio_path = None
             downloaded_format = None
             
-            for ext in audio_extensions:
-                files = list(output_dir.glob(f"{audio_id}.{ext}"))
-                if files:
-                    audio_path = files[0]
-                    downloaded_format = ext
-                    break
+            # Check for MP3 first (preferred)
+            mp3_files = list(output_dir.glob(f"{audio_id}.mp3"))
+            if mp3_files:
+                audio_path = mp3_files[0]
+                downloaded_format = 'mp3'
+                logger.info("mp3_file_found_after_download", audio_path=str(audio_path))
+            else:
+                # Check other formats
+                for ext in ['m4a', 'opus', 'webm', 'ogg', 'aac']:
+                    files = list(output_dir.glob(f"{audio_id}.{ext}"))
+                    if files:
+                        audio_path = files[0]
+                        downloaded_format = ext
+                        logger.info("audio_downloaded_in_format", format=ext, audio_path=str(audio_path))
+                        break
             
             if not audio_path:
                 raise AudioDownloadError(f"Audio file not found after download. Expected: {audio_id}.[mp3|m4a|opus|webm]")
 
-            # If not MP3, try to convert using pydub (if FFmpeg and pydub are available)
+            # ALWAYS convert to MP3 if not already MP3 (and FFmpeg is available)
             if downloaded_format != 'mp3':
+                original_format = downloaded_format
                 if self.ffmpeg_available and PYDUB_AVAILABLE:
-                    logger.info("converting_audio_to_mp3", format=downloaded_format)
+                    logger.info("converting_audio_to_mp3", format=original_format, audio_path=str(audio_path))
                     audio_path = await self._convert_to_mp3(audio_path, audio_id, output_dir, audio_quality)
                     if audio_path.suffix == '.mp3':
                         downloaded_format = 'mp3'
+                        logger.info("successfully_converted_to_mp3", original_format=original_format)
                     else:
-                        logger.warning(
+                        logger.error(
                             "conversion_failed_keeping_original",
-                            format=downloaded_format,
+                            format=original_format,
                             message="MP3 conversion failed, keeping original format"
                         )
+                        # Raise error if conversion failed - we want MP3!
+                        raise AudioDownloadError(
+                            f"Failed to convert audio to MP3. Downloaded format: {original_format}. "
+                            "Please ensure FFmpeg and pydub are properly installed."
+                        )
                 else:
-                    logger.warning(
-                        "cannot_convert_to_mp3",
-                        format=downloaded_format,
-                        message="FFmpeg or pydub not available. Install FFmpeg to enable MP3 conversion."
+                    # If FFmpeg/pydub not available, raise error - we require MP3
+                    raise AudioDownloadError(
+                        "FFmpeg or pydub not available. MP3 conversion is required. "
+                        "Please install FFmpeg to enable MP3 conversion."
                     )
 
             file_size = audio_path.stat().st_size

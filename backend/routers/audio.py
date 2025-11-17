@@ -229,15 +229,20 @@ async def get_audio(audio_id: str):
             }
         )
 
-    # Try to find audio file with any common extension
-    audio_extensions = ['mp3', 'm4a', 'opus', 'webm', 'ogg', 'aac']
+    # Try to find audio file - prioritize MP3 since we always convert to MP3
     audio_path = None
     
-    for ext in audio_extensions:
-        potential_path = Path(AUDIO_BASE_PATH) / f"{audio_id}.{ext}"
-        if potential_path.exists():
-            audio_path = potential_path
-            break
+    # Check MP3 first (since we always convert to MP3)
+    mp3_path = Path(AUDIO_BASE_PATH) / f"{audio_id}.mp3"
+    if mp3_path.exists():
+        audio_path = mp3_path
+    else:
+        # Fallback to other formats (shouldn't happen, but just in case)
+        for ext in ['m4a', 'opus', 'webm', 'ogg', 'aac']:
+            potential_path = Path(AUDIO_BASE_PATH) / f"{audio_id}.{ext}"
+            if potential_path.exists():
+                audio_path = potential_path
+                break
     
     if not audio_path:
         logger.warning("audio_file_not_found", audio_id=audio_id)
@@ -263,12 +268,16 @@ async def get_audio(audio_id: str):
     ext = audio_path.suffix[1:].lower()  # Remove the dot
     media_type = media_type_map.get(ext, 'audio/mpeg')
     
-    logger.info("audio_file_serving", audio_id=audio_id, audio_path=str(audio_path), format=ext)
+    # Always return as MP3 filename (since we always convert to MP3)
+    # Use the actual file extension for media type, but force filename to .mp3
+    filename = f"{audio_id}.mp3"
+    
+    logger.info("audio_file_serving", audio_id=audio_id, audio_path=str(audio_path), format=ext, filename=filename)
 
     return FileResponse(
         path=str(audio_path),
         media_type=media_type,
-        filename=f"{audio_id}.{ext}"
+        filename=filename
     )
 
 
