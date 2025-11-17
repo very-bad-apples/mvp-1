@@ -18,6 +18,8 @@ from pathlib import Path
 import fsspec
 import asyncio
 from functools import partial
+import boto3
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -333,13 +335,23 @@ class S3StorageBackend(StorageBackend):
         """
         self.bucket = bucket
         self.region = region
+        self.aws_access_key = aws_access_key
+        self.aws_secret_key = aws_secret_key
         
-        # Initialize s3fs filesystem
+        # Initialize s3fs filesystem for file operations
         self.fs = fsspec.filesystem(
             's3',
             key=aws_access_key,
             secret=aws_secret_key,
             client_kwargs={'region_name': region}
+        )
+        
+        # Initialize boto3 client for presigned URL generation
+        self.s3_client = boto3.client(
+            's3',
+            aws_access_key_id=aws_access_key,
+            aws_secret_access_key=aws_secret_key,
+            region_name=region
         )
         
         logger.info(f"Initialized S3 storage backend with bucket: {bucket}")
@@ -351,6 +363,35 @@ class S3StorageBackend(StorageBackend):
     def _get_public_url(self, cloud_path: str) -> str:
         """Get public URL for a file."""
         return f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{cloud_path}"
+    
+    def generate_presigned_url(self, cloud_path: str, expiry: int = 3600) -> str:
+        """
+        Generate a presigned URL for secure, time-limited access to an S3 object.
+        
+        Args:
+            cloud_path: Path to the file in cloud storage (e.g., "mv/jobs/{id}/video.mp4")
+            expiry: URL expiration time in seconds (default: 3600 = 1 hour)
+            
+        Returns:
+            Presigned URL with AWS signature for authenticated access
+            
+        Raises:
+            ClientError: If URL generation fails
+        """
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket,
+                    'Key': cloud_path
+                },
+                ExpiresIn=expiry
+            )
+            logger.debug(f"Generated presigned URL for {cloud_path} (expires in {expiry}s)")
+            return url
+        except ClientError as e:
+            logger.error(f"Failed to generate presigned URL for {cloud_path}: {e}")
+            raise
     
     async def upload_file(self, local_path: str, cloud_path: str) -> str:
         """Upload file to S3."""
@@ -369,8 +410,10 @@ class S3StorageBackend(StorageBackend):
                 partial(self.fs.put, local_path, full_path)
             )
             
-            url = self._get_public_url(cloud_path)
-            logger.info(f"Upload successful: {url}")
+            # Generate presigned URL for secure, time-limited access
+            from config import settings
+            url = self.generate_presigned_url(cloud_path, expiry=settings.PRESIGNED_URL_EXPIRY)
+            logger.info(f"Upload successful with presigned URL (expires in {settings.PRESIGNED_URL_EXPIRY}s)")
             return url
             
         except Exception as e:

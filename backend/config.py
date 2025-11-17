@@ -63,6 +63,10 @@ class Settings:
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    PRESIGNED_URL_EXPIRY: int = int(os.getenv("PRESIGNED_URL_EXPIRY", "3600"))  # 1 hour in seconds
+    
+    # Video Serving Configuration
+    SERVE_FROM_CLOUD: bool = os.getenv("SERVE_FROM_CLOUD", "false").lower() == "true"  # Serve videos from cloud storage
     
     # Asset Retention Policy
     KEEP_INTERMEDIATE_ASSETS: bool = os.getenv("KEEP_INTERMEDIATE_ASSETS", "true").lower() == "true"

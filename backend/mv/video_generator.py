@@ -254,39 +254,23 @@ def generate_video(
     # Generate UUID for video
     video_id = str(uuid.uuid4())
 
-    # Save video to outputs directory
-    output_dir = Path(__file__).parent / "outputs" / "videos"
-    os.makedirs(output_dir, exist_ok=True)
+    # Create job directory structure for this video
+    job_dir = Path(__file__).parent / "outputs" / "jobs" / video_id
+    os.makedirs(job_dir, exist_ok=True)
+    
+    # Also save to videos directory for backward compatibility
+    videos_dir = Path(__file__).parent / "outputs" / "videos"
+    os.makedirs(videos_dir, exist_ok=True)
 
     video_filename = f"{video_id}.mp4"
-    video_path = output_dir / video_filename
+    video_path = job_dir / "video.mp4"  # Save in job directory
+    video_path_compat = videos_dir / video_filename  # Backward compatibility
 
+    # Save video to both locations
     with open(video_path, "wb") as f:
         f.write(video_data)
-
-    # Upload to cloud storage if configured
-    cloud_url = None
-    try:
-        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
-            from services.storage_backend import get_storage_backend
-            
-            async def upload_to_cloud():
-                storage = get_storage_backend()
-                cloud_path = f"mv/videos/{video_id}.mp4"
-                return await storage.upload_file(
-                    str(video_path),
-                    cloud_path
-                )
-            
-            # Run async upload in sync context
-            cloud_url = asyncio.run(upload_to_cloud())
-            logger.info(f"Uploaded video {video_id} to cloud storage: {cloud_url}")
-    except Exception as e:
-        logger.warning(f"Failed to upload video {video_id} to cloud storage: {e}")
-        # Continue without cloud upload - local file is still available
-
-    # Construct video URL (local API endpoint)
-    video_url = f"/api/mv/get_video/{video_id}"
+    with open(video_path_compat, "wb") as f:
+        f.write(video_data)
 
     # Build metadata
     metadata = {
@@ -301,11 +285,8 @@ def generate_video(
         "generation_timestamp": datetime.now(timezone.utc).isoformat(),
         "processing_time_seconds": round(processing_time, 2),
         "local_path": str(video_path),
+        "video_id": video_id,
     }
-    
-    # Add cloud URL to metadata if upload succeeded
-    if cloud_url:
-        metadata["cloud_url"] = cloud_url
 
     if negative_prompt:
         metadata["parameters_used"]["negative_prompt"] = negative_prompt
@@ -313,6 +294,93 @@ def generate_video(
         metadata["parameters_used"]["seed"] = seed
     if reference_image_base64:
         metadata["has_reference_image"] = True
+        # Save reference image if provided
+        try:
+            import base64
+            # Fix base64 padding if needed
+            image_data = reference_image_base64
+            # Remove data URL prefix if present
+            if ',' in image_data:
+                image_data = image_data.split(',', 1)[1]
+            # Add padding if needed
+            missing_padding = len(image_data) % 4
+            if missing_padding:
+                image_data += '=' * (4 - missing_padding)
+            
+            ref_image_data = base64.b64decode(image_data)
+            ref_image_path = job_dir / "reference_image.jpg"
+            with open(ref_image_path, "wb") as f:
+                f.write(ref_image_data)
+            metadata["reference_image_path"] = str(ref_image_path)
+        except Exception as e:
+            logger.warning(f"Failed to save reference image: {e}")
+
+    # Save metadata.json
+    import json
+    metadata_path = job_dir / "metadata.json"
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    # Upload entire job directory to cloud storage if configured
+    cloud_urls = {}
+    try:
+        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
+            from services.storage_backend import get_storage_backend
+            
+            async def upload_job_to_cloud():
+                storage = get_storage_backend()
+                urls = {}
+                
+                # Upload video
+                urls["video"] = await storage.upload_file(
+                    str(video_path),
+                    f"mv/jobs/{video_id}/video.mp4"
+                )
+                
+                # Upload metadata
+                urls["metadata"] = await storage.upload_file(
+                    str(metadata_path),
+                    f"mv/jobs/{video_id}/metadata.json"
+                )
+                
+                # Upload reference image if exists
+                ref_image_path = job_dir / "reference_image.jpg"
+                if ref_image_path.exists():
+                    urls["reference_image"] = await storage.upload_file(
+                        str(ref_image_path),
+                        f"mv/jobs/{video_id}/reference_image.jpg"
+                    )
+                
+                return urls
+            
+            # Run async upload - handle both sync and async contexts
+            # Use a separate thread with its own event loop to avoid conflicts
+            import concurrent.futures
+            
+            def run_upload():
+                return asyncio.run(upload_job_to_cloud())
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_upload)
+                cloud_urls = future.result(timeout=300)  # 5 min timeout
+            
+            logger.info(f"Uploaded job {video_id} to cloud storage with {len(cloud_urls)} files")
+    except Exception as e:
+        logger.warning(f"Failed to upload job {video_id} to cloud storage: {e}")
+        # Continue without cloud upload - local files are still available
+
+    # Add cloud URLs to metadata if upload succeeded
+    if cloud_urls:
+        metadata["cloud_urls"] = cloud_urls
+        metadata["cloud_url"] = cloud_urls.get("video")  # Backward compatibility
+        # Use cloud URL as primary video URL when available
+        video_url = cloud_urls.get("video")
+    else:
+        # Fallback to local API endpoint if cloud upload failed or not configured
+        video_url = f"/api/mv/get_video/{video_id}"
+    
+    # Also store local API endpoint for backward compatibility
+    metadata["local_video_url"] = f"/api/mv/get_video/{video_id}"
 
     if settings.MV_DEBUG_MODE:
         from mv.debug import log_video_generation_result
