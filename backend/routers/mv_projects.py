@@ -225,30 +225,57 @@ async def create_project(
             # Currently accepts any existing character reference (acceptable for MVP)
             # UUID validation above ensures no path traversal in ID
             source_key = f"mv/outputs/character_reference/{characterReferenceImageId}.png"
-            try:
-                # Use async wrapper for S3 operation to avoid blocking event loop
-                file_exists = await asyncio.to_thread(s3_service.file_exists, source_key)
-                if not file_exists:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "NotFound",
-                            "message": f"Character reference {characterReferenceImageId} not found",
-                            "details": "The specified character image does not exist"
-                        }
+            
+            # For local development: skip S3 validation if bucket is not configured
+            # In production, this validation ensures the character reference exists
+            from config import settings
+            if settings.STORAGE_BUCKET:
+                try:
+                    # Use async wrapper for S3 operation to avoid blocking event loop
+                    file_exists = await asyncio.to_thread(s3_service.file_exists, source_key)
+                    if not file_exists:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={
+                                "error": "NotFound",
+                                "message": f"Character reference {characterReferenceImageId} not found",
+                                "details": "The specified character image does not exist"
+                            }
+                        )
+                except HTTPException:
+                    raise
+                except Exception as s3_error:
+                    logger.warning(
+                        "s3_validation_failed",
+                        error=str(s3_error),
+                        source_key=source_key,
+                        message="S3 validation failed, proceeding without validation (local dev mode)"
                     )
-            except HTTPException:
-                raise
-            except Exception as s3_error:
-                logger.error("s3_validation_failed", error=str(s3_error), source_key=source_key)
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "error": "ServiceUnavailable",
-                        "message": "Unable to validate character reference",
-                        "details": "Storage service temporarily unavailable"
-                    }
+                    # For local development: allow proceeding without S3 validation
+                    # In production, this should be an error
+                    if not settings.STORAGE_BUCKET:
+                        logger.info(
+                            "skipping_character_validation",
+                            reason="STORAGE_BUCKET not configured (local dev mode)"
+                        )
+                    else:
+                        # S3 is configured but validation failed - this is an error
+                        logger.error("s3_validation_failed", error=str(s3_error), source_key=source_key)
+                        raise HTTPException(
+                            status_code=503,
+                            detail={
+                                "error": "ServiceUnavailable",
+                                "message": "Unable to validate character reference",
+                                "details": "Storage service temporarily unavailable"
+                            }
+                        )
+            else:
+                logger.info(
+                    "skipping_character_validation",
+                    reason="STORAGE_BUCKET not configured (local dev mode)",
+                    character_ref_id=characterReferenceImageId
                 )
+            
             character_image_s3_key = source_key
             logger.info(
                 "character_reference_used",

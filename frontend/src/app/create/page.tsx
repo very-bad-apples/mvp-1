@@ -153,19 +153,28 @@ export default function CreatePage() {
         formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
       }
 
-      // Mock API call (simulating network delay)
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // Generate a mock job ID
-      const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-
-      toast({
-        title: "Video generation started!",
-        description: `Job ID: ${jobId}`,
+      // Call the real API endpoint
+      const response = await fetch(`${API_URL}/api/mv/projects`, {
+        method: 'POST',
+        body: formData,
       })
 
-      // Navigate to the mock result page
-      router.push(`/result/${jobId}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        const errorMessage = errorData.detail?.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      const projectId = data.projectId
+
+      toast({
+        title: "Project created successfully!",
+        description: `Project ID: ${projectId}`,
+      })
+
+      // Navigate to the project result page
+      router.push(`/result/${projectId}`)
     } catch (error) {
       console.error('Error submitting form:', error)
       toast({
