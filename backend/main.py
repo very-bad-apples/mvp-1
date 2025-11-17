@@ -182,6 +182,7 @@ async def root():
             "mv_create_scenes": "/api/mv/create_scenes",
             "mv_generate_character_reference": "/api/mv/generate_character_reference",
             "mv_generate_video": "/api/mv/generate_video",
+            "mv_lipsync": "/api/mv/lipsync",
             "mv_get_video": "/api/mv/get_video/{video_id}"
         }
     }

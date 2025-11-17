@@ -27,6 +27,11 @@ from mv.video_generator import (
     GenerateVideoResponse,
     generate_video,
 )
+from mv.lipsync import (
+    LipsyncRequest,
+    LipsyncResponse,
+    generate_lipsync,
+)
 from config import settings
 
 logger = structlog.get_logger()
@@ -709,3 +714,194 @@ async def get_video_info(video_id: str):
         "file_size_bytes": stat.st_size,
         "created_at": created_at
     }
+
+
+@router.post(
+    "/lipsync",
+    response_model=LipsyncResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Lipsync video generated successfully"},
+        400: {"description": "Invalid request parameters"},
+        500: {"description": "Internal server error or API failure"},
+        503: {"description": "Backend service unavailable"}
+    },
+    summary="Generate Lipsync Video",
+    description="""
+Generate a lip-synced video by syncing audio to a video scene using Sync Labs' Lipsync-2-Pro model.
+
+**IMPORTANT: This is a synchronous endpoint that may take 20-300+ seconds to complete.**
+
+This endpoint takes a video URL (scene) and an audio URL, then generates a lip-synced version
+where the video's lip movements match the provided audio track.
+
+**Limitations:**
+- Synchronous processing (20-300s response times)
+- No progress tracking (client waits for completion)
+- File-based storage (videos saved with UUID filenames)
+- Requires Scale plan or higher for Replicate API access
+
+**Required Fields:**
+- video_url: URL to the video file (scene) - supports MP4, MOV, WEBM, M4V, GIF
+- audio_url: URL to the audio file - supports MP3, OGG, WAV, M4A, AAC
+
+**Optional Fields:**
+- temperature: Control expressiveness of lip movements (0.0 = subtle, 1.0 = exaggerated)
+- occlusion_detection_enabled: Enable for complex scenes with obstructions (may slow processing)
+- active_speaker_detection: Auto-detect active speaker in multi-person videos
+
+**Best Practices:**
+- Ensure input video shows the speaker actively talking for natural speaking motion
+- For AI-generated videos, include a text prompt like "person is speaking naturally"
+- Use occlusion_detection_enabled for scenes with partial face obstructions
+"""
+)
+async def lipsync_video(request: LipsyncRequest):
+    """
+    Generate a lip-synced video.
+
+    This endpoint:
+    1. Validates the request parameters
+    2. Calls Replicate's Lipsync-2-Pro model with video and audio URLs
+    3. Saves the result to filesystem with UUID-based filename
+    4. Returns video ID, path, URL, and metadata
+
+    **Example Request:**
+    ```json
+    {
+        "video_url": "https://example.com/scene.mp4",
+        "audio_url": "https://example.com/audio.mp3",
+        "temperature": 0.5,
+        "active_speaker_detection": true
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "video_path": "/path/to/lipsync/a1b2c3d4...mp4",
+        "video_url": "/api/mv/get_video/a1b2c3d4...",
+        "metadata": {
+            "video_url": "https://example.com/scene.mp4",
+            "audio_url": "https://example.com/audio.mp3",
+            "model_used": "sync/lipsync-2-pro",
+            "parameters_used": {
+                "temperature": 0.5,
+                "active_speaker_detection": true
+            },
+            "generation_timestamp": "2025-11-16T10:30:25Z",
+            "processing_time_seconds": 45.7,
+            "file_size_bytes": 15234567
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "lipsync_request_received",
+            video_url=request.video_url[:100] + "..." if len(request.video_url) > 100 else request.video_url,
+            audio_url=request.audio_url[:100] + "..." if len(request.audio_url) > 100 else request.audio_url,
+            temperature=request.temperature,
+            occlusion_detection_enabled=request.occlusion_detection_enabled,
+            active_speaker_detection=request.active_speaker_detection
+        )
+
+        # Validate required fields
+        if not request.video_url or not request.video_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Video URL is required",
+                    "details": "The 'video_url' field cannot be empty"
+                }
+            )
+
+        if not request.audio_url or not request.audio_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Audio URL is required",
+                    "details": "The 'audio_url' field cannot be empty"
+                }
+            )
+
+        # Generate lipsync video
+        video_id, video_path, video_url, metadata = generate_lipsync(
+            video_url=request.video_url.strip(),
+            audio_url=request.audio_url.strip(),
+            temperature=request.temperature,
+            occlusion_detection_enabled=request.occlusion_detection_enabled,
+            active_speaker_detection=request.active_speaker_detection,
+        )
+
+        response = LipsyncResponse(
+            video_id=video_id,
+            video_path=video_path,
+            video_url=video_url,
+            metadata=metadata
+        )
+
+        logger.info(
+            "lipsync_request_completed",
+            video_id=video_id,
+            video_path=video_path,
+            processing_time_seconds=metadata.get("processing_time_seconds"),
+            file_size_bytes=metadata.get("file_size_bytes")
+        )
+
+        return response
+
+    except ValueError as e:
+        # Handle configuration errors (e.g., missing API token)
+        logger.error("lipsync_config_error", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "ConfigurationError",
+                "message": str(e),
+                "details": "Check your environment configuration"
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except TimeoutError as e:
+        logger.error("lipsync_timeout", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ServiceTimeout",
+                "message": str(e),
+                "details": "Lipsync generation service timed out"
+            }
+        )
+
+    except Exception as e:
+        logger.error("lipsync_unexpected_error", error=str(e), exc_info=True)
+
+        # Try to provide structured error information
+        error_code = "UNKNOWN_ERROR"
+        if "content" in str(e).lower() and "policy" in str(e).lower():
+            error_code = "CONTENT_POLICY_VIOLATION"
+        elif "rate" in str(e).lower() and "limit" in str(e).lower():
+            error_code = "RATE_LIMIT_EXCEEDED"
+        elif "authentication" in str(e).lower() or "auth" in str(e).lower():
+            error_code = "AUTHENTICATION_ERROR"
+        elif "plan" in str(e).lower() or "scale" in str(e).lower():
+            error_code = "PLAN_REQUIREMENT_ERROR"
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "LipsyncGenerationError",
+                "error_code": error_code,
+                "message": "An unexpected error occurred during lipsync generation",
+                "model_used": "sync/lipsync-2-pro",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": str(e)
+            }
+        )
