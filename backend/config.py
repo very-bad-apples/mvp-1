@@ -3,6 +3,7 @@ Configuration management for the FastAPI backend
 """
 
 import os
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -71,6 +72,9 @@ class Settings:
     # Asset Retention Policy
     KEEP_INTERMEDIATE_ASSETS: bool = os.getenv("KEEP_INTERMEDIATE_ASSETS", "true").lower() == "true"
     ASSET_BACKUP_LIMIT: int = int(os.getenv("ASSET_BACKUP_LIMIT", "1"))  # Keep 1 previous version
+
+    # FFmpeg Configuration (for audio processing)
+    FFMPEG_PATH: Optional[str] = os.getenv("FFMPEG_PATH", None)  # Optional path to ffmpeg executable
 
     # Job Queue
     JOB_QUEUE_NAME: str = "video_generation_queue"

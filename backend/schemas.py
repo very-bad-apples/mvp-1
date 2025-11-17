@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -135,5 +135,55 @@ class ErrorResponse(BaseModel):
                 "error": "ValidationError",
                 "message": "Invalid input data",
                 "details": "Product name is required"
+            }
+        }
+
+
+class AudioDownloadRequest(BaseModel):
+    """Request model for audio download from YouTube"""
+    url: str = Field(..., description="YouTube video URL")
+    audio_quality: Optional[str] = Field(
+        default="192",
+        description="Audio quality in kbps (e.g., '128', '192', '256', '320')"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "audio_quality": "192"
+            }
+        }
+
+
+class AudioDownloadResponse(BaseModel):
+    """Response model for audio download endpoint"""
+    audio_id: str = Field(..., description="Unique identifier for the downloaded audio")
+    audio_path: str = Field(..., description="Path to the downloaded audio file")
+    audio_url: str = Field(..., description="URL to access the audio file")
+    filename: str = Field(..., description="Name of the audio file")
+    format: str = Field(..., description="Audio format (mp3, m4a, opus, webm, etc.)")
+    title: str = Field(..., description="Title of the YouTube video")
+    duration: Optional[int] = Field(None, description="Duration in seconds")
+    file_size_bytes: int = Field(..., description="Size of the audio file in bytes")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "audio_id": "550e8400-e29b-41d4-a716-446655440000",
+                "audio_path": "/tmp/audio/550e8400-e29b-41d4-a716-446655440000.mp3",
+                "audio_url": "/api/audio/get/550e8400-e29b-41d4-a716-446655440000",
+                "filename": "550e8400-e29b-41d4-a716-446655440000.mp3",
+                "format": "mp3",
+                "title": "Example Video Title",
+                "duration": 180,
+                "file_size_bytes": 3456789,
+                "metadata": {
+                    "uploader": "Channel Name",
+                    "view_count": 1000000,
+                    "original_format": "m4a",
+                    "converted_to_mp3": True
+                }
             }
         }

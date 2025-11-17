@@ -157,13 +157,14 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models, mv
+from routers import generate, jobs, websocket, models, mv, audio
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
 app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
+app.include_router(audio.router)
 
 
 # Root endpoint
@@ -183,7 +184,10 @@ async def root():
             "mv_generate_character_reference": "/api/mv/generate_character_reference",
             "mv_generate_video": "/api/mv/generate_video",
             "mv_lipsync": "/api/mv/lipsync",
-            "mv_get_video": "/api/mv/get_video/{video_id}"
+            "mv_get_video": "/api/mv/get_video/{video_id}",
+            "audio_download": "/api/audio/download",
+            "audio_get": "/api/audio/get/{audio_id}",
+            "audio_info": "/api/audio/info/{audio_id}"
         }
     }
 
