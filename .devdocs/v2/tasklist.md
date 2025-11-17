@@ -93,3 +93,229 @@ Enable batch generation of 1-4 character reference images from a single prompt, 
   - Document UUID storage change
   - Document batch generation architecture decisions
   - Note any limitations (Replicate API constraints, etc.)
+
+---
+
+## v2 - Quick Job Button & Data Display Page
+
+### Summary
+Add a "Quick Job" button to the create page that navigates to a new `/quick-gen-page` route, passing form data via URL state and displaying it in a card.
+
+### Frontend Tasks
+
+- [ ] **Add "Quick Job" button to create page**
+  - Add button below "Generate videos" button
+  - Match styling of "Generate videos" button
+  - No validation logic required (always enabled)
+  - On click: navigate to `/quick-gen-page` with form data
+
+- [ ] **Implement data passing via URL state**
+  - Use Next.js `router.push` with state object
+  - Pass: `videoDescription`, `characterDescription`, `selectedImageId`
+  - Handle case where state is empty/undefined
+
+- [ ] **Create /quick-gen-page route**
+  - Create `frontend/src/app/quick-gen-page/page.tsx`
+  - Match layout/styling of `/result/[id]/page.tsx`:
+    - Dark gradient background
+    - Nav bar with logo and "Back to Create" button
+    - Centered content with max-w-4xl
+
+- [ ] **Create input data display card**
+  - Display card at top of page with form data:
+    - "Video Description" field
+    - "Character and Style" field (characterDescription)
+    - "Character Reference Image ID" field
+  - Show empty/placeholder if data not provided
+  - Use Card component with gray-800/50 background styling
+
+- [ ] **Handle missing state gracefully**
+  - If no state passed (direct URL access), show empty values
+  - Consider redirect to `/create` if state is missing (optional)
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Test navigation from create page to quick-gen-page
+  - Verify data displays correctly in card
+  - Test with missing/empty fields
+  - Test direct URL access (no state)
+  - Test "Back to Create" navigation
+
+---
+
+## v3 - Scene Generation API Integration
+
+### Summary
+Integrate `/api/mv/create_scenes` API call on `/quick-gen-page`, showing simulated progress bar during request and displaying generated scenes in cards.
+
+### Frontend Tasks
+
+- [ ] **Add API call on page load**
+  - Call `/api/mv/create_scenes` immediately when page mounts
+  - Request body: `{ "idea": videoDescription, "character_description": characterDescription }`
+  - Only call if both fields are non-empty
+  - Handle case where data is missing (skip API call)
+
+- [ ] **Implement simulated progress bar**
+  - Show progress bar during API call (10-30 second expected duration)
+  - Simulate progress from 0% to ~90% over time
+  - Jump to 100% when response arrives
+  - Use same Progress component as `/result/[id]/page.tsx`
+  - Show "Generating scenes..." status message
+
+- [ ] **Display scenes in cards**
+  - Parse response: `response.scenes` array
+  - Each scene contains: `description` and `negative_description`
+  - Create card for each scene with:
+    - Scene number/title
+    - Description text
+    - Negative description text (clearly labeled)
+  - Use same Card styling as existing cards (gray-800/50, border-gray-700)
+
+- [ ] **Handle loading states**
+  - Show progress bar card while loading
+  - Replace with scene cards when complete
+  - Show status indicators (pending → processing → completed)
+
+- [ ] **Error handling**
+  - Display error message in card area if API fails
+  - Show error details (network error, server error, etc.)
+  - Use Alert component with destructive variant
+  - Allow retry or navigation back to create page
+
+- [ ] **Update state management**
+  - Track: isLoading, progress, scenes array, error state
+  - Clear progress simulation interval on response/error
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Test API call triggers on page load
+  - Verify progress bar animates during wait
+  - Check scene cards display correctly with both fields
+  - Test error scenarios (backend down, invalid data)
+  - Test with missing input data (no API call)
+
+---
+
+## v4 - Video Generation from Scenes
+
+### Summary
+After scenes are generated, automatically trigger parallel video generation for each scene via `/api/mv/generate_video`. Display videos in individual cards with loading states and an overall status summary bar.
+
+### Frontend Tasks
+
+- [ ] **Trigger video generation after scenes complete**
+  - After scenes array is populated, automatically start video generation
+  - One API call per scene, all in parallel
+  - Request body per scene:
+    - `prompt`: scene.description
+    - `negative_prompt`: scene.negative_description
+  - Omit all other parameters (reference_image_base64, etc.)
+  - NOTE: Character reference image integration deferred (document as limitation)
+
+- [ ] **Create video cards immediately**
+  - Create placeholder cards for each video before generation starts
+  - Show loading state per card (spinner, "Generating video...")
+  - Display scene number in card header
+  - Use configurable expected load time (default: 7 seconds)
+
+- [ ] **Handle individual video responses**
+  - Track state per video: loading | completed | error
+  - On success: store video_id and video_url from response
+  - On error: store error message for that specific card
+  - Update card state as each response arrives
+
+- [ ] **Display videos in cards**
+  - Replace loading state with video player when ready
+  - Video controls: enabled, sound enabled, no autoplay
+  - Show video metadata (video_id, etc.)
+  - Use video URL from response (or fetch via `/api/mv/get_video/{id}`)
+
+- [ ] **Implement overall status summary bar**
+  - Show at top of videos section
+  - Display counts: "X loading / Y succeeded / Z failed"
+  - Update in real-time as videos complete
+  - Use Badge components for status colors:
+    - Blue: loading
+    - Green: succeeded
+    - Red: failed
+
+- [ ] **Error handling per card**
+  - Display error message within the specific video card
+  - Show which scene number failed
+  - Keep other videos unaffected
+  - Use Alert component within card
+
+- [ ] **State management**
+  - Track array of video states (one per scene)
+  - Each entry: { sceneIndex, status, videoId?, videoUrl?, error? }
+  - Calculate summary stats from this array
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document character reference image limitation
+  - Note that reference_image_base64 is not passed to generate_video
+  - Document parallel generation approach
+  - Document expected load time configuration
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Verify video generation triggers after scenes complete
+  - Check all videos generate in parallel
+  - Test loading states display correctly
+  - Verify videos play with controls and sound
+  - Test error scenarios (some videos fail, all fail)
+  - Check status summary bar updates correctly
+  - Test with mock mode enabled (MOCK_VID_GENS=true)
+
+---
+
+## v5 - Dual Storage Backend Support (Local/S3)
+
+### Summary
+Enable the quick-gen-page frontend to seamlessly handle video URLs from both local filesystem (relative paths) and S3 cloud storage (presigned URLs) without backend changes. The frontend should automatically detect the URL type and handle appropriately.
+
+### Frontend Tasks
+
+- [ ] **Update video URL handling logic**
+  - Detect if `video_url` from `generate_video` response is absolute (starts with `http`)
+  - If absolute URL (S3 presigned): use directly as video src
+  - If relative URL (local): prepend `API_URL` as before
+  - Update `generateSingleVideo()` function in `/quick-gen-page/page.tsx`
+
+- [ ] **Add helper function for URL resolution**
+  - Create `resolveVideoUrl(videoUrl: string)` function
+  - Returns absolute URL ready for use in video player
+  - Handles both S3 presigned URLs and local backend paths
+
+- [ ] **Update video player src assignment**
+  - Use resolved URL in video card component
+  - Ensure video element can load from both sources
+
+### Testing Tasks
+
+- [ ] **Test with SERVE_FROM_CLOUD=true (S3 mode)**
+  - Verify video URLs are S3 presigned URLs (start with https://)
+  - Confirm videos load and play correctly from S3
+  - Check that no API_URL is incorrectly prepended
+
+- [ ] **Test with SERVE_FROM_CLOUD=false (local mode)**
+  - Verify video URLs are relative paths (/api/mv/get_video/{uuid})
+  - Confirm API_URL is prepended correctly
+  - Check videos load from local backend
+
+- [ ] **Edge case testing**
+  - Test switching between modes (requires backend restart)
+  - Verify mixed responses don't cause issues
+  - Check error handling for both storage backends
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document dual storage backend detection logic
+  - Note that frontend auto-detects based on URL format
+  - Document the URL resolution approach

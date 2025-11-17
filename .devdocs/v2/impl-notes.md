@@ -277,3 +277,202 @@ if (useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedI
 3. **Partial Failure Handling**
    - If backend returns fewer than 4 images, UI will display what's available
    - No specific error message for partial success
+
+---
+
+## v4 - Video Generation from Scenes
+
+### Implementation Summary
+
+Integrated parallel video generation from generated scenes on `/quick-gen-page`.
+
+### Key Features
+
+1. **Automatic Video Generation**
+   - Videos start generating immediately after scenes are created
+   - All videos generated in parallel using `Promise.allSettled`
+   - Each scene's `description` maps to `prompt`
+   - Each scene's `negative_description` maps to `negative_prompt`
+
+2. **Video Cards with Loading States**
+   - Cards created immediately with loading spinner
+   - Status badge per card (Generating/Ready/Failed)
+   - Video ID displayed after completion
+   - Configurable expected load time (default: 7 seconds)
+
+3. **Video Playback**
+   - HTML5 video player with controls enabled
+   - Sound enabled (not muted by default)
+   - No autoplay - user must click to play
+   - Uses `video_url` from API response directly
+
+4. **Status Summary Bar**
+   - Real-time summary: "X loading / Y succeeded / Z failed"
+   - Color-coded badges (blue/green/red)
+   - Updates dynamically as each video completes
+
+5. **Per-Card Error Handling**
+   - Errors isolated to specific cards
+   - Shows scene number in error message
+   - Other videos unaffected by individual failures
+
+### Limitations
+
+1. **Character Reference Image Not Passed**
+   - `reference_image_base64` parameter is omitted from video generation requests
+   - Would require fetching character image by ID and converting to base64
+   - Documented in code as future enhancement
+   - Character reference ID is available but not utilized
+
+2. **No Progress Indicator Per Video**
+   - Backend doesn't provide progress status for video generation
+   - Only loading/completed/error states available
+   - Expected load time shown as placeholder (configurable constant)
+
+3. **No Retry Mechanism**
+   - Failed videos cannot be retried without reloading page
+   - Future enhancement: add retry button per card
+
+### Configuration
+
+```typescript
+// frontend/src/app/quick-gen-page/page.tsx
+const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 // Configurable expected time
+```
+
+### Code Structure
+
+**State Management:**
+```typescript
+interface VideoState {
+  sceneIndex: number
+  status: 'loading' | 'completed' | 'error'
+  videoId?: string
+  videoUrl?: string
+  error?: string
+}
+
+const [videoStates, setVideoStates] = useState<VideoState[]>([])
+```
+
+**Parallel Generation:**
+```typescript
+const generateVideos = async () => {
+  // Initialize all cards as loading
+  const initialStates = scenes.map((_, index) => ({
+    sceneIndex: index,
+    status: 'loading',
+  }))
+  setVideoStates(initialStates)
+
+  // Fire all requests in parallel
+  const videoPromises = scenes.map((scene, index) =>
+    generateSingleVideo(scene, index)
+  )
+  await Promise.allSettled(videoPromises)
+}
+```
+
+**Status Summary Calculation:**
+```typescript
+const videoSummary = {
+  loading: videoStates.filter(v => v.status === 'loading').length,
+  succeeded: videoStates.filter(v => v.status === 'completed').length,
+  failed: videoStates.filter(v => v.status === 'error').length,
+}
+```
+
+### Future Improvements
+
+1. **Character Reference Integration**
+   - Fetch character image by ID via `/api/mv/get_character_reference/{id}`
+   - Convert to base64 and pass to `generate_video`
+   - Ensure consistent character appearance across all videos
+
+2. **Video Download/Export**
+   - Add download button per video card
+   - Bulk download all videos as ZIP
+
+3. **Retry Failed Videos**
+   - Add retry button on error cards
+   - Re-trigger single video generation
+
+4. **Video Composition**
+   - Stitch all generated videos into single final video
+   - Add transitions between scenes
+
+### Files Modified
+
+- `frontend/src/app/quick-gen-page/page.tsx` - Video generation logic and UI
+- `.devdocs/v2/tasklist.md` - Task tracking
+- `.devdocs/v2/impl-notes.md` - This section
+
+---
+
+## v5 - Dual Storage Backend Support (Local/S3)
+
+### Implementation Summary
+
+Added automatic detection of video URL types to support both local filesystem and S3 cloud storage backends seamlessly.
+
+### Key Changes
+
+1. **URL Resolution Helper Function**
+   ```typescript
+   const resolveVideoUrl = (videoUrl: string): string => {
+     if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
+       // Absolute URL (S3 presigned URL) - use directly
+       return videoUrl
+     }
+     // Relative URL (local backend) - prepend API_URL
+     return `${API_URL}${videoUrl}`
+   }
+   ```
+
+2. **Automatic Backend Detection**
+   - Frontend checks if `video_url` from `generate_video` response is absolute or relative
+   - SERVE_FROM_CLOUD=true: Backend returns S3 presigned URLs (https://...)
+   - SERVE_FROM_CLOUD=false: Backend returns relative paths (/api/mv/get_video/{uuid})
+   - No backend changes required - frontend handles both cases
+
+3. **Video Player Integration**
+   - Uses resolved URL directly in `<video src={videoUrl}>`
+   - Works with both S3 presigned URLs and local backend proxied files
+   - No additional API calls needed for S3 mode
+
+### How It Works
+
+**S3 Mode (SERVE_FROM_CLOUD=true):**
+```
+generate_video response: { video_url: "https://bucket.s3.amazonaws.com/...?AWSAccessKeyId=...&Signature=...&Expires=..." }
+↓
+resolveVideoUrl detects http/https prefix
+↓
+Uses URL directly in video player
+↓
+Browser loads video directly from S3
+```
+
+**Local Mode (SERVE_FROM_CLOUD=false):**
+```
+generate_video response: { video_url: "/api/mv/get_video/uuid-here" }
+↓
+resolveVideoUrl detects relative path
+↓
+Prepends API_URL: "http://localhost:8000/api/mv/get_video/uuid-here"
+↓
+Browser loads video through backend proxy
+```
+
+### Benefits
+
+1. **No Backend Changes** - Frontend adapts to whatever URL format the backend provides
+2. **Seamless Switching** - Works automatically when backend switches between modes
+3. **Efficient S3 Loading** - Videos load directly from S3 without backend proxying
+4. **Backward Compatible** - Local mode continues to work as before
+
+### Files Modified
+
+- `frontend/src/app/quick-gen-page/page.tsx` - Added `resolveVideoUrl()` helper function
+- `.devdocs/v2/tasklist.md` - v5 task tracking
+- `.devdocs/v2/impl-notes.md` - This section

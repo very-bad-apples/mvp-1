@@ -5,6 +5,50 @@ In the frontend for generate character reference enable the display of 4 simulat
 
 ## v2
 
-For the generate_character on the frontend let's add to new features: 
-- loading state (per image): ideally this is some kind of animation demonstrate the image is being generated.
-- regenerate capability (per image)
+Let's add another button to the front end on the create page below the "Generate videos" button. this new button is called "Quick Job" and it will operate simliar to "generate videos" by routing to a new page of route /quick-gen-page instead of result/job_<id>. But this button will have no validation logic for being enabled.
+
+This page should utilize the layout and styling of the result/job_<id> page but this should send the data from the create page onto the second page and display:
+- the "video description"
+- the "character and style"
+- the id of the character reference image.
+These fields should de displayed in a card on that page above the other sections. Don't worry about styling these, in future these fields will be used as payloads in requests to the backend from that /quick-gen-page.
+
+## v3
+
+on /quick-gen-page let's kickoff a call to /api/mv/create_scenes and display the response json in cards on the page when it's created.
+- Create a progress bar like on the /result/job_id page waiting for the scenes json to be returned (expected 10-30 seconds).
+- Utilize only the following field for the request:
+    - "idea": <video description data>,
+    - "character_description": <character and style data>
+
+## v4
+
+on the /quick-gen-page we'll await the scenes.json to arrive and when they do quick off a call to /api/mv/generate_video, one request per scene, we'll pass each scenes's field to respective endpoint 
+    - description -> prompt
+    - negative_description -> negative_prompt
+omit all other endpoint params.
+
+return the generated videos by calling the /api/mv/get_video with uuid / video_url and display each video clip in it's own card.
+    - create the cards for the videos immediately and show loading status for them until the video is generated and loaded.
+
+## v5
+
+Overall goal: get the quick-gen-page to work in local dev both when the video assets are stored to local filesystem or when they are stored in the s3 buckets. Currently the page only works when they are stored in local filesystem, but the s3 system is working when we do the proper flow with curls, so we need the frontend to be able to switch between modes seemlessly based on the data passed back from generate_video
+
+after adding a new backend feature of enabling .backend/.env: SERVE_FROM_CLOUD=true which puts the video assets into an s3 bucket (even when running from local dev) where getting an issue calling get_video/ from quick-gen-page. This seems to be because when:
+- SERVE_FROM_CLOUD=true the "video_url" of generate_video comes back as: "/api/mv/get_video/fb25d756-a58a-4b1a-bc5a-acd9ed3b2373" but
+- SERVE_FROM_CLOUD=false the "video_url" of generate_video comes back as: "https://video-generator-storage.s3.amazonaws.com/mv/jobs/de0279c3-4948-42dd-821d-761daf783959/video.mp4?AWSAccessKeyId=AKIAUKUMUU7ZLPX6FY7N&Signature=h359lHgCWHEwzPMJ5hIwxHQTZfg%3D&Expires=1763407044"
+this seems to cause problems in contructing the url for get_video request and recieve the data.
+
+However there is also new logic on the get_video route which you can query with the /<uuid>?redirect=<boolean> and you can get back either a json of the s3 presigned url or the actual file download (you can check the swagger doc for elaboration)
+- redirect=false:
+{
+  "video_id": "38940f21-e2a8-4bf8-9442-6742ca101a92",
+  "video_url": "https://video-generator-storage.s3.amazonaws.com/mv/jobs/38940f21-e2a8-4bf8-9442-6742ca101a92/video.mp4?AWSAccessKeyId=AKIAUKUMUU7ZLPX6FY7N&Signature=fqsmfiCWWwPEHGXBocJeLkn%2BgxU%3D&Expires=1763405772",
+  "storage_backend": "s3",
+  "expires_in_seconds": 3600,
+  "cloud_path": "mv/jobs/38940f21-e2a8-4bf8-9442-6742ca101a92/video.mp4"
+}
+- redirect=true: downloads the actual video data from the video_url
+
+    

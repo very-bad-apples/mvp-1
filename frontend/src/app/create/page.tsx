@@ -12,7 +12,7 @@ import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 type Mode = 'ad-creative' | 'music-video'
@@ -149,6 +149,17 @@ export default function CreatePage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleQuickJob = () => {
+    // Store form data in sessionStorage before navigating
+    const quickJobData = {
+      videoDescription: prompt,
+      characterDescription: characterDescription,
+      characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+    }
+    sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
+    router.push('/quick-gen-page')
   }
 
   const handleGenerateImages = async () => {
@@ -533,6 +544,17 @@ export default function CreatePage() {
                       Generate Video
                     </>
                   )}
+                </Button>
+
+                {/* Quick Job Button */}
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={handleQuickJob}
+                  className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Zap className="mr-2 h-5 w-5" />
+                  Quick Job
                 </Button>
 
                 {/* Validation Messages */}
