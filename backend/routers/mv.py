@@ -329,6 +329,70 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
             seed=request.seed,
         )
 
+        # Upload to S3 if cloud storage is configured (follows video_generator.py pattern)
+        cloud_urls = {}
+        try:
+            if settings.STORAGE_BUCKET:
+                from services.storage_backend import get_storage_backend
+                import asyncio
+                import concurrent.futures
+                
+                async def upload_images_to_cloud():
+                    """Upload character reference images to cloud storage."""
+                    storage = get_storage_backend()
+                    urls = {}
+                    
+                    for image in images:
+                        try:
+                            # Determine file extension from path
+                            from pathlib import Path
+                            ext = Path(image.path).suffix.lstrip('.')
+                            
+                            cloud_path = f"character_references/{image.id}.{ext}"
+                            url = await storage.upload_file(
+                                image.path,
+                                cloud_path
+                            )
+                            
+                            # Update image with cloud URL
+                            image.cloud_url = url
+                            urls[image.id] = url
+                            
+                            logger.info(
+                                "character_image_uploaded_to_cloud",
+                                image_id=image.id,
+                                cloud_path=cloud_path
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "character_image_upload_failed",
+                                image_id=image.id,
+                                error=str(e)
+                            )
+                            # Continue with other images
+                    
+                    return urls
+                
+                # Run async upload in separate thread to avoid event loop conflicts
+                def run_upload():
+                    return asyncio.run(upload_images_to_cloud())
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_upload)
+                    cloud_urls = future.result(timeout=120)  # 2 min timeout for multiple images
+                
+                logger.info(
+                    "character_images_uploaded_to_cloud",
+                    num_images=len(cloud_urls),
+                    image_ids=list(cloud_urls.keys())
+                )
+        except Exception as e:
+            logger.warning(
+                "character_images_cloud_upload_failed",
+                error=str(e)
+            )
+            # Continue without cloud upload - local files are still available
+
         response = GenerateCharacterReferenceResponse(
             images=images,
             metadata=metadata
@@ -338,6 +402,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
             "generate_character_reference_request_completed",
             num_images_requested=request.num_images,
             num_images_generated=len(images),
+            num_images_uploaded=len(cloud_urls),
             image_ids=[img.id for img in images]
         )
 
@@ -373,29 +438,39 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
 @router.get(
     "/get_character_reference/{image_id}",
     responses={
-        200: {"description": "Character reference image", "content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}}},
+        200: {"description": "Character reference image or URL", "content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}, "application/json": {}}},
         404: {"description": "Image not found"}
     },
     summary="Retrieve Character Reference Image",
     description="""
 Retrieve a character reference image by its UUID.
 
-Returns the image file directly for download or display.
+**Cloud Storage (S3):**
+- Returns JSON with presigned URL by default
+- Use `?redirect=true` to get 302 redirect to image (for browsers)
+
+**Local Storage:**
+- Serves the image file directly
+
+**Query Parameters:**
+- `redirect` (optional): Set to "true" for 302 redirect instead of JSON
 
 **Example:**
 ```
 GET /api/mv/get_character_reference/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+GET /api/mv/get_character_reference/a1b2c3d4-e5f6-7890-abcd-ef1234567890?redirect=true
 ```
 """
 )
-async def get_character_reference(image_id: str):
+async def get_character_reference(image_id: str, redirect: bool = False):
     """
     Retrieve a character reference image by ID.
 
     This endpoint:
     1. Validates the image_id format
-    2. Searches for the image file (supports png, jpg, webp)
-    3. Returns the image file as a streaming response
+    2. Checks SERVE_FROM_CLOUD config
+    3. If enabled, generates presigned URL and redirects to cloud storage
+    4. Otherwise, serves the image file from local storage
     """
     # Validate image_id format (basic UUID validation)
     if not image_id or len(image_id) != 36 or image_id.count("-") != 4:
@@ -407,8 +482,74 @@ async def get_character_reference(image_id: str):
                 "details": "image_id must be a valid UUID"
             }
         )
+    
+    # Check if we should serve from cloud storage
+    if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
+        logger.info(
+            "get_character_reference_attempting_cloud_serve",
+            image_id=image_id,
+            serve_from_cloud=settings.SERVE_FROM_CLOUD,
+            storage_bucket=settings.STORAGE_BUCKET
+        )
+        try:
+            from services.storage_backend import get_storage_backend, S3StorageBackend
+            
+            storage = get_storage_backend()
+            
+            # S3: Generate presigned URL without exists() check (performance optimization)
+            # Note: We skip the exists() check for performance (like video endpoint)
+            # If file doesn't exist, the presigned URL will return 404 when accessed
+            if isinstance(storage, S3StorageBackend):
+                # Default to png, but will work with any extension in S3
+                cloud_path = f"character_references/{image_id}.png"
+                
+                presigned_url = storage.generate_presigned_url(
+                    cloud_path,
+                    expiry=settings.PRESIGNED_URL_EXPIRY
+                )
+                
+                logger.info(
+                    "get_character_reference_url_generated",
+                    image_id=image_id,
+                    storage_backend="s3",
+                    cloud_path=cloud_path,
+                    redirect_mode=redirect
+                )
+                
+                # Return JSON with URL by default, or redirect if requested
+                if redirect:
+                    return RedirectResponse(
+                        url=presigned_url,
+                        status_code=302
+                    )
+                else:
+                    return JSONResponse(
+                        content={
+                            "image_id": image_id,
+                            "image_url": presigned_url,
+                            "storage_backend": "s3",
+                            "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
+                            "cloud_path": cloud_path
+                        },
+                        status_code=200
+                    )
+            
+            # If not S3, fall through to local serving
+            logger.debug(
+                "get_character_reference_cloud_fallback_to_local",
+                image_id=image_id,
+                reason="not_s3_backend"
+            )
+            
+        except Exception as e:
+            # If cloud serving fails, fall back to local
+            logger.warning(
+                "get_character_reference_cloud_error_fallback",
+                image_id=image_id,
+                error=str(e)
+            )
 
-    # Search for image file (could be png, jpg, or webp)
+    # Local serving: Search for image file (could be png, jpg, or webp)
     image_dir = Path(__file__).parent.parent / "mv" / "outputs" / "character_reference"
 
     # Try different extensions
