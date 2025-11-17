@@ -51,4 +51,13 @@ However there is also new logic on the get_video route which you can query with 
 }
 - redirect=true: downloads the actual video data from the video_url
 
-    
+## v6
+
+implement the endpoint /api/mv/stitch-videos which implements the functionality of .ref-pipeline/src/main.py:merge_videos 
+
+the client will pass a list of video-ids in the request which this method should then merge into one video clip.
+
+implement the file storage logic in generate_video of utilizing storage buckets when the setting is enabled, and saving to local file system if not.
+
+also utilize the MV_DEBUG_MODE logic to print out debugging data when that setting is enabled.
+

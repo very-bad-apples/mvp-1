@@ -319,3 +319,91 @@ Enable the quick-gen-page frontend to seamlessly handle video URLs from both loc
   - Document dual storage backend detection logic
   - Note that frontend auto-detects based on URL format
   - Document the URL resolution approach
+
+---
+
+## v6 - Video Stitching Endpoint
+
+### Summary
+Implement `/api/mv/stitch-videos` endpoint that merges multiple video clips into a single video using MoviePy. Support both local filesystem and S3 storage backends based on SERVE_FROM_CLOUD setting. Include debug logging when MV_DEBUG_MODE is enabled.
+
+### Backend Tasks
+
+- [ ] **Add MoviePy dependency**
+  - Add `moviepy` to requirements.txt
+  - Verify installation with `uv pip install moviepy`
+
+- [ ] **Create video stitching module**
+  - Create `backend/mv/video_stitcher.py`
+  - Implement `stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]`
+  - Return format: (video_id, video_path, video_url, metadata)
+  - Handle both local and S3 storage modes
+
+- [ ] **Implement video file retrieval**
+  - For SERVE_FROM_CLOUD=false: read from local filesystem
+  - For SERVE_FROM_CLOUD=true: download from S3 to temp directory
+  - Validate all video IDs exist before processing
+  - Fail entire operation if any video is missing
+
+- [ ] **Implement video merging logic**
+  - Use MoviePy's `VideoFileClip` and `concatenate_videoclips`
+  - Configure codec (libx264) and audio codec (aac)
+  - Generate new UUID for merged video
+  - Save to appropriate location based on SERVE_FROM_CLOUD
+
+- [ ] **Implement storage backend logic**
+  - SERVE_FROM_CLOUD=false: save to local filesystem
+  - SERVE_FROM_CLOUD=true: upload merged video to S3
+  - Return appropriate video_url (relative path vs S3 presigned URL)
+
+- [ ] **Create request/response models**
+  - Request: `StitchVideosRequest` with `video_ids: list[str]`
+  - Response: `StitchVideosResponse` similar to `GenerateVideoResponse`
+  - Include metadata: input video IDs, processing time, storage backend
+
+- [ ] **Add endpoint to router**
+  - POST `/api/mv/stitch-videos`
+  - Validate video IDs format (UUID)
+  - Call stitch_videos function
+  - Return response with video_id, video_url, metadata
+
+- [ ] **Add debug logging**
+  - Log when MV_DEBUG_MODE is enabled
+  - Log: video IDs received, storage mode, temp file locations
+  - Log: merging start/end, upload progress, final URL
+  - Add debug functions to `backend/mv/debug.py`
+
+- [ ] **Error handling**
+  - Return 400 if empty video_ids list
+  - Return 404 if any video ID not found
+  - Return 500 for MoviePy processing errors
+  - Clean up temp files on error
+
+- [ ] **Cleanup temporary files**
+  - Remove downloaded S3 files after merging
+  - Remove intermediate files from MoviePy processing
+
+### Testing Tasks
+
+- [ ] **Manual testing with SERVE_FROM_CLOUD=false**
+  - Test with 2-3 local video files
+  - Verify merged video plays correctly
+  - Check metadata contains input video IDs
+
+- [ ] **Manual testing with SERVE_FROM_CLOUD=true**
+  - Test with videos stored in S3
+  - Verify S3 download and re-upload works
+  - Check presigned URL returned for merged video
+
+- [ ] **Error case testing**
+  - Test with non-existent video ID
+  - Test with empty video_ids list
+  - Test with single video (edge case)
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document video stitching implementation
+  - Note MoviePy usage and codecs
+  - Document storage backend handling
+  - Note temporary file management

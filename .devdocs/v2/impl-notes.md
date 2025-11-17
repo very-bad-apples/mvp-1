@@ -476,3 +476,123 @@ Browser loads video through backend proxy
 - `frontend/src/app/quick-gen-page/page.tsx` - Added `resolveVideoUrl()` helper function
 - `.devdocs/v2/tasklist.md` - v5 task tracking
 - `.devdocs/v2/impl-notes.md` - This section
+
+---
+
+## v6 - Video Stitching Endpoint
+
+### Implementation Summary
+
+Added `/api/mv/stitch-videos` endpoint that merges multiple video clips into a single video using MoviePy. Supports both local filesystem and S3 storage backends.
+
+### Key Features
+
+1. **MoviePy Integration**
+   - Uses `VideoFileClip` and `concatenate_videoclips` for merging
+   - Outputs with libx264 codec and AAC audio
+   - Clean resource management with proper clip cleanup
+
+2. **Dual Storage Backend Support**
+   - SERVE_FROM_CLOUD=false: Reads from local filesystem, writes locally
+   - SERVE_FROM_CLOUD=true: Downloads from S3, merges locally, uploads to S3
+   - Returns appropriate URL (relative path or S3 presigned URL)
+
+3. **Error Handling**
+   - 400: Empty video_ids list or invalid UUID format
+   - 404: Any video not found (fails entire operation)
+   - 500: MoviePy processing errors
+
+4. **Debug Logging**
+   - Logs request with video IDs
+   - Logs storage mode (local vs S3)
+   - Logs S3 downloads (when applicable)
+   - Logs merge start/completion with timing
+   - Logs cleanup of temp files
+
+### Architecture
+
+**Request Flow:**
+```
+POST /api/mv/stitch-videos
+  ↓
+Validate video_ids (non-empty, valid UUIDs)
+  ↓
+Retrieve videos (local path lookup or S3 download)
+  ↓
+Merge with MoviePy
+  ↓
+Save to local filesystem
+  ↓
+Upload to S3 (if configured)
+  ↓
+Return response with video_id, video_url, metadata
+```
+
+**Storage Mode Detection:**
+```python
+if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
+    # S3 mode: download → merge → upload
+else:
+    # Local mode: direct file access
+```
+
+### API Usage
+
+**Request:**
+```json
+POST /api/mv/stitch-videos
+{
+  "video_ids": [
+    "uuid-1",
+    "uuid-2",
+    "uuid-3"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "video_id": "new-uuid",
+  "video_path": "/path/to/stitched/video.mp4",
+  "video_url": "https://s3.../video.mp4" or "/api/mv/get_video/new-uuid",
+  "metadata": {
+    "input_video_ids": ["uuid-1", "uuid-2", "uuid-3"],
+    "num_videos_stitched": 3,
+    "merge_time_seconds": 45.2,
+    "total_processing_time_seconds": 120.5,
+    "generation_timestamp": "2025-11-17T...",
+    "storage_backend": "s3" or "local",
+    "cloud_urls": {...}  // if S3
+  }
+}
+```
+
+### Limitations
+
+1. **No Transitions** - Videos are concatenated directly without crossfades or effects
+2. **Synchronous Processing** - Can take 30-300+ seconds for multiple large videos
+3. **All-or-Nothing** - If any video is missing, entire operation fails
+4. **Temporary Storage** - S3 mode downloads all videos to temp directory before merging
+
+### Files Created/Modified
+
+- `backend/mv/video_stitcher.py` - Core stitching logic (NEW)
+- `backend/routers/mv.py` - Added `/stitch-videos` endpoint
+- `backend/mv/debug.py` - Added stitch-specific logging functions
+- `backend/requirements.txt` - Added moviepy==2.0.0
+- `.devdocs/v2/tasklist.md` - v6 task tracking
+- `.devdocs/v2/impl-notes.md` - This section
+
+### Dependencies Added
+
+- `moviepy==2.0.0` - Video processing and concatenation
+
+### Future Improvements
+
+1. **Add Transitions** - Crossfades, cuts, or other transition effects
+2. **Progress Tracking** - Stream progress updates for long operations
+3. **Retry Failed Downloads** - Retry S3 downloads on transient failures
+4. **Partial Success** - Skip missing videos with warning instead of failing
+5. **Audio Normalization** - Normalize audio levels across clips
+6. **Video Resolution Matching** - Handle videos with different resolutions
