@@ -47,6 +47,7 @@ class CharacterReferenceImage(BaseModel):
     id: str = Field(..., description="UUID of the image")
     path: str = Field(..., description="File path to saved image")
     base64: str = Field(..., description="Base64-encoded image data")
+    cloud_url: Optional[str] = Field(None, description="Presigned/public URL for cloud access")
 
 
 class GenerateCharacterReferenceResponse(BaseModel):

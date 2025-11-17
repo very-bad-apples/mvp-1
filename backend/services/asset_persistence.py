@@ -97,7 +97,8 @@ class AssetPersistenceService:
             "audio": [],
             "metadata": None,
             "script": None,
-            "uploads": []
+            "uploads": [],
+            "character_references": []
         }
         
         try:
@@ -136,6 +137,15 @@ class AssetPersistenceService:
                     job_id,
                     uploads_dir,
                     "intermediate/uploads"
+                )
+            
+            # Upload character reference images
+            character_ref_dir = base_path / "character_reference"
+            if character_ref_dir.exists():
+                result["character_references"] = await self._upload_directory(
+                    job_id,
+                    character_ref_dir,
+                    "intermediate/character_reference"
                 )
             
             # Upload metadata if exists
@@ -449,6 +459,168 @@ class AssetPersistenceService:
         except Exception as e:
             logger.error(f"Error cleaning up backups: {e}")
             # Don't raise - cleanup failure shouldn't break the main flow
+    
+    async def persist_character_reference(
+        self,
+        image_id: str,
+        local_image_path: str,
+        job_id: Optional[str] = None
+    ) -> str:
+        """
+        Persist a single character reference image to cloud storage.
+        
+        Args:
+            image_id: UUID of the image
+            local_image_path: Path to local image file
+            job_id: Optional job ID to associate with. If None, stores standalone.
+        
+        Returns:
+            Cloud URL of uploaded image
+            
+        Example:
+            >>> service = AssetPersistenceService()
+            >>> url = await service.persist_character_reference(
+            ...     "abc-123",
+            ...     "/tmp/character_reference/abc-123.png",
+            ...     job_id="job-456"
+            ... )
+        """
+        if not os.path.exists(local_image_path):
+            raise FileNotFoundError(f"Image file not found: {local_image_path}")
+        
+        # Determine cloud path based on whether it's associated with a job
+        file_ext = Path(local_image_path).suffix
+        if job_id:
+            cloud_path = f"videos/{job_id}/intermediate/character_reference/{image_id}{file_ext}"
+        else:
+            cloud_path = f"character_references/{image_id}{file_ext}"
+        
+        logger.info(f"Persisting character reference {image_id} to {cloud_path}")
+        
+        try:
+            url = await self.storage.upload_file(local_image_path, cloud_path)
+            logger.info(f"Successfully persisted character reference {image_id}")
+            return url
+        except Exception as e:
+            logger.error(f"Failed to persist character reference {image_id}: {e}")
+            raise
+    
+    async def associate_character_images_with_job(
+        self,
+        job_id: str,
+        image_ids: List[str],
+        local_base_path: str
+    ) -> List[str]:
+        """
+        Copy character reference images into job directory and upload to cloud.
+        
+        This method copies images from the standalone character_reference directory
+        into a job-specific directory, then uploads them to cloud storage.
+        
+        Args:
+            job_id: Job identifier
+            image_ids: List of character reference image UUIDs
+            local_base_path: Base path to job directory (e.g., "/tmp/video_jobs/job-123")
+        
+        Returns:
+            List of cloud URLs for the uploaded images
+            
+        Example:
+            >>> service = AssetPersistenceService()
+            >>> urls = await service.associate_character_images_with_job(
+            ...     "job-456",
+            ...     ["abc-123", "def-456"],
+            ...     "/tmp/video_jobs/job-456"
+            ... )
+        """
+        import shutil
+        
+        base_path = Path(local_base_path)
+        job_char_ref_dir = base_path / "character_reference"
+        job_char_ref_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Source directory where standalone character images are stored
+        source_dir = Path(__file__).parent.parent / "mv" / "outputs" / "character_reference"
+        
+        urls = []
+        
+        logger.info(f"Associating {len(image_ids)} character images with job {job_id}")
+        
+        for image_id in image_ids:
+            # Try to find the image with different extensions
+            image_found = False
+            for ext in [".png", ".jpg", ".jpeg", ".webp"]:
+                source_path = source_dir / f"{image_id}{ext}"
+                if source_path.exists():
+                    # Copy to job directory
+                    dest_path = job_char_ref_dir / f"{image_id}{ext}"
+                    shutil.copy2(source_path, dest_path)
+                    
+                    # Upload to cloud
+                    cloud_path = f"videos/{job_id}/intermediate/character_reference/{image_id}{ext}"
+                    url = await self.storage.upload_file(str(dest_path), cloud_path)
+                    urls.append(url)
+                    
+                    logger.info(f"Associated character reference {image_id} with job {job_id}")
+                    image_found = True
+                    break
+            
+            if not image_found:
+                logger.warning(f"Character reference image {image_id} not found in {source_dir}")
+        
+        logger.info(f"Successfully associated {len(urls)} character images with job {job_id}")
+        return urls
+    
+    async def get_character_reference_url(
+        self,
+        image_id: str,
+        job_id: Optional[str] = None,
+        extension: str = "png"
+    ) -> Optional[str]:
+        """
+        Generate presigned URL (S3) or public URL (Firebase) for character reference image.
+        
+        Reuses storage backend's generate_presigned_url() for S3 
+        and _get_public_url() for Firebase.
+        
+        Args:
+            image_id: UUID of the image
+            job_id: Optional job ID if image is associated with a job
+            extension: Image file extension (png, jpg, webp)
+        
+        Returns:
+            Presigned/public URL or None if image doesn't exist
+            
+        Example:
+            >>> service = AssetPersistenceService()
+            >>> url = await service.get_character_reference_url(
+            ...     "abc-123",
+            ...     job_id="job-456",
+            ...     extension="png"
+            ... )
+        """
+        from services.storage_backend import S3StorageBackend, FirebaseStorageBackend
+        
+        # Determine cloud path
+        if job_id:
+            cloud_path = f"videos/{job_id}/intermediate/character_reference/{image_id}.{extension}"
+        else:
+            cloud_path = f"character_references/{image_id}.{extension}"
+        
+        # Check if exists
+        if not await self.storage.exists(cloud_path):
+            return None
+        
+        # Generate URL based on backend type
+        if isinstance(self.storage, S3StorageBackend):
+            return self.storage.generate_presigned_url(
+                cloud_path, 
+                expiry=settings.PRESIGNED_URL_EXPIRY
+            )
+        elif isinstance(self.storage, FirebaseStorageBackend):
+            return self.storage._get_public_url(cloud_path)
+        
+        return None
 
 
 
