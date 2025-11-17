@@ -1,0 +1,644 @@
+'use client'
+
+/**
+ * ProjectPageClient - Main Project Dashboard
+ *
+ * This component orchestrates the complete project view with:
+ * - Real-time project status polling
+ * - Component integration (Header, PhaseTracker, Scenes, Assets, FinalVideo)
+ * - Start generation and regeneration controls
+ * - Conditional rendering based on project status
+ * - Error handling and loading states
+ */
+
+import { useCallback, useMemo } from 'react'
+import Link from 'next/link'
+import { Video, ChevronLeft, CheckCircle2, Circle, Film, Play } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { useToast } from '@/hooks/use-toast'
+import { useProjectPolling } from '@/hooks/useProjectPolling'
+import { ProjectStatus, ProjectScene } from '@/types/project'
+import { AssetGallery } from '@/components/AssetGallery'
+import FinalVideoPlayer from '@/components/FinalVideoPlayer'
+
+const statusConfig: Record<ProjectStatus, { color: string; label: string }> = {
+  'creating-scenes': { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', label: 'Creating Scenes' },
+  'generating-images': { color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', label: 'Generating Images' },
+  'generating-videos': { color: 'bg-purple-500/10 text-purple-500 border-purple-500/20', label: 'Generating Videos' },
+  'generating-lipsync': { color: 'bg-pink-500/10 text-pink-500 border-pink-500/20', label: 'Generating Lip-sync' },
+  'composing': { color: 'bg-orange-500/10 text-orange-500 border-orange-500/20', label: 'Composing' },
+  'completed': { color: 'bg-green-500/10 text-green-500 border-green-500/20', label: 'Completed' },
+  'error': { color: 'bg-red-500/10 text-red-500 border-red-500/20', label: 'Error' },
+}
+
+interface Phase {
+  id: string
+  label: string
+  completed: boolean
+}
+
+function getPhases(status: ProjectStatus): Phase[] {
+  const phases: Phase[] = [
+    { id: 'scenes', label: 'Scenes', completed: false },
+    { id: 'images', label: 'Images', completed: false },
+    { id: 'videos', label: 'Videos', completed: false },
+    { id: 'lipsync', label: 'Lip-sync', completed: false },
+    { id: 'compose', label: 'Compose', completed: false },
+  ]
+
+  const statusOrder: ProjectStatus[] = [
+    'creating-scenes',
+    'generating-images',
+    'generating-videos',
+    'generating-lipsync',
+    'composing',
+    'completed',
+  ]
+
+  const currentIndex = statusOrder.indexOf(status === 'error' ? 'completed' : status)
+
+  phases.forEach((phase, index) => {
+    if (index < currentIndex || status === 'completed') {
+      phase.completed = true
+    }
+  })
+
+  if (status === 'completed') {
+    phases.forEach(p => p.completed = true)
+  }
+
+  return phases
+}
+
+function ProjectHeader({
+  title,
+  status,
+  createdAt,
+  onStartGeneration,
+  isGenerating,
+}: {
+  title: string
+  status: ProjectStatus
+  createdAt: string
+  onStartGeneration?: () => void
+  isGenerating?: boolean
+}) {
+  const statusStyle = statusConfig[status]
+  const canStartGeneration = status === 'creating-scenes' && onStartGeneration
+
+  return (
+    <div className="space-y-4" role="region" aria-label="Project header">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-3xl md:text-4xl font-bold text-white">{title}</h1>
+          <p className="text-gray-400 text-sm">
+            <time dateTime={createdAt}>
+              Created on {new Date(createdAt).toLocaleDateString()}
+            </time>
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Badge
+            className={`${statusStyle.color} border px-4 py-2 text-sm font-medium`}
+            aria-label={`Project status: ${statusStyle.label}`}
+          >
+            {statusStyle.label}
+          </Badge>
+          {canStartGeneration && (
+            <Button
+              onClick={onStartGeneration}
+              disabled={isGenerating}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              aria-label="Start video generation"
+            >
+              <Play className="w-4 h-4 mr-2" aria-hidden="true" />
+              {isGenerating ? 'Starting...' : 'Start Generation'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhaseTracker({ phases }: { phases: Phase[] }) {
+  const completedCount = phases.filter(p => p.completed).length
+
+  return (
+    <div
+      className="bg-gray-800/50 border border-gray-700 rounded-lg p-6"
+      role="region"
+      aria-label="Generation progress tracker"
+    >
+      <h2 className="text-xl font-semibold text-white mb-6">
+        Project Phases
+        <span className="sr-only">
+          {completedCount} of {phases.length} phases completed
+        </span>
+      </h2>
+      <div
+        className="flex items-center justify-between gap-2 overflow-x-auto pb-2"
+        role="progressbar"
+        aria-valuenow={completedCount}
+        aria-valuemin={0}
+        aria-valuemax={phases.length}
+        aria-label="Project generation progress"
+      >
+        {phases.map((phase, index) => (
+          <div key={phase.id} className="flex items-center flex-shrink-0">
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className={`flex items-center justify-center w-12 h-12 rounded-full ${
+                  phase.completed ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-700 text-gray-400'
+                }`}
+                aria-label={`${phase.label} phase: ${phase.completed ? 'completed' : 'pending'}`}
+              >
+                {phase.completed ? (
+                  <CheckCircle2 className="w-6 h-6" aria-hidden="true" />
+                ) : (
+                  <Circle className="w-6 h-6" aria-hidden="true" />
+                )}
+              </div>
+              <span className={`text-xs md:text-sm font-medium ${
+                phase.completed ? 'text-blue-400' : 'text-gray-400'
+              }`}>
+                {phase.label}
+              </span>
+            </div>
+            {index < phases.length - 1 && (
+              <div
+                className={`w-12 md:w-24 h-0.5 mx-2 ${
+                  phase.completed ? 'bg-blue-500/50' : 'bg-gray-700'
+                }`}
+                aria-hidden="true"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SceneCard({
+  scene,
+  onRegenerateImage,
+  onRegenerateVideo,
+  onRegenerateLipsync,
+}: {
+  scene: ProjectScene
+  onRegenerateImage?: (sceneId: number) => void
+  onRegenerateVideo?: (sceneId: number) => void
+  onRegenerateLipsync?: (sceneId: number) => void
+}) {
+  const hasVideo = scene.videoUrl && scene.status === 'completed'
+  const thumbnail = '/placeholder.svg'
+
+  const sceneStatusConfig = {
+    pending: { color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', label: 'Pending' },
+    generating: { color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', label: 'Generating' },
+    completed: { color: 'bg-green-500/10 text-green-400 border-green-500/20', label: 'Completed' },
+    failed: { color: 'bg-red-500/10 text-red-400 border-red-500/20', label: 'Failed' },
+  }
+
+  const sceneStatus = scene.status || 'pending'
+  const statusStyle = sceneStatusConfig[sceneStatus]
+
+  return (
+    <Card
+      className="bg-gray-800/50 border-gray-700 overflow-hidden group hover:border-blue-500/50 transition-colors"
+      role="article"
+      aria-label={`Scene ${scene.sequence}: ${scene.prompt}`}
+    >
+      <div className="relative aspect-video overflow-hidden bg-gray-900/50">
+        {hasVideo && scene.videoUrl ? (
+          <video
+            src={scene.videoUrl}
+            className="object-cover w-full h-full"
+            muted
+            loop
+            playsInline
+            aria-label={`Video preview for scene ${scene.sequence}`}
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={thumbnail}
+            alt={`Scene ${scene.sequence} thumbnail`}
+            className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+          />
+        )}
+        <div className="absolute top-2 right-2">
+          <Badge className="bg-gray-900/80 text-white border-gray-700 text-xs">
+            Scene {scene.sequence}
+          </Badge>
+        </div>
+      </div>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="text-white font-medium text-sm line-clamp-1">{scene.prompt}</h3>
+          <Badge
+            className={`text-xs ${statusStyle.color} border flex-shrink-0`}
+            aria-label={`Scene status: ${statusStyle.label}`}
+          >
+            {statusStyle.label}
+          </Badge>
+        </div>
+        <p className="text-gray-400 text-xs mb-3 line-clamp-2">{scene.negativePrompt || 'No negative prompt'}</p>
+
+        {/* Regeneration controls - only show for completed or failed scenes */}
+        {(scene.status === 'completed' || scene.status === 'failed') && scene.id && (
+          <div className="flex gap-2 mt-2" role="group" aria-label="Regeneration controls">
+            {onRegenerateImage && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-gray-600 hover:bg-gray-700"
+                onClick={() => onRegenerateImage(scene.id!)}
+                aria-label={`Regenerate image for scene ${scene.sequence}`}
+              >
+                Regen Image
+              </Button>
+            )}
+            {onRegenerateVideo && scene.status === 'completed' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-gray-600 hover:bg-gray-700"
+                onClick={() => onRegenerateVideo(scene.id!)}
+                aria-label={`Regenerate video for scene ${scene.sequence}`}
+              >
+                Regen Video
+              </Button>
+            )}
+            {onRegenerateLipsync && scene.status === 'completed' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-gray-600 hover:bg-gray-700"
+                onClick={() => onRegenerateLipsync(scene.id!)}
+                aria-label={`Regenerate lipsync for scene ${scene.sequence}`}
+              >
+                Regen Lipsync
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function VideoPlayerSection({
+  videoUrl,
+  projectTitle,
+  projectId,
+  metadata
+}: {
+  videoUrl?: string
+  projectTitle: string
+  projectId: string
+  metadata?: {
+    duration: number
+    fileSize: number
+    resolution: string
+    format: string
+  }
+}) {
+  if (!videoUrl) {
+    return (
+      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Film className="w-5 h-5 text-blue-400" />
+          <h2 className="text-xl font-semibold text-white">Final Video</h2>
+        </div>
+        <div className="aspect-video bg-gray-900/50 rounded-lg border border-gray-700 flex items-center justify-center">
+          <div className="text-center space-y-2">
+            <Film className="w-12 h-12 text-gray-600 mx-auto" />
+            <p className="text-gray-400 text-sm">Video is being generated...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <FinalVideoPlayer
+      src={videoUrl}
+      metadata={{
+        title: projectTitle,
+        description: `AI-generated video for project: ${projectId}`,
+        duration: metadata?.duration || 0,
+        fileSize: metadata?.fileSize,
+        resolution: metadata?.resolution,
+        format: metadata?.format || 'mp4'
+      }}
+      showDownload={true}
+      showShare={true}
+      showMetadata={true}
+    />
+  )
+}
+
+export function ProjectPageClient({ projectId }: { projectId: string }) {
+  const { toast } = useToast()
+  const { project, loading, error, refetch, isPolling } = useProjectPolling(projectId)
+
+  // Calculate phases based on project status
+  const phases = useMemo(() => {
+    return project ? getPhases(project.status) : []
+  }, [project])
+
+  // Project title
+  const projectTitle = useMemo(() => {
+    if (!project) return ''
+    return project.idea.slice(0, 60) + (project.idea.length > 60 ? '...' : '')
+  }, [project])
+
+  // Handle start generation
+  const handleStartGeneration = useCallback(async () => {
+    if (!project) return
+
+    try {
+      toast({
+        title: 'Starting Generation',
+        description: 'Your project generation has been queued.',
+      })
+
+      const response = await fetch(`/api/projects/${projectId}/generate`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to start generation')
+      }
+
+      toast({
+        title: 'Generation Started',
+        description: 'Your project is now being generated.',
+      })
+
+      await refetch()
+    } catch (err) {
+      toast({
+        title: 'Generation Failed',
+        description: err instanceof Error ? err.message : 'Failed to start generation',
+        variant: 'destructive',
+      })
+    }
+  }, [project, projectId, refetch, toast])
+
+  // Handle scene regeneration
+  const handleRegenerateImage = useCallback(async (sceneId: number) => {
+    try {
+      toast({
+        title: 'Regenerating Image',
+        description: `Regenerating image for scene ${sceneId}...`,
+      })
+
+      const response = await fetch(
+        `/api/projects/${projectId}/scenes/${sceneId}/regenerate-image`,
+        { method: 'POST' }
+      )
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to regenerate image')
+      }
+
+      toast({
+        title: 'Regeneration Started',
+        description: `Image regeneration for scene ${sceneId} has started.`,
+      })
+
+      await refetch()
+    } catch (err) {
+      toast({
+        title: 'Regeneration Failed',
+        description: err instanceof Error ? err.message : 'Failed to regenerate image',
+        variant: 'destructive',
+      })
+    }
+  }, [projectId, refetch, toast])
+
+  const handleRegenerateVideo = useCallback(async (sceneId: number) => {
+    try {
+      toast({
+        title: 'Regenerating Video',
+        description: `Regenerating video for scene ${sceneId}...`,
+      })
+
+      const response = await fetch(
+        `/api/projects/${projectId}/scenes/${sceneId}/regenerate-video`,
+        { method: 'POST' }
+      )
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to regenerate video')
+      }
+
+      toast({
+        title: 'Regeneration Started',
+        description: `Video regeneration for scene ${sceneId} has started.`,
+      })
+
+      await refetch()
+    } catch (err) {
+      toast({
+        title: 'Regeneration Failed',
+        description: err instanceof Error ? err.message : 'Failed to regenerate video',
+        variant: 'destructive',
+      })
+    }
+  }, [projectId, refetch, toast])
+
+  const handleRegenerateLipsync = useCallback(async (sceneId: number) => {
+    try {
+      toast({
+        title: 'Regenerating Lipsync',
+        description: `Regenerating lipsync for scene ${sceneId}...`,
+      })
+
+      const response = await fetch(
+        `/api/projects/${projectId}/scenes/${sceneId}/regenerate-lipsync`,
+        { method: 'POST' }
+      )
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to regenerate lipsync')
+      }
+
+      toast({
+        title: 'Regeneration Started',
+        description: `Lipsync regeneration for scene ${sceneId} has started.`,
+      })
+
+      await refetch()
+    } catch (err) {
+      toast({
+        title: 'Regeneration Failed',
+        description: err instanceof Error ? err.message : 'Failed to regenerate lipsync',
+        variant: 'destructive',
+      })
+    }
+  }, [projectId, refetch, toast])
+
+  // Error state
+  if (error && !project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-3xl font-bold text-white">Error Loading Project</h1>
+          <p className="text-gray-400">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <Button onClick={() => refetch()} variant="outline">
+              Try Again
+            </Button>
+            <Link href="/">
+              <Button>Go Back Home</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state (initial load)
+  if (loading && !project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="text-gray-400">Loading project...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Not found state
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-3xl font-bold text-white">Project Not Found</h1>
+          <p className="text-gray-400">The project you are looking for does not exist.</p>
+          <Link href="/">
+            <Button>Go Back Home</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Determine what to show based on status
+  const showPhaseTracker = project.status !== 'creating-scenes' && project.status !== 'completed'
+  const showScenes = project.scenes && project.scenes.length > 0
+  const showAssets = project.scenes && project.scenes.some(s => s.videoUrl || s.status === 'completed')
+  const showFinalVideo = project.status === 'completed' || project.finalVideoUrl
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* Header */}
+      <header
+        className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50"
+        role="banner"
+      >
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-blue-400">
+                <Video className="w-8 h-8" aria-hidden="true" />
+                <h1 className="text-xl font-bold text-white">AI Video Generator</h1>
+              </div>
+            </div>
+            <nav className="flex items-center gap-3" aria-label="Project navigation">
+              {isPolling && (
+                <span
+                  className="text-xs text-gray-400 flex items-center gap-2"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Real-time updates active"
+                >
+                  <span className="animate-pulse w-2 h-2 bg-blue-500 rounded-full" aria-hidden="true" />
+                  Live
+                </span>
+              )}
+              <Link href="/">
+                <Button
+                  variant="outline"
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+                  aria-label="Go back to home page"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-2" aria-hidden="true" />
+                  Back
+                </Button>
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8 space-y-8" role="main">
+        {/* Project Header */}
+        <ProjectHeader
+          title={projectTitle}
+          status={project.status}
+          createdAt={project.createdAt}
+          onStartGeneration={handleStartGeneration}
+          isGenerating={loading}
+        />
+
+        {/* Phase Tracker - Only show during generation */}
+        {showPhaseTracker && <PhaseTracker phases={phases} />}
+
+        {/* Scenes Section */}
+        {showScenes && (
+          <section aria-labelledby="scenes-heading">
+            <h2 id="scenes-heading" className="text-2xl font-semibold text-white mb-6">
+              Scenes ({project.completedScenes}/{project.scenes.length})
+            </h2>
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              role="list"
+              aria-label="Project scenes"
+            >
+              {project.scenes.map((scene) => (
+                <SceneCard
+                  key={scene.sequence}
+                  scene={scene}
+                  onRegenerateImage={handleRegenerateImage}
+                  onRegenerateVideo={handleRegenerateVideo}
+                  onRegenerateLipsync={handleRegenerateLipsync}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Assets Gallery - Show when we have completed scenes */}
+        {showAssets && (
+          <AssetGallery
+            scenes={project.scenes}
+            characterRefImage={project.characterRefImage}
+          />
+        )}
+
+        {/* Final Video - Show when project is complete or video is available */}
+        {showFinalVideo && (
+          <VideoPlayerSection
+            videoUrl={project.finalVideoUrl || undefined}
+            projectTitle={projectTitle}
+            projectId={project.projectId}
+            metadata={project.finalVideoMetadata}
+          />
+        )}
+      </main>
+    </div>
+  )
+}
