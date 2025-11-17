@@ -30,6 +30,7 @@ export default function CreatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [useAICharacter, setUseAICharacter] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
+  const [generatedImageIds, setGeneratedImageIds] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
@@ -120,6 +121,11 @@ export default function CreatePage() {
         }
       }
 
+      // Add selected character reference image ID if using AI character
+      if (useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]) {
+        formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
+      }
+
       // Mock API call (simulating network delay)
       await new Promise(resolve => setTimeout(resolve, 1500))
 
@@ -166,6 +172,7 @@ export default function CreatePage() {
       }
     })
     setGeneratedImages([])
+    setGeneratedImageIds([])
 
     try {
       const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
@@ -175,35 +182,43 @@ export default function CreatePage() {
         },
         body: JSON.stringify({
           character_description: characterDescription.trim(),
+          num_images: 4, // Request 4 images for selection
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character image')
+        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character images')
       }
 
       const data = await response.json()
 
-      // Convert base64 to blob URL for better performance
-      const base64Image = data.image_base64
-      const byteCharacters = atob(base64Image)
-      const byteNumbers = new Array(byteCharacters.length)
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i)
-      }
-      const byteArray = new Uint8Array(byteNumbers)
-      const blob = new Blob([byteArray], { type: 'image/png' })
-      const blobUrl = URL.createObjectURL(blob)
+      // Convert each base64 image to blob URL for better performance
+      const blobUrls: string[] = []
+      const imageIds: string[] = []
 
-      // For now, we're generating one image, but you could generate multiple
-      // by calling the API multiple times in parallel or modifying the backend
-      setGeneratedImages([blobUrl])
+      for (const image of data.images) {
+        const base64Image = image.base64
+        const byteCharacters = atob(base64Image)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        const blob = new Blob([byteArray], { type: 'image/png' })
+        const blobUrl = URL.createObjectURL(blob)
+
+        blobUrls.push(blobUrl)
+        imageIds.push(image.id)
+      }
+
+      setGeneratedImages(blobUrls)
+      setGeneratedImageIds(imageIds)
       setGenerationAttempts(prev => prev + 1)
 
       toast({
-        title: "Character Image Generated",
-        description: "Your character reference is ready. Click to select it.",
+        title: "Character Images Generated",
+        description: `${blobUrls.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)
@@ -396,9 +411,12 @@ export default function CreatePage() {
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <Skeleton className="aspect-square rounded-lg bg-gray-700/50" />
+                          <Skeleton className="aspect-square rounded-lg bg-gray-700/50" />
+                          <Skeleton className="aspect-square rounded-lg bg-gray-700/50" />
+                          <Skeleton className="aspect-square rounded-lg bg-gray-700/50" />
                         </div>
                         <p className="text-sm text-gray-400 text-center">
-                          Generating character image... This may take 30-60 seconds.
+                          Generating 4 character images... This may take 30-60 seconds.
                         </p>
                       </div>
                     )}
