@@ -93,3 +93,51 @@ Enable batch generation of 1-4 character reference images from a single prompt, 
   - Document UUID storage change
   - Document batch generation architecture decisions
   - Note any limitations (Replicate API constraints, etc.)
+
+---
+
+## v2 - Quick Job Button & Data Display Page
+
+### Summary
+Add a "Quick Job" button to the create page that navigates to a new `/quick-gen-page` route, passing form data via URL state and displaying it in a card.
+
+### Frontend Tasks
+
+- [ ] **Add "Quick Job" button to create page**
+  - Add button below "Generate videos" button
+  - Match styling of "Generate videos" button
+  - No validation logic required (always enabled)
+  - On click: navigate to `/quick-gen-page` with form data
+
+- [ ] **Implement data passing via URL state**
+  - Use Next.js `router.push` with state object
+  - Pass: `videoDescription`, `characterDescription`, `selectedImageId`
+  - Handle case where state is empty/undefined
+
+- [ ] **Create /quick-gen-page route**
+  - Create `frontend/src/app/quick-gen-page/page.tsx`
+  - Match layout/styling of `/result/[id]/page.tsx`:
+    - Dark gradient background
+    - Nav bar with logo and "Back to Create" button
+    - Centered content with max-w-4xl
+
+- [ ] **Create input data display card**
+  - Display card at top of page with form data:
+    - "Video Description" field
+    - "Character and Style" field (characterDescription)
+    - "Character Reference Image ID" field
+  - Show empty/placeholder if data not provided
+  - Use Card component with gray-800/50 background styling
+
+- [ ] **Handle missing state gracefully**
+  - If no state passed (direct URL access), show empty values
+  - Consider redirect to `/create` if state is missing (optional)
+
+### Testing Tasks
+
+- [ ] **Manual testing**
+  - Test navigation from create page to quick-gen-page
+  - Verify data displays correctly in card
+  - Test with missing/empty fields
+  - Test direct URL access (no state)
+  - Test "Back to Create" navigation
