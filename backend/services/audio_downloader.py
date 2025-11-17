@@ -147,6 +147,14 @@ class AudioDownloader:
         # Add FFmpeg path if specified
         if self.ffmpeg_path:
             ydl_opts['ffmpeg_location'] = self.ffmpeg_path
+        elif self.ffmpeg_available:
+            # If FFmpeg is in PATH, yt-dlp will find it automatically
+            # But we can also explicitly set it if needed
+            ffmpeg_cmd = shutil.which("ffmpeg")
+            if ffmpeg_cmd:
+                # Extract directory from full path (remove ffmpeg.exe)
+                ffmpeg_dir = str(Path(ffmpeg_cmd).parent)
+                ydl_opts['ffmpeg_location'] = ffmpeg_dir
         
         # Always try to convert to MP3 if FFmpeg is available
         # If not available, we'll try pydub conversion after download
