@@ -33,6 +33,27 @@ services:
     restart: unless-stopped
     networks:
       - video-network
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    ports:
+      - "8001:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Future: Add backend service
+  # backend:
+  #   build: ./backend
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379/0
 
 networks:
   video-network:
@@ -42,4 +63,6 @@ volumes:
   redis_data:
     driver: local
   backend_data:
+    driver: local
+  dynamodb-data:
     driver: local

@@ -70,6 +70,13 @@ class Settings:
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
     PRESIGNED_URL_EXPIRY: int = int(os.getenv("PRESIGNED_URL_EXPIRY", "3600"))  # 1 hour in seconds
     
+    # DynamoDB Configuration
+    DYNAMODB_ENDPOINT: str = os.getenv("DYNAMODB_ENDPOINT", "http://localhost:8001")
+    DYNAMODB_REGION: str = os.getenv("DYNAMODB_REGION", "us-east-1")
+    DYNAMODB_TABLE_NAME: str = os.getenv("DYNAMODB_TABLE_NAME", "MVProjects")
+    # Use local DynamoDB for development
+    USE_LOCAL_DYNAMODB: bool = os.getenv("USE_LOCAL_DYNAMODB", "true").lower() == "true"
+    
     # Video Serving Configuration
     SERVE_FROM_CLOUD: bool = os.getenv("SERVE_FROM_CLOUD", "false").lower() == "true"  # Serve videos from cloud storage
     
