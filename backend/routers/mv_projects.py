@@ -99,386 +99,385 @@ async def create_project(
     Returns:
         ProjectCreateResponse with project ID
     """
-    try:
-        logger.info(
-            "create_project_request",
-            mode=mode,
-            has_images=bool(images),
-            has_audio=audio is not None,
-            has_character_ref=characterReferenceImageId is not None
+    logger.info(
+        "create_project_request",
+        mode=mode,
+        has_images=bool(images),
+        has_audio=audio is not None,
+        has_character_ref=characterReferenceImageId is not None
+    )
+
+    # Validate input lengths and content (Pydantic model not used with Form fields)
+    # Sanitize inputs: strip whitespace and remove control characters
+    prompt = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', prompt.strip())
+    characterDescription = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', characterDescription.strip())
+    if productDescription:
+        productDescription = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', productDescription.strip())
+
+    if not prompt or len(prompt) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Prompt too short",
+                "details": "Prompt must be at least 10 characters"
+            }
+        )
+    if not characterDescription or len(characterDescription) < 20:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Character description too short",
+                "details": "Character description must be at least 20 characters"
+            }
+        )
+    if len(prompt) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Prompt too long",
+                "details": "Maximum length is 2000 characters"
+            }
+        )
+    if len(characterDescription) > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Character description too long",
+                "details": "Maximum length is 1000 characters"
+            }
+        )
+    if productDescription and len(productDescription) > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Product description too long",
+                "details": "Maximum length is 1000 characters"
+            }
         )
 
-        # Validate input lengths and content (Pydantic model not used with Form fields)
-        # Sanitize inputs: strip whitespace and remove control characters
-        prompt = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', prompt.strip())
-        characterDescription = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', characterDescription.strip())
-        if productDescription:
-            productDescription = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', productDescription.strip())
+    # Validate mode
+    if mode not in ['ad-creative', 'music-video']:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Invalid mode",
+                "details": "mode must be 'ad-creative' or 'music-video'"
+            }
+        )
 
-        if not prompt or len(prompt) < 10:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Prompt too short",
-                    "details": "Prompt must be at least 10 characters"
-                }
-            )
-        if not characterDescription or len(characterDescription) < 20:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Character description too short",
-                    "details": "Character description must be at least 20 characters"
-                }
-            )
-        if len(prompt) > 2000:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Prompt too long",
-                    "details": "Maximum length is 2000 characters"
-                }
-            )
-        if len(characterDescription) > 1000:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Character description too long",
-                    "details": "Maximum length is 1000 characters"
-                }
-            )
-        if productDescription and len(productDescription) > 1000:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Product description too long",
-                    "details": "Maximum length is 1000 characters"
-                }
-            )
+    # Validate mode-specific requirements
+    if mode == 'ad-creative' and (not images or len(images) == 0):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Product images required for ad-creative mode",
+                "details": "At least one product image must be provided"
+            }
+        )
 
-        # Validate mode
-        if mode not in ['ad-creative', 'music-video']:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Invalid mode",
-                    "details": "mode must be 'ad-creative' or 'music-video'"
-                }
-            )
+    if mode == 'music-video' and not audio:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Audio file required for music-video mode",
+                "details": "Music file must be provided"
+            }
+        )
 
-        # Validate mode-specific requirements
-        if mode == 'ad-creative' and (not images or len(images) == 0):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Product images required for ad-creative mode",
-                    "details": "At least one product image must be provided"
-                }
-            )
+    # Generate project ID (canonical UUID format)
+    project_id = str(uuid.uuid4())
+    s3_service = get_s3_storage_service()
 
-        if mode == 'music-video' and not audio:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Audio file required for music-video mode",
-                    "details": "Music file must be provided"
-                }
-            )
+    # Track uploaded files for cleanup on failure
+    uploaded_keys = []
+    cleanup_needed = False
 
-        # Generate project ID (canonical UUID format)
-        project_id = str(uuid.uuid4())
-        s3_service = get_s3_storage_service()
+    try:
+        # Upload files to S3
+        character_image_s3_key = None
+        product_image_s3_key = None
+        audio_s3_key = None
 
-        # Track uploaded files for cleanup on failure
-        uploaded_keys = []
-        cleanup_needed = False
-
-        try:
-            # Upload files to S3
-            character_image_s3_key = None
-            product_image_s3_key = None
-            audio_s3_key = None
-
-            # Handle character reference image
-            if characterReferenceImageId:
-                # Validate UUID format to prevent path traversal attacks
-                try:
-                    uuid.UUID(characterReferenceImageId)
-                except ValueError:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "error": "ValidationError",
-                            "message": "Invalid character reference ID format",
-                            "details": "Character reference ID must be a valid UUID"
-                        }
-                    )
-                # Validate character reference exists
-                # TODO: Add ownership validation when authentication is implemented
-                # Currently accepts any existing character reference (acceptable for MVP)
-                # UUID validation above ensures no path traversal in ID
-                source_key = f"mv/outputs/character_reference/{characterReferenceImageId}.png"
-                try:
-                    # Use async wrapper for S3 operation to avoid blocking event loop
-                    file_exists = await asyncio.to_thread(s3_service.file_exists, source_key)
-                    if not file_exists:
-                        raise HTTPException(
-                            status_code=404,
-                            detail={
-                                "error": "NotFound",
-                                "message": f"Character reference {characterReferenceImageId} not found",
-                                "details": "The specified character image does not exist"
-                            }
-                        )
-                except HTTPException:
-                    raise
-                except Exception as s3_error:
-                    logger.error("s3_validation_failed", error=str(s3_error), source_key=source_key)
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "error": "ServiceUnavailable",
-                            "message": "Unable to validate character reference",
-                            "details": "Storage service temporarily unavailable"
-                        }
-                    )
-                character_image_s3_key = source_key
-                logger.info(
-                    "character_reference_used",
-                    project_id=project_id,
-                    character_ref_id=characterReferenceImageId,
-                    s3_key=character_image_s3_key
-                )
-
-            # Upload product images with validation
-            if images and len(images) > 0:
-                # For simplicity, use first image as primary
-                product_image = images[0]
-
-                # Read file content once for both size check and upload
-                file_content = await product_image.read()
-                file_size = len(file_content)
-
-                if file_size > MAX_IMAGE_SIZE:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "error": "ValidationError",
-                            "message": "Image file too large",
-                            "details": f"Maximum size is {MAX_IMAGE_SIZE / (1024*1024)}MB"
-                        }
-                    )
-
-                # Validate content type
-                content_type = product_image.content_type or "image/jpeg"
-                if content_type not in ALLOWED_IMAGE_TYPES:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "error": "ValidationError",
-                            "message": "Invalid image format",
-                            "details": f"Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
-                        }
-                    )
-
-                # Generate S3 key with proper file extension
-                # Don't use user-supplied filename - derive extension from content type only
-                # This prevents any path traversal or filename-based attacks
-                # TODO: Add magic number validation (PIL/python-magic) to verify actual file format
-                # Currently trusts Content-Type header which can be spoofed (acceptable for MVP)
-                if 'png' in content_type:
-                    file_ext = '.png'
-                elif 'webp' in content_type:
-                    file_ext = '.webp'
-                else:
-                    file_ext = '.jpg'
-                
-                # Generate S3 key with server-controlled extension
-                base_key = generate_s3_key(project_id, "product")
-                product_image_s3_key = str(Path(base_key).with_suffix(file_ext))
-
-                # Upload in thread pool to avoid blocking event loop
-                buffer = BytesIO(file_content)
-                try:
-                    await asyncio.to_thread(
-                        s3_service.upload_file,
-                        buffer,
-                        product_image_s3_key,
-                        content_type=content_type
-                    )
-                finally:
-                    buffer.close()
-                uploaded_keys.append(product_image_s3_key)
-                cleanup_needed = True
-
-                logger.info(
-                    "product_image_uploaded",
-                    project_id=project_id,
-                    s3_key=product_image_s3_key,
-                    size=file_size
-                )
-
-            # Upload audio file with validation
-            if audio:
-                # Read file content once for both size check and upload
-                file_content = await audio.read()
-                file_size = len(file_content)
-
-                if file_size > MAX_AUDIO_SIZE:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "error": "ValidationError",
-                            "message": "Audio file too large",
-                            "details": f"Maximum size is {MAX_AUDIO_SIZE / (1024*1024)}MB"
-                        }
-                    )
-
-                # Validate content type
-                content_type = audio.content_type or "audio/mpeg"
-                if content_type not in ALLOWED_AUDIO_TYPES:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "error": "ValidationError",
-                            "message": "Invalid audio format",
-                            "details": f"Allowed types: {', '.join(ALLOWED_AUDIO_TYPES)}"
-                        }
-                    )
-
-                # Generate S3 key with proper file extension
-                # Don't use user-supplied filename - derive extension from content type only
-                # This prevents any path traversal or filename-based attacks
-                # TODO: Add magic number validation to verify actual file format
-                # Currently trusts Content-Type header which can be spoofed (acceptable for MVP)
-                if 'wav' in content_type:
-                    file_ext = '.wav'
-                else:
-                    file_ext = '.mp3'
-                
-                # Generate S3 key with server-controlled extension
-                base_key = generate_s3_key(project_id, "audio")
-                audio_s3_key = str(Path(base_key).with_suffix(file_ext))
-
-                # Upload in thread pool to avoid blocking event loop
-                buffer = BytesIO(file_content)
-                try:
-                    await asyncio.to_thread(
-                        s3_service.upload_file,
-                        buffer,
-                        audio_s3_key,
-                        content_type=content_type
-                    )
-                finally:
-                    buffer.close()
-                uploaded_keys.append(audio_s3_key)
-                cleanup_needed = True
-
-                logger.info(
-                    "audio_uploaded",
-                    project_id=project_id,
-                    s3_key=audio_s3_key,
-                    size=file_size
-                )
-
-            # Create project metadata in DynamoDB
-            project = create_project_metadata(
-                project_id=project_id,
-                concept_prompt=prompt,
-                character_description=characterDescription,
-                product_description=productDescription,
-                character_image_s3_key=character_image_s3_key,
-                product_image_s3_key=product_image_s3_key,
-                audio_backing_track_s3_key=audio_s3_key
-            )
-
-            # Ensure status is explicitly set to pending with GSI attributes
-            # Always set GSI attributes for consistency (even if status is already pending)
-            project.status = "pending"
-            project.GSI1PK = "pending"
-            project.GSI1SK = project.createdAt.isoformat()  # Required for GSI queries
-
+        # Handle character reference image
+        if characterReferenceImageId:
+            # Validate UUID format to prevent path traversal attacks
             try:
-                project.save()
-                logger.info("project_created", project_id=project_id)
-                # Only mark cleanup as not needed AFTER successful save
-                # This ensures cleanup happens if save fails or if exception occurs before this point
-                cleanup_needed = False
-            except PutError as e:
-                # Save failed - need to cleanup uploaded files
-                cleanup_needed = True
-                logger.error("project_save_failed", project_id=project_id, error=str(e))
+                uuid.UUID(characterReferenceImageId)
+            except ValueError:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=400,
                     detail={
-                        "error": "DatabaseError",
-                        "message": "Failed to create project",
-                        "details": "Unable to save project to database"
+                        "error": "ValidationError",
+                        "message": "Invalid character reference ID format",
+                        "details": "Character reference ID must be a valid UUID"
+                    }
+                )
+            # Validate character reference exists
+            # TODO: Add ownership validation when authentication is implemented
+            # Currently accepts any existing character reference (acceptable for MVP)
+            # UUID validation above ensures no path traversal in ID
+            source_key = f"mv/outputs/character_reference/{characterReferenceImageId}.png"
+            try:
+                # Use async wrapper for S3 operation to avoid blocking event loop
+                file_exists = await asyncio.to_thread(s3_service.file_exists, source_key)
+                if not file_exists:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Character reference {characterReferenceImageId} not found",
+                            "details": "The specified character image does not exist"
+                        }
+                    )
+            except HTTPException:
+                raise
+            except Exception as s3_error:
+                logger.error("s3_validation_failed", error=str(s3_error), source_key=source_key)
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "ServiceUnavailable",
+                        "message": "Unable to validate character reference",
+                        "details": "Storage service temporarily unavailable"
+                    }
+                )
+            character_image_s3_key = source_key
+            logger.info(
+                "character_reference_used",
+                project_id=project_id,
+                character_ref_id=characterReferenceImageId,
+                s3_key=character_image_s3_key
+            )
+
+        # Upload product images with validation
+        if images and len(images) > 0:
+            # For simplicity, use first image as primary
+            product_image = images[0]
+
+            # Read file content once for both size check and upload
+            file_content = await product_image.read()
+            file_size = len(file_content)
+
+            if file_size > MAX_IMAGE_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Image file too large",
+                        "details": f"Maximum size is {MAX_IMAGE_SIZE / (1024*1024)}MB"
                     }
                 )
 
-            # Return success response (in outer try block, after inner try/except completes)
-            return ProjectCreateResponse(
-                projectId=project_id,
-                status="pending",
-                message="Project created successfully"
+            # Validate content type
+            content_type = product_image.content_type or "image/jpeg"
+            if content_type not in ALLOWED_IMAGE_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Invalid image format",
+                        "details": f"Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
+                    }
+                )
+
+            # Generate S3 key with proper file extension
+            # Don't use user-supplied filename - derive extension from content type only
+            # This prevents any path traversal or filename-based attacks
+            # TODO: Add magic number validation (PIL/python-magic) to verify actual file format
+            # Currently trusts Content-Type header which can be spoofed (acceptable for MVP)
+            if 'png' in content_type:
+                file_ext = '.png'
+            elif 'webp' in content_type:
+                file_ext = '.webp'
+            else:
+                file_ext = '.jpg'
+
+            # Generate S3 key with server-controlled extension
+            base_key = generate_s3_key(project_id, "product")
+            product_image_s3_key = str(Path(base_key).with_suffix(file_ext))
+
+            # Upload in thread pool to avoid blocking event loop
+            buffer = BytesIO(file_content)
+            try:
+                await asyncio.to_thread(
+                    s3_service.upload_file,
+                    buffer,
+                    product_image_s3_key,
+                    content_type=content_type
+                )
+            finally:
+                buffer.close()
+            uploaded_keys.append(product_image_s3_key)
+            cleanup_needed = True
+
+            logger.info(
+                "product_image_uploaded",
+                project_id=project_id,
+                s3_key=product_image_s3_key,
+                size=file_size
             )
 
-        except HTTPException:
-            # Re-raise HTTP exceptions (they already have proper error responses)
-            raise
-        except Exception as e:
-            # Log unexpected errors (with full details in logs, not exposed to client)
-            logger.error("create_project_error", error=str(e), exc_info=True)
+        # Upload audio file with validation
+        if audio:
+            # Read file content once for both size check and upload
+            file_content = await audio.read()
+            file_size = len(file_content)
+
+            if file_size > MAX_AUDIO_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Audio file too large",
+                        "details": f"Maximum size is {MAX_AUDIO_SIZE / (1024*1024)}MB"
+                    }
+                )
+
+            # Validate content type
+            content_type = audio.content_type or "audio/mpeg"
+            if content_type not in ALLOWED_AUDIO_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Invalid audio format",
+                        "details": f"Allowed types: {', '.join(ALLOWED_AUDIO_TYPES)}"
+                    }
+                )
+
+            # Generate S3 key with proper file extension
+            # Don't use user-supplied filename - derive extension from content type only
+            # This prevents any path traversal or filename-based attacks
+            # TODO: Add magic number validation to verify actual file format
+            # Currently trusts Content-Type header which can be spoofed (acceptable for MVP)
+            if 'wav' in content_type:
+                file_ext = '.wav'
+            else:
+                file_ext = '.mp3'
+
+            # Generate S3 key with server-controlled extension
+            base_key = generate_s3_key(project_id, "audio")
+            audio_s3_key = str(Path(base_key).with_suffix(file_ext))
+
+            # Upload in thread pool to avoid blocking event loop
+            buffer = BytesIO(file_content)
+            try:
+                await asyncio.to_thread(
+                    s3_service.upload_file,
+                    buffer,
+                    audio_s3_key,
+                    content_type=content_type
+                )
+            finally:
+                buffer.close()
+            uploaded_keys.append(audio_s3_key)
+            cleanup_needed = True
+
+            logger.info(
+                "audio_uploaded",
+                project_id=project_id,
+                s3_key=audio_s3_key,
+                size=file_size
+            )
+
+        # Create project metadata in DynamoDB
+        project = create_project_metadata(
+            project_id=project_id,
+            concept_prompt=prompt,
+            character_description=characterDescription,
+            product_description=productDescription,
+            character_image_s3_key=character_image_s3_key,
+            product_image_s3_key=product_image_s3_key,
+            audio_backing_track_s3_key=audio_s3_key
+        )
+
+        # Ensure status is explicitly set to pending with GSI attributes
+        # Always set GSI attributes for consistency (even if status is already pending)
+        project.status = "pending"
+        project.GSI1PK = "pending"
+        project.GSI1SK = project.createdAt.isoformat()  # Required for GSI queries
+
+        try:
+            project.save()
+            logger.info("project_created", project_id=project_id)
+            # Only mark cleanup as not needed AFTER successful save
+            # This ensures cleanup happens if save fails or if exception occurs before this point
+            cleanup_needed = False
+        except PutError as e:
+            # Save failed - need to cleanup uploaded files
+            cleanup_needed = True
+            logger.error("project_save_failed", project_id=project_id, error=str(e))
             raise HTTPException(
                 status_code=500,
                 detail={
-                    "error": "InternalError",
+                    "error": "DatabaseError",
                     "message": "Failed to create project",
-                    "details": "An internal error occurred"
+                    "details": "Unable to save project to database"
                 }
             )
-        finally:
-            # Cleanup uploaded files and project metadata if operation failed
-            # Note: character_image_s3_key (if from characterReferenceImageId) is NOT in uploaded_keys
-            # and is NOT cleaned up, as it's a shared reference that may be used by other projects
-            if cleanup_needed:
-                # Cleanup uploaded S3 files first (only files uploaded in this request)
-                # Character reference images are explicitly excluded from uploaded_keys
-                # Do this before DB cleanup to avoid orphaned S3 files if DB cleanup fails
-                if uploaded_keys:
-                    for key in uploaded_keys:
-                        try:
-                            await asyncio.to_thread(s3_service.delete_file, key)
-                            logger.info("cleanup_uploaded_file", s3_key=key)
-                        except Exception as cleanup_error:
-                            logger.error("cleanup_failed", s3_key=key, error=str(cleanup_error))
-                
-                # Attempt to delete project metadata if it was created
-                # This handles the case where save() succeeded but an exception occurred after
-                # Use conditional delete to only remove if still in pending state (prevents race conditions)
-                try:
-                    pk = f"PROJECT#{project_id}"
+
+        # Return success response (in outer try block, after inner try/except completes)
+        return ProjectCreateResponse(
+            projectId=project_id,
+            status="pending",
+            message="Project created successfully"
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (they already have proper error responses)
+        raise
+    except Exception as e:
+        # Log unexpected errors (with full details in logs, not exposed to client)
+        logger.error("create_project_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to create project",
+                "details": "An internal error occurred"
+            }
+        )
+    finally:
+        # Cleanup uploaded files and project metadata if operation failed
+        # Note: character_image_s3_key (if from characterReferenceImageId) is NOT in uploaded_keys
+        # and is NOT cleaned up, as it's a shared reference that may be used by other projects
+        if cleanup_needed:
+            # Cleanup uploaded S3 files first (only files uploaded in this request)
+            # Character reference images are explicitly excluded from uploaded_keys
+            # Do this before DB cleanup to avoid orphaned S3 files if DB cleanup fails
+            if uploaded_keys:
+                for key in uploaded_keys:
                     try:
-                        project_item = MVProjectItem.get(pk, "METADATA")
-                        # Only delete if still in pending state (not yet processed)
-                        if project_item.status == "pending":
-                            project_item.delete()
-                            logger.info("cleanup_project_metadata", project_id=project_id)
-                        else:
-                            logger.warning("cleanup_skipped_non_pending", project_id=project_id, status=project_item.status)
-                    except DoesNotExist:
-                        pass  # Project wasn't created yet, nothing to clean up
-                except Exception as project_cleanup_error:
-                    logger.error("project_cleanup_failed", project_id=project_id, error=str(project_cleanup_error))
+                        await asyncio.to_thread(s3_service.delete_file, key)
+                        logger.info("cleanup_uploaded_file", s3_key=key)
+                    except Exception as cleanup_error:
+                        logger.error("cleanup_failed", s3_key=key, error=str(cleanup_error))
+            
+            # Attempt to delete project metadata if it was created
+            # This handles the case where save() succeeded but an exception occurred after
+            # Use conditional delete to only remove if still in pending state (prevents race conditions)
+            try:
+                pk = f"PROJECT#{project_id}"
+                try:
+                    project_item = MVProjectItem.get(pk, "METADATA")
+                    # Only delete if still in pending state (not yet processed)
+                    if project_item.status == "pending":
+                        project_item.delete()
+                        logger.info("cleanup_project_metadata", project_id=project_id)
+                    else:
+                        logger.warning("cleanup_skipped_non_pending", project_id=project_id, status=project_item.status)
+                except DoesNotExist:
+                    pass  # Project wasn't created yet, nothing to clean up
+            except Exception as project_cleanup_error:
+                logger.error("project_cleanup_failed", project_id=project_id, error=str(project_cleanup_error))
 
 
 @router.get(
