@@ -32,6 +32,11 @@ from mv.lipsync import (
     LipsyncResponse,
     generate_lipsync,
 )
+from mv.video_stitcher import (
+    StitchVideosRequest,
+    StitchVideosResponse,
+    stitch_videos,
+)
 from config import settings
 
 logger = structlog.get_logger()
@@ -1302,6 +1307,166 @@ async def lipsync_video(request: LipsyncRequest):
                 "error_code": error_code,
                 "message": "An unexpected error occurred during lipsync generation",
                 "model_used": "sync/lipsync-2-pro",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/stitch-videos",
+    response_model=StitchVideosResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Videos stitched successfully"},
+        400: {"description": "Invalid request parameters"},
+        404: {"description": "One or more videos not found"},
+        500: {"description": "Internal server error"}
+    },
+    summary="Stitch Multiple Videos",
+    description="""
+Stitch multiple video clips into a single video using MoviePy.
+
+**IMPORTANT: This is a synchronous endpoint that may take 30-300+ seconds depending on video count and size.**
+
+This endpoint takes a list of video UUIDs and merges them in the specified order
+into a single video file. Supports both local filesystem and S3 storage backends.
+
+**Limitations:**
+- Synchronous processing (may take several minutes)
+- All videos must exist (fails if any video is missing)
+- Videos are concatenated without transitions
+- Output uses libx264 codec with AAC audio
+
+**Required Fields:**
+- video_ids: List of video UUIDs to stitch together (in order)
+
+**Storage Backend Behavior:**
+- SERVE_FROM_CLOUD=false: Reads from and writes to local filesystem
+- SERVE_FROM_CLOUD=true: Downloads from S3, stitches locally, uploads result to S3
+"""
+)
+async def stitch_videos_endpoint(request: StitchVideosRequest):
+    """
+    Stitch multiple video clips into a single video.
+
+    This endpoint:
+    1. Validates the video IDs
+    2. Retrieves videos (from local or S3)
+    3. Merges videos using MoviePy
+    4. Saves to appropriate storage (local or S3)
+    5. Returns video ID, path, URL, and metadata
+
+    **Example Request:**
+    ```json
+    {
+        "video_ids": [
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+            "c3d4e5f6-a7b8-9012-cdef-234567890123"
+        ]
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "video_id": "d4e5f6a7-b8c9-0123-def1-345678901234",
+        "video_path": "/path/to/stitched/d4e5f6a7...mp4",
+        "video_url": "https://s3.amazonaws.com/..." or "/api/mv/get_video/d4e5f6a7...",
+        "metadata": {
+            "input_video_ids": [...],
+            "num_videos_stitched": 3,
+            "merge_time_seconds": 45.2,
+            "total_processing_time_seconds": 120.5,
+            "generation_timestamp": "2025-11-16T10:30:25Z",
+            "storage_backend": "s3"
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "stitch_videos_request_received",
+            video_ids=request.video_ids,
+            num_videos=len(request.video_ids)
+        )
+
+        # Validate request
+        if not request.video_ids:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "video_ids list cannot be empty",
+                    "details": "Provide at least one video ID to stitch"
+                }
+            )
+
+        # Validate UUID format for each video_id
+        for video_id in request.video_ids:
+            if not video_id or len(video_id) != 36 or video_id.count("-") != 4:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": f"Invalid video_id format: {video_id}",
+                        "details": "All video_ids must be valid UUIDs"
+                    }
+                )
+
+        # Stitch videos
+        video_id, video_path, video_url, metadata = stitch_videos(request.video_ids)
+
+        response = StitchVideosResponse(
+            video_id=video_id,
+            video_path=video_path,
+            video_url=video_url,
+            metadata=metadata
+        )
+
+        logger.info(
+            "stitch_videos_request_completed",
+            video_id=video_id,
+            num_videos_stitched=len(request.video_ids),
+            total_processing_time_seconds=metadata.get("total_processing_time_seconds"),
+            storage_backend=metadata.get("storage_backend")
+        )
+
+        return response
+
+    except FileNotFoundError as e:
+        logger.error("stitch_videos_not_found", error=str(e))
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "NotFound",
+                "message": str(e),
+                "details": "One or more videos could not be found. Ensure all video IDs exist."
+            }
+        )
+
+    except ValueError as e:
+        logger.error("stitch_videos_validation_error", error=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": str(e),
+                "details": "Invalid request parameters"
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error("stitch_videos_unexpected_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "StitchingError",
+                "message": "An unexpected error occurred during video stitching",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "details": str(e)
             }

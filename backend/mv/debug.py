@@ -126,3 +126,58 @@ def log_batch_image_result(num_requested: int, num_generated: int, image_ids: li
         num_generated=num_generated,
         image_ids=image_ids
     )
+
+
+# Video stitching specific debug logging
+
+def log_stitch_request(video_ids: list):
+    """Log video stitching request."""
+    debug_log("stitch_request", video_ids=video_ids, num_videos=len(video_ids))
+
+
+def log_stitch_storage_mode(mode: str, temp_dir: str = None):
+    """Log which storage mode is being used for stitching."""
+    debug_log("stitch_storage_mode", mode=mode, temp_dir=temp_dir)
+
+
+def log_stitch_s3_download(video_id: str, cloud_path: str, local_path: str):
+    """Log S3 video download for stitching."""
+    debug_log(
+        "stitch_s3_download",
+        video_id=video_id,
+        cloud_path=cloud_path,
+        local_path=local_path
+    )
+
+
+def log_stitch_merge_start(video_paths: list):
+    """Log start of video merging."""
+    debug_log("stitch_merge_start", video_paths=video_paths, num_videos=len(video_paths))
+
+
+def log_stitch_merge_complete(output_path: str, processing_time: float):
+    """Log completion of video merging."""
+    debug_log(
+        "stitch_merge_complete",
+        output_path=output_path,
+        processing_time_seconds=round(processing_time, 2)
+    )
+
+
+def log_stitch_upload_complete(video_id: str, cloud_urls: dict):
+    """Log completion of cloud upload for stitched video."""
+    debug_log(
+        "stitch_upload_complete",
+        video_id=video_id,
+        cloud_urls=cloud_urls
+    )
+
+
+def log_stitch_result(result_info: dict):
+    """Log the result of video stitching."""
+    debug_log("stitch_result", **result_info)
+
+
+def log_stitch_cleanup(temp_dir: str):
+    """Log cleanup of temporary files."""
+    debug_log("stitch_cleanup", temp_dir=temp_dir)
