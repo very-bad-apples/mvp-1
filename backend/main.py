@@ -52,6 +52,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("database_init_error", error=str(e))
 
+    # Initialize DynamoDB tables
+    try:
+        from dynamodb_config import init_dynamodb_tables
+        init_dynamodb_tables()
+        logger.info("dynamodb_tables_created", message="DynamoDB tables initialized successfully")
+    except Exception as e:
+        logger.error("dynamodb_init_error", error=str(e))
+
     # Load MV (Music Video) module configs
     try:
         from mv.scene_generator import load_configs
@@ -221,6 +229,7 @@ async def health_check():
 
 # Include routers
 from routers import generate, jobs, websocket, models, mv, audio
+from routers import mv_projects
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
@@ -228,6 +237,8 @@ app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
 app.include_router(audio.router)
+app.include_router(mv_projects.router)
+logger.info("router_loaded", router="mv_projects")
 
 
 # Root endpoint
