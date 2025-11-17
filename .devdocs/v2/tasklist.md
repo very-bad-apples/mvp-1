@@ -271,3 +271,51 @@ After scenes are generated, automatically trigger parallel video generation for 
   - Test error scenarios (some videos fail, all fail)
   - Check status summary bar updates correctly
   - Test with mock mode enabled (MOCK_VID_GENS=true)
+
+---
+
+## v5 - Dual Storage Backend Support (Local/S3)
+
+### Summary
+Enable the quick-gen-page frontend to seamlessly handle video URLs from both local filesystem (relative paths) and S3 cloud storage (presigned URLs) without backend changes. The frontend should automatically detect the URL type and handle appropriately.
+
+### Frontend Tasks
+
+- [ ] **Update video URL handling logic**
+  - Detect if `video_url` from `generate_video` response is absolute (starts with `http`)
+  - If absolute URL (S3 presigned): use directly as video src
+  - If relative URL (local): prepend `API_URL` as before
+  - Update `generateSingleVideo()` function in `/quick-gen-page/page.tsx`
+
+- [ ] **Add helper function for URL resolution**
+  - Create `resolveVideoUrl(videoUrl: string)` function
+  - Returns absolute URL ready for use in video player
+  - Handles both S3 presigned URLs and local backend paths
+
+- [ ] **Update video player src assignment**
+  - Use resolved URL in video card component
+  - Ensure video element can load from both sources
+
+### Testing Tasks
+
+- [ ] **Test with SERVE_FROM_CLOUD=true (S3 mode)**
+  - Verify video URLs are S3 presigned URLs (start with https://)
+  - Confirm videos load and play correctly from S3
+  - Check that no API_URL is incorrectly prepended
+
+- [ ] **Test with SERVE_FROM_CLOUD=false (local mode)**
+  - Verify video URLs are relative paths (/api/mv/get_video/{uuid})
+  - Confirm API_URL is prepended correctly
+  - Check videos load from local backend
+
+- [ ] **Edge case testing**
+  - Test switching between modes (requires backend restart)
+  - Verify mixed responses don't cause issues
+  - Check error handling for both storage backends
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document dual storage backend detection logic
+  - Note that frontend auto-detects based on URL format
+  - Document the URL resolution approach

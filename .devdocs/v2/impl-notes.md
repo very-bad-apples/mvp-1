@@ -406,3 +406,73 @@ const videoSummary = {
 - `frontend/src/app/quick-gen-page/page.tsx` - Video generation logic and UI
 - `.devdocs/v2/tasklist.md` - Task tracking
 - `.devdocs/v2/impl-notes.md` - This section
+
+---
+
+## v5 - Dual Storage Backend Support (Local/S3)
+
+### Implementation Summary
+
+Added automatic detection of video URL types to support both local filesystem and S3 cloud storage backends seamlessly.
+
+### Key Changes
+
+1. **URL Resolution Helper Function**
+   ```typescript
+   const resolveVideoUrl = (videoUrl: string): string => {
+     if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
+       // Absolute URL (S3 presigned URL) - use directly
+       return videoUrl
+     }
+     // Relative URL (local backend) - prepend API_URL
+     return `${API_URL}${videoUrl}`
+   }
+   ```
+
+2. **Automatic Backend Detection**
+   - Frontend checks if `video_url` from `generate_video` response is absolute or relative
+   - SERVE_FROM_CLOUD=true: Backend returns S3 presigned URLs (https://...)
+   - SERVE_FROM_CLOUD=false: Backend returns relative paths (/api/mv/get_video/{uuid})
+   - No backend changes required - frontend handles both cases
+
+3. **Video Player Integration**
+   - Uses resolved URL directly in `<video src={videoUrl}>`
+   - Works with both S3 presigned URLs and local backend proxied files
+   - No additional API calls needed for S3 mode
+
+### How It Works
+
+**S3 Mode (SERVE_FROM_CLOUD=true):**
+```
+generate_video response: { video_url: "https://bucket.s3.amazonaws.com/...?AWSAccessKeyId=...&Signature=...&Expires=..." }
+↓
+resolveVideoUrl detects http/https prefix
+↓
+Uses URL directly in video player
+↓
+Browser loads video directly from S3
+```
+
+**Local Mode (SERVE_FROM_CLOUD=false):**
+```
+generate_video response: { video_url: "/api/mv/get_video/uuid-here" }
+↓
+resolveVideoUrl detects relative path
+↓
+Prepends API_URL: "http://localhost:8000/api/mv/get_video/uuid-here"
+↓
+Browser loads video through backend proxy
+```
+
+### Benefits
+
+1. **No Backend Changes** - Frontend adapts to whatever URL format the backend provides
+2. **Seamless Switching** - Works automatically when backend switches between modes
+3. **Efficient S3 Loading** - Videos load directly from S3 without backend proxying
+4. **Backward Compatible** - Local mode continues to work as before
+
+### Files Modified
+
+- `frontend/src/app/quick-gen-page/page.tsx` - Added `resolveVideoUrl()` helper function
+- `.devdocs/v2/tasklist.md` - v5 task tracking
+- `.devdocs/v2/impl-notes.md` - This section

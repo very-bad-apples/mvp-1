@@ -30,3 +30,25 @@ omit all other endpoint params.
 
 return the generated videos by calling the /api/mv/get_video with uuid / video_url and display each video clip in it's own card.
     - create the cards for the videos immediately and show loading status for them until the video is generated and loaded.
+
+## v5
+
+Overall goal: get the quick-gen-page to work in local dev both when the video assets are stored to local filesystem or when they are stored in the s3 buckets. Currently the page only works when they are stored in local filesystem, but the s3 system is working when we do the proper flow with curls, so we need the frontend to be able to switch between modes seemlessly based on the data passed back from generate_video
+
+after adding a new backend feature of enabling .backend/.env: SERVE_FROM_CLOUD=true which puts the video assets into an s3 bucket (even when running from local dev) where getting an issue calling get_video/ from quick-gen-page. This seems to be because when:
+- SERVE_FROM_CLOUD=true the "video_url" of generate_video comes back as: "/api/mv/get_video/fb25d756-a58a-4b1a-bc5a-acd9ed3b2373" but
+- SERVE_FROM_CLOUD=false the "video_url" of generate_video comes back as: "https://video-generator-storage.s3.amazonaws.com/mv/jobs/de0279c3-4948-42dd-821d-761daf783959/video.mp4?AWSAccessKeyId=AKIAUKUMUU7ZLPX6FY7N&Signature=h359lHgCWHEwzPMJ5hIwxHQTZfg%3D&Expires=1763407044"
+this seems to cause problems in contructing the url for get_video request and recieve the data.
+
+However there is also new logic on the get_video route which you can query with the /<uuid>?redirect=<boolean> and you can get back either a json of the s3 presigned url or the actual file download (you can check the swagger doc for elaboration)
+- redirect=false:
+{
+  "video_id": "38940f21-e2a8-4bf8-9442-6742ca101a92",
+  "video_url": "https://video-generator-storage.s3.amazonaws.com/mv/jobs/38940f21-e2a8-4bf8-9442-6742ca101a92/video.mp4?AWSAccessKeyId=AKIAUKUMUU7ZLPX6FY7N&Signature=fqsmfiCWWwPEHGXBocJeLkn%2BgxU%3D&Expires=1763405772",
+  "storage_backend": "s3",
+  "expires_in_seconds": 3600,
+  "cloud_path": "mv/jobs/38940f21-e2a8-4bf8-9442-6742ca101a92/video.mp4"
+}
+- redirect=true: downloads the actual video data from the video_url
+
+    

@@ -15,6 +15,20 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 // Configuration
 const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 // Expected time for video generation
 
+/**
+ * Resolves video URL to handle both local and S3 storage backends.
+ * - If URL is absolute (starts with http), use directly (S3 presigned URL)
+ * - If URL is relative (starts with /), prepend API_URL (local backend)
+ */
+const resolveVideoUrl = (videoUrl: string): string => {
+  if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
+    // Absolute URL (S3 presigned URL) - use directly
+    return videoUrl
+  }
+  // Relative URL (local backend) - prepend API_URL
+  return `${API_URL}${videoUrl}`
+}
+
 interface QuickJobData {
   videoDescription: string
   characterDescription: string
@@ -210,8 +224,8 @@ export default function QuickGenPage() {
       const data = await response.json()
 
       // Update state for this specific video
-      // Prepend API_URL to the relative video_url path
-      const fullVideoUrl = `${API_URL}${data.video_url}`
+      // Resolve video URL (handles both S3 presigned URLs and local backend paths)
+      const resolvedVideoUrl = resolveVideoUrl(data.video_url)
       setVideoStates(prev =>
         prev.map(state =>
           state.sceneIndex === sceneIndex
@@ -219,7 +233,7 @@ export default function QuickGenPage() {
                 ...state,
                 status: 'completed',
                 videoId: data.video_id,
-                videoUrl: fullVideoUrl,
+                videoUrl: resolvedVideoUrl,
               }
             : state
         )
