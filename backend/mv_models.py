@@ -57,7 +57,11 @@ class MVProjectItem(BaseDynamoModel):
         table_name = settings.DYNAMODB_TABLE_NAME
         region = settings.DYNAMODB_REGION
         # For local DynamoDB, explicit credentials are required
-        # For production, PynamoDB uses boto3 credential chain (env vars, IAM roles)
+        # Note: DynamoDB Local requires explicit credentials (even fake ones).
+        # Fake credentials (fakeAccessKey/fakeSecretKey) are ONLY used when
+        # USE_LOCAL_DYNAMODB=true. In production, these are NOT set, and PynamoDB
+        # uses boto3 credential chain (environment variables, IAM roles, credentials file).
+        # This conditional ensures credentials are NEVER set in production code path.
         if settings.USE_LOCAL_DYNAMODB:
             host = settings.DYNAMODB_ENDPOINT
             aws_access_key_id = settings.dynamodb_access_key_id
@@ -95,7 +99,7 @@ class MVProjectItem(BaseDynamoModel):
     sequence = NumberAttribute(null=True)
     prompt = UnicodeAttribute(null=True)
     negativePrompt = UnicodeAttribute(null=True)
-    referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True, default=[])  # List of S3 keys
+    referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True)  # List of S3 keys
     duration = NumberAttribute(null=True)
     audioClipS3Key = UnicodeAttribute(null=True)
     videoClipS3Key = UnicodeAttribute(null=True)
@@ -113,8 +117,6 @@ class MVProjectItem(BaseDynamoModel):
         Args:
             new_status: New status value (pending, processing, completed, failed)
         """
-        from datetime import datetime, timezone
-        
         self.status = new_status
         # Keep GSI in sync with status (only for project metadata items)
         if self.entityType == "project":
@@ -131,6 +133,7 @@ class MVProjectItem(BaseDynamoModel):
         """
         result = {
             "projectId": self.projectId,
+            "entityType": self.entityType,
             "status": self.status,
             "createdAt": self.createdAt.isoformat() if self.createdAt else None,
             "updatedAt": self.updatedAt.isoformat() if self.updatedAt else None,
@@ -154,7 +157,7 @@ class MVProjectItem(BaseDynamoModel):
                 "sequence": self.sequence,
                 "prompt": self.prompt,
                 "negativePrompt": self.negativePrompt,
-                "referenceImageS3Keys": list(self.referenceImageS3Keys) if self.referenceImageS3Keys and isinstance(self.referenceImageS3Keys, list) else [],
+                "referenceImageS3Keys": list(self.referenceImageS3Keys) if self.referenceImageS3Keys is not None else [],
                 "duration": self.duration,
                 "audioClipS3Key": self.audioClipS3Key,
                 "videoClipS3Key": self.videoClipS3Key,
@@ -263,6 +266,7 @@ def create_scene_item(
     item.retryCount = 0
 
     # GSI attributes are only for project metadata items, not scenes
+    # Note: To query failed scenes across projects, must scan or query per-project
     item.GSI1PK = None
     item.GSI1SK = None
 
