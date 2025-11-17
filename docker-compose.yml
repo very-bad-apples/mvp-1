@@ -16,15 +16,23 @@ services:
     networks:
       - video-network
 
-  # Future: Add backend service
-  # backend:
-  #   build: ./backend
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - redis
-  #   environment:
-  #     - REDIS_URL=redis://redis:6379/0
+  backend:
+    build: ./backend
+    container_name: video-generator-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:///./video_generator.db
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+    restart: unless-stopped
+    networks:
+      - video-network
 
 networks:
   video-network:
@@ -32,4 +40,6 @@ networks:
 
 volumes:
   redis_data:
+    driver: local
+  backend_data:
     driver: local
