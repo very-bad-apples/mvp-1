@@ -1,0 +1,93 @@
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and customize for your environment
+
+# AWS Region
+aws_region = "us-east-1"
+
+# S3 Bucket Name (MUST BE GLOBALLY UNIQUE!)
+# Suggestion: use your-name-video-generator or company-name-video-gen
+bucket_name = "video-generator-storage"
+
+# Environment
+environment = "dev"  # Options: dev, staging, prod
+
+# IAM User Name
+iam_user_name = "video-generator-app"
+
+# CORS Allowed Origins (for web access)
+cors_allowed_origins = [
+  "http://localhost:3000",  # Frontend dev
+  "http://localhost:8000",  # Backend dev
+  # "https://yourdomain.com",  # Production domain
+]
+
+# Asset Retention (days before deletion, 0 = never delete)
+asset_retention_days = 0  # Keep videos forever
+
+# Enable CloudWatch Monitoring
+enable_monitoring = false
+
+# Bucket Size Alarm Threshold (GB)
+bucket_size_alarm_threshold_gb = 100
+
+# ===== App Runner Configuration =====
+
+# App Runner Service Name
+app_runner_service_name = "video-generator-api"
+
+# ECR Repository Names
+app_runner_ecr_repo_name = "video-generator-app"
+worker_ecr_repo_name     = "video-generator-worker"
+
+# App Runner Instance Configuration
+app_runner_cpu    = "1024"  # 1 vCPU - Options: 256, 512, 1024, 2048, 4096
+app_runner_memory = "2048"  # 2 GB - Options: 512-12288 MB (see variables.tf for full list)
+
+# Auto Scaling Configuration
+app_runner_min_instances   = 1
+app_runner_max_instances   = 5
+app_runner_max_concurrency = 100  # Max concurrent requests per instance
+
+# Auto Deploy (enable automatic deployments on new image push)
+app_runner_auto_deploy = false
+
+# CORS Origins for App Runner
+app_runner_cors_origins = [
+  "http://localhost:3000",
+  # "https://yourdomain.com",  # Add your production domain
+]
+
+# Mock Video Generation (useful for testing without API costs)
+mock_video_generation = false
+
+# ===== Secrets Configuration =====
+# IMPORTANT: It's recommended to NOT store these in terraform.tfvars
+# Instead, pass them via environment variables or update AWS Secrets Manager manually
+# Example: export TF_VAR_anthropic_api_key="your-key-here"
+
+# anthropic_api_key  = ""  # Set via TF_VAR_anthropic_api_key
+# openai_api_key     = ""  # Set via TF_VAR_openai_api_key
+# replicate_api_key  = ""  # Set via TF_VAR_replicate_api_key
+# elevenlabs_api_key = ""  # Set via TF_VAR_elevenlabs_api_key
+# gemini_api_key     = ""  # Set via TF_VAR_gemini_api_key
+
+# Database URL (use RDS or managed database in production)
+# database_url = "postgresql://user:pass@host:5432/dbname"
+database_url = "sqlite:///./video_generator.db"
+
+# Redis URL (use ElastiCache in production)
+# redis_url = "redis://your-redis-host:6379/0"
+redis_url = ""
+
+# ===== VPC Configuration (Optional) =====
+# Uncomment and configure if you need VPC connectivity (e.g., for private Redis/RDS)
+
+# enable_vpc_connector = true
+# private_subnet_ids   = ["subnet-xxxxx", "subnet-yyyyy"]
+# security_group_ids   = ["sg-xxxxx"]
+
+# ===== Custom Domain (Optional) =====
+# Requires ACM certificate in the same region
+
+# custom_domain = "api.yourdomain.com"
+

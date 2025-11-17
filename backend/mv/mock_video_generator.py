@@ -5,8 +5,11 @@ When MOCK_VID_GENS is enabled, this module provides mock video generation
 functionality that simulates processing delay and returns pre-staged videos.
 """
 
+import asyncio
+import logging
 import os
 import random
+import shutil
 import time
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +17,8 @@ from pathlib import Path
 from typing import Optional
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_mock_videos_directory() -> Path:
@@ -125,9 +130,24 @@ def generate_mock_video(
     # Generate UUID for this "video"
     video_id = str(uuid.uuid4())
 
-    # Build paths (pointing to mock directory)
+    # Create job directory structure for this video
+    job_dir = Path(__file__).parent / "outputs" / "jobs" / video_id
+    os.makedirs(job_dir, exist_ok=True)
+
+    # Copy mock video to job directory
     mock_dir = get_mock_videos_directory()
-    video_path = str(mock_dir / mock_video_filename)
+    mock_video_path = mock_dir / mock_video_filename
+    video_path = job_dir / "video.mp4"
+    
+    # Copy the mock video
+    shutil.copy2(mock_video_path, video_path)
+    
+    # Also save to videos directory for backward compatibility
+    videos_dir = Path(__file__).parent / "outputs" / "videos"
+    os.makedirs(videos_dir, exist_ok=True)
+    video_path_compat = videos_dir / f"{video_id}.mp4"
+    shutil.copy2(mock_video_path, video_path_compat)
+
     video_url = f"/api/mv/get_video/{video_id}"
 
     # Apply defaults
@@ -152,6 +172,8 @@ def generate_mock_video(
         },
         "generation_timestamp": datetime.now(timezone.utc).isoformat(),
         "processing_time_seconds": round(actual_delay, 2),
+        "local_path": str(video_path),
+        "video_id": video_id,
     }
 
     if negative_prompt:
@@ -160,5 +182,92 @@ def generate_mock_video(
         metadata["parameters_used"]["seed"] = seed
     if reference_image_base64:
         metadata["has_reference_image"] = True
+        # Save reference image if provided
+        try:
+            import base64
+            # Fix base64 padding if needed
+            image_data = reference_image_base64
+            # Remove data URL prefix if present
+            if ',' in image_data:
+                image_data = image_data.split(',', 1)[1]
+            # Add padding if needed
+            missing_padding = len(image_data) % 4
+            if missing_padding:
+                image_data += '=' * (4 - missing_padding)
+            
+            ref_image_data = base64.b64decode(image_data)
+            ref_image_path = job_dir / "reference_image.jpg"
+            with open(ref_image_path, "wb") as f:
+                f.write(ref_image_data)
+            metadata["reference_image_path"] = str(ref_image_path)
+        except Exception as e:
+            logger.warning(f"Failed to save reference image: {e}")
 
-    return video_id, video_path, video_url, metadata
+    # Save metadata.json
+    import json
+    metadata_path = job_dir / "metadata.json"
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    # Upload entire job directory to cloud storage if configured
+    cloud_urls = {}
+    try:
+        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
+            from services.storage_backend import get_storage_backend
+            
+            async def upload_job_to_cloud():
+                storage = get_storage_backend()
+                urls = {}
+                
+                # Upload video
+                urls["video"] = await storage.upload_file(
+                    str(video_path),
+                    f"mv/jobs/{video_id}/video.mp4"
+                )
+                
+                # Upload metadata
+                urls["metadata"] = await storage.upload_file(
+                    str(metadata_path),
+                    f"mv/jobs/{video_id}/metadata.json"
+                )
+                
+                # Upload reference image if exists
+                ref_image_path = job_dir / "reference_image.jpg"
+                if ref_image_path.exists():
+                    urls["reference_image"] = await storage.upload_file(
+                        str(ref_image_path),
+                        f"mv/jobs/{video_id}/reference_image.jpg"
+                    )
+                
+                return urls
+            
+            # Run async upload - handle both sync and async contexts
+            # Use a separate thread with its own event loop to avoid conflicts
+            import concurrent.futures
+            
+            def run_upload():
+                return asyncio.run(upload_job_to_cloud())
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_upload)
+                cloud_urls = future.result(timeout=300)  # 5 min timeout
+            
+            logger.info(f"Uploaded mock job {video_id} to cloud storage with {len(cloud_urls)} files")
+    except Exception as e:
+        logger.warning(f"Failed to upload mock job {video_id} to cloud storage: {e}")
+        # Continue without cloud upload - local files are still available
+    
+    # Add cloud URLs to metadata if upload succeeded
+    if cloud_urls:
+        metadata["cloud_urls"] = cloud_urls
+        metadata["cloud_url"] = cloud_urls.get("video")  # Backward compatibility
+        # Use cloud URL as primary video URL when available
+        video_url = cloud_urls.get("video")
+    else:
+        # Fallback to local API endpoint if cloud upload failed or not configured
+        video_url = f"/api/mv/get_video/{video_id}"
+    
+    # Also store local API endpoint for backward compatibility
+    metadata["local_video_url"] = f"/api/mv/get_video/{video_id}"
+
+    return video_id, str(video_path), video_url, metadata

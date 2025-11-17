@@ -10,7 +10,7 @@ from pathlib import Path
 
 import structlog
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from mv.scene_generator import (
     CreateScenesRequest,
@@ -37,6 +37,22 @@ from config import settings
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/mv", tags=["Music Video"])
+
+
+@router.get(
+    "/config/debug",
+    summary="Debug Configuration",
+    description="Shows current configuration values for troubleshooting"
+)
+async def debug_config():
+    """Debug endpoint to check current configuration."""
+    return {
+        "SERVE_FROM_CLOUD": settings.SERVE_FROM_CLOUD,
+        "STORAGE_BACKEND": settings.STORAGE_BACKEND,
+        "STORAGE_BUCKET": settings.STORAGE_BUCKET,
+        "PRESIGNED_URL_EXPIRY": settings.PRESIGNED_URL_EXPIRY,
+        "cloud_serving_enabled": settings.SERVE_FROM_CLOUD and bool(settings.STORAGE_BUCKET)
+    }
 
 
 @router.post(
@@ -619,32 +635,41 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
 @router.get(
     "/get_video/{video_id}",
     responses={
-        200: {"description": "Video file", "content": {"video/mp4": {}}},
+        200: {"description": "Video URL or redirect", "content": {"application/json": {}}},
         404: {"description": "Video not found"}
     },
-    summary="Retrieve Generated Video",
+    summary="Retrieve Generated Video URL",
     description="""
-Retrieve a generated video by its UUID.
+Retrieve a generated video URL by its UUID.
 
-Returns the video file directly for download or streaming.
-Supports HEAD requests to check if video exists without downloading.
+**Cloud Storage (S3):**
+- Returns JSON with presigned URL by default
+- Use `?redirect=true` to get 302 redirect to video (for browsers)
+
+**Local Storage:**
+- Serves the video file directly
+
+**Query Parameters:**
+- `redirect` (optional): Set to "true" for 302 redirect instead of JSON
 
 **Example:**
 ```
 GET /api/mv/get_video/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+GET /api/mv/get_video/a1b2c3d4-e5f6-7890-abcd-ef1234567890?redirect=true
 ```
 """
 )
-async def get_video(video_id: str):
+async def get_video(video_id: str, redirect: bool = False):
     """
     Retrieve a generated video by ID.
 
     This endpoint:
     1. Validates the video_id format
-    2. Checks if the video file exists
-    3. Returns the video file as a streaming response
+    2. Checks SERVE_FROM_CLOUD config
+    3. If enabled, generates presigned URL and redirects to cloud storage
+    4. Otherwise, serves the video file from local storage
 
-    The video is served with Content-Type: video/mp4
+    The video is served with Content-Type: video/mp4 (local) or redirected to cloud URL.
     """
     # Validate video_id format (basic UUID validation)
     if not video_id or len(video_id) != 36 or video_id.count("-") != 4:
@@ -656,6 +681,103 @@ async def get_video(video_id: str):
                 "details": "video_id must be a valid UUID"
             }
         )
+    
+    # Check if we should serve from cloud storage
+    if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
+        logger.info(
+            "get_video_attempting_cloud_serve",
+            video_id=video_id,
+            serve_from_cloud=settings.SERVE_FROM_CLOUD,
+            storage_bucket=settings.STORAGE_BUCKET
+        )
+        try:
+            from services.storage_backend import get_storage_backend, S3StorageBackend
+            
+            storage = get_storage_backend()
+            cloud_path = f"mv/jobs/{video_id}/video.mp4"
+            
+            # Generate presigned URL (S3)
+            # Note: We skip the exists() check for performance (21s -> <100ms)
+            # If file doesn't exist, the presigned URL will return 404 when accessed
+            if isinstance(storage, S3StorageBackend):
+                presigned_url = storage.generate_presigned_url(
+                    cloud_path,
+                    expiry=settings.PRESIGNED_URL_EXPIRY
+                )
+                
+                logger.info(
+                    "get_video_url_generated",
+                    video_id=video_id,
+                    storage_backend="s3",
+                    cloud_path=cloud_path,
+                    redirect_mode=redirect
+                )
+                
+                # Return JSON with URL by default, or redirect if requested
+                if redirect:
+                    return RedirectResponse(
+                        url=presigned_url,
+                        status_code=302
+                    )
+                else:
+                    return JSONResponse(
+                        content={
+                            "video_id": video_id,
+                            "video_url": presigned_url,
+                            "storage_backend": "s3",
+                            "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
+                            "cloud_path": cloud_path
+                        },
+                        status_code=200
+                    )
+            
+            # Firebase: check existence then return public URL with token
+            from services.storage_backend import FirebaseStorageBackend
+            if isinstance(storage, FirebaseStorageBackend):
+                # Firebase needs existence check as URLs are always valid
+                exists = await storage.exists(cloud_path)
+                
+                if exists:
+                    url = storage._get_public_url(cloud_path)
+                    
+                    logger.info(
+                        "get_video_url_generated",
+                        video_id=video_id,
+                        storage_backend="firebase",
+                        redirect_mode=redirect
+                    )
+                    
+                    # Return JSON with URL by default, or redirect if requested
+                    if redirect:
+                        return RedirectResponse(
+                            url=url,
+                            status_code=302
+                        )
+                    else:
+                        return JSONResponse(
+                            content={
+                                "video_id": video_id,
+                                "video_url": url,
+                                "storage_backend": "firebase",
+                                "cloud_path": cloud_path
+                            },
+                            status_code=200
+                        )
+            
+            # If video not in cloud or storage backend not supported, fall through to local serving
+            logger.debug(
+                "get_video_cloud_fallback_to_local",
+                video_id=video_id,
+                reason="not_in_cloud_or_unsupported_backend"
+            )
+            
+        except Exception as e:
+            # If cloud serving fails, fall back to local
+            logger.warning(
+                "get_video_cloud_error_fallback",
+                video_id=video_id,
+                error=str(e)
+            )
 
     # Check if mock mode is enabled
     if settings.MOCK_VID_GENS:
@@ -795,12 +917,63 @@ async def get_video_info(video_id: str):
 
     logger.info("get_video_info", video_id=video_id, file_size_bytes=stat.st_size)
 
-    return {
+    # Build base response
+    response = {
         "video_id": video_id,
         "exists": True,
         "file_size_bytes": stat.st_size,
-        "created_at": created_at
+        "created_at": created_at,
+        "serving_mode": "cloud" if settings.SERVE_FROM_CLOUD else "local"
     }
+    
+    # Add cloud URL if cloud storage is configured
+    if settings.STORAGE_BUCKET:
+        try:
+            from services.storage_backend import get_storage_backend, S3StorageBackend
+            
+            storage = get_storage_backend()
+            cloud_path = f"mv/jobs/{video_id}/video.mp4"
+            
+            # Check if video exists in cloud
+            exists_in_cloud = await storage.exists(cloud_path)
+            
+            if exists_in_cloud:
+                # Generate presigned URL for S3
+                if isinstance(storage, S3StorageBackend):
+                    presigned_url = storage.generate_presigned_url(
+                        cloud_path,
+                        expiry=settings.PRESIGNED_URL_EXPIRY
+                    )
+                    response["cloud_url"] = presigned_url
+                    response["cloud_storage"] = {
+                        "backend": "s3",
+                        "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY
+                    }
+                else:
+                    # Firebase: get public URL with token
+                    from services.storage_backend import FirebaseStorageBackend
+                    if isinstance(storage, FirebaseStorageBackend):
+                        url = storage._get_public_url(cloud_path)
+                        response["cloud_url"] = url
+                        response["cloud_storage"] = {
+                            "backend": "firebase",
+                            "expires_in_seconds": None  # Firebase tokens don't expire
+                        }
+            else:
+                response["cloud_url"] = None
+                response["cloud_storage"] = {
+                    "status": "not_uploaded"
+                }
+                
+        except Exception as e:
+            logger.warning("get_video_info_cloud_error", video_id=video_id, error=str(e))
+            response["cloud_url"] = None
+            response["cloud_storage"] = {
+                "status": "error",
+                "error": str(e)
+            }
+    
+    return response
 
 
 @router.post(

@@ -33,6 +33,7 @@ from pipeline.error_handler import (
     categorize_error
 )
 from pipeline.orchestrator import create_pipeline_orchestrator
+from services.asset_persistence import AssetPersistenceService
 import asyncio
 
 logger = structlog.get_logger()
@@ -327,6 +328,13 @@ class VideoGenerationWorker:
                     job_id=job_id,
                     final_video=final_video
                 )
+                
+                # Persist assets to cloud storage
+                cloud_urls = asyncio.run(self._persist_job_assets(job_id, final_video))
+                
+                # Update job with cloud URLs
+                self._update_job_with_cloud_urls(job_id, cloud_urls)
+                
             except Exception as e:
                 logger.error(
                     "pipeline_execution_failed",
@@ -416,6 +424,104 @@ class VideoGenerationWorker:
         except Exception as e:
             logger.error(
                 "database_update_failed",
+                job_id=job_id,
+                error=str(e),
+                traceback=traceback.format_exc()
+            )
+
+    async def _persist_job_assets(self, job_id: str, final_video_path: str) -> Dict[str, any]:
+        """
+        Persist all job assets to cloud storage.
+        
+        Args:
+            job_id: Job identifier
+            final_video_path: Path to final video (may be relative or absolute)
+            
+        Returns:
+            Dict with cloud URLs for all assets
+        """
+        try:
+            logger.info("persisting_job_assets", job_id=job_id)
+            
+            # Determine local base path from final_video_path
+            # final_video_path is like "/tmp/video_jobs/job-123/final/video.mp4"
+            # We need "/tmp/video_jobs/job-123"
+            from pathlib import Path
+            video_path = Path(final_video_path)
+            
+            # Go up from final/video.mp4 to job directory
+            if video_path.parent.name == "final":
+                local_base_path = str(video_path.parent.parent)
+            else:
+                # Assume it's directly in job directory
+                local_base_path = str(video_path.parent)
+            
+            # Create persistence service and upload assets
+            persistence_service = AssetPersistenceService()
+            cloud_urls = await persistence_service.persist_job_assets(
+                job_id=job_id,
+                local_base_path=local_base_path
+            )
+            
+            logger.info(
+                "job_assets_persisted",
+                job_id=job_id,
+                final_video_url=cloud_urls.get("final_video")
+            )
+            
+            return cloud_urls
+            
+        except Exception as e:
+            logger.error(
+                "asset_persistence_failed",
+                job_id=job_id,
+                error=str(e),
+                traceback=traceback.format_exc()
+            )
+            # Don't fail the job if cloud upload fails
+            # The local video is still available
+            return {"error": str(e)}
+
+    def _update_job_with_cloud_urls(self, job_id: str, cloud_urls: Dict[str, any]):
+        """
+        Update job record with cloud storage URLs.
+        
+        Args:
+            job_id: Job identifier
+            cloud_urls: Dict of cloud URLs from persistence service
+        """
+        try:
+            with get_db_context() as db:
+                job = db.query(Job).filter(Job.id == job_id).first()
+                if job:
+                    # Store cloud URLs in job metadata
+                    # Note: This requires the Job model to have appropriate fields
+                    # For now, we'll store in a JSON field if available
+                    if hasattr(job, 'cloud_urls'):
+                        job.cloud_urls = cloud_urls
+                    
+                    # Store final video URL as primary video_url
+                    if cloud_urls.get("final_video"):
+                        job.video_url = cloud_urls["final_video"]
+                    
+                    # Initialize version tracking
+                    if hasattr(job, 'version') and job.version is None:
+                        job.version = 1
+                    
+                    job.updated_at = datetime.utcnow()
+                    db.commit()
+                    
+                    logger.info(
+                        "job_cloud_urls_updated",
+                        job_id=job_id,
+                        video_url=cloud_urls.get("final_video")
+                    )
+                else:
+                    logger.warning("job_not_found_for_url_update", job_id=job_id)
+                    
+        except Exception as e:
+            logger.error(
+                "cloud_url_update_failed",
                 job_id=job_id,
                 error=str(e),
                 traceback=traceback.format_exc()
