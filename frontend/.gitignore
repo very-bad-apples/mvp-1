@@ -29,6 +29,9 @@ yarn-error.log*
 .env*.local
 .env
 
+# development project storage
+.dev-projects.json
+
 # vercel
 .vercel
 
