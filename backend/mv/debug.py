@@ -109,3 +109,20 @@ def log_mock_video_selected(video_filename: str):
 def log_mock_delay(delay_seconds: float):
     """Log simulated processing delay."""
     debug_log("mock_delay", delay_seconds=round(delay_seconds, 2))
+
+
+# Batch image generation specific debug logging
+
+def log_batch_image_request(num_images: int):
+    """Log batch image generation request."""
+    debug_log("batch_image_request", num_images=num_images)
+
+
+def log_batch_image_result(num_requested: int, num_generated: int, image_ids: list):
+    """Log batch image generation results."""
+    debug_log(
+        "batch_image_result",
+        num_requested=num_requested,
+        num_generated=num_generated,
+        image_ids=image_ids
+    )

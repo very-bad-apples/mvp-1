@@ -27,6 +27,11 @@ from mv.video_generator import (
     GenerateVideoResponse,
     generate_video,
 )
+from mv.lipsync import (
+    LipsyncRequest,
+    LipsyncResponse,
+    generate_lipsync,
+)
 from config import settings
 
 logger = structlog.get_logger()
@@ -222,26 +227,28 @@ async def create_scenes(request: CreateScenesRequest):
     response_model=GenerateCharacterReferenceResponse,
     status_code=200,
     responses={
-        200: {"description": "Character reference image generated successfully"},
+        200: {"description": "Character reference images generated successfully"},
         400: {"description": "Invalid request parameters"},
         500: {"description": "Internal server error or API failure"}
     },
-    summary="Generate Character Reference Image",
+    summary="Generate Character Reference Images",
     description="""
-Generate a character reference image using Google Imagen 4 via Replicate API.
+Generate 1-4 character reference images using Google Imagen 4 via Replicate API.
 
-This endpoint creates a full-body character reference image based on a visual
+This endpoint creates full-body character reference images based on a visual
 description, suitable for maintaining character consistency across video scenes.
+Multiple images allow users to select the best representation.
 
 **Limitations:**
 - Synchronous processing (may take 10-60+ seconds)
-- File-based storage (images saved to filesystem)
-- Large response size (base64 encoded image)
+- File-based storage (images saved to filesystem with UUID filenames)
+- Large response size (base64 encoded images)
 
 **Required Fields:**
 - character_description: Visual description of the character
 
 **Optional Fields (defaults from config):**
+- num_images: Number of images to generate (1-4, default: 4)
 - aspect_ratio: Image aspect ratio (default: "1:1")
 - safety_filter_level: Content moderation level (default: "block_medium_and_above")
 - person_generation: Person generation setting (default: "allow_adult")
@@ -252,30 +259,39 @@ description, suitable for maintaining character consistency across video scenes.
 )
 async def generate_character_reference(request: GenerateCharacterReferenceRequest):
     """
-    Generate a character reference image.
+    Generate character reference images.
 
     This endpoint:
     1. Validates the request parameters
     2. Applies defaults from YAML config for optional fields
-    3. Generates image using Replicate API with Google Imagen 4
-    4. Saves image to files with timestamp-based filename
-    5. Returns base64-encoded image, file path, and metadata
+    3. Generates images using Replicate API with Google Imagen 4
+    4. Saves images to files with UUID-based filenames
+    5. Returns list of images with IDs, paths, and base64 data
 
     **Example Request:**
     ```json
     {
-        "character_description": "Silver metallic humanoid robot with a red shield"
+        "character_description": "Silver metallic humanoid robot with a red shield",
+        "num_images": 4
     }
     ```
 
     **Example Response:**
     ```json
     {
-        "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-        "output_file": "/path/to/character_ref_20251115_143025.png",
+        "images": [
+            {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "path": "/path/to/a1b2c3d4...png",
+                "base64": "iVBORw0KGgoAAAANSUhEUgAA..."
+            },
+            ...
+        ],
         "metadata": {
             "character_description": "Silver metallic humanoid robot...",
             "model_used": "google/imagen-4",
+            "num_images_requested": 4,
+            "num_images_generated": 4,
             "parameters_used": {...},
             "generation_timestamp": "2025-11-15T14:30:25Z"
         }
@@ -286,6 +302,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         logger.info(
             "generate_character_reference_request_received",
             character_description=request.character_description[:100] + "..." if len(request.character_description) > 100 else request.character_description,
+            num_images=request.num_images,
             aspect_ratio=request.aspect_ratio
         )
 
@@ -300,9 +317,10 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                 }
             )
 
-        # Generate character reference image
-        image_base64, output_file, metadata = generate_character_reference_image(
+        # Generate character reference images
+        images, metadata = generate_character_reference_image(
             character_description=request.character_description.strip(),
+            num_images=request.num_images,
             aspect_ratio=request.aspect_ratio.strip() if request.aspect_ratio else None,
             safety_filter_level=request.safety_filter_level.strip() if request.safety_filter_level else None,
             person_generation=request.person_generation.strip() if request.person_generation else None,
@@ -312,15 +330,15 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         )
 
         response = GenerateCharacterReferenceResponse(
-            image_base64=image_base64,
-            output_file=output_file,
+            images=images,
             metadata=metadata
         )
 
         logger.info(
             "generate_character_reference_request_completed",
-            output_file=output_file,
-            image_size_bytes=len(image_base64)
+            num_images_requested=request.num_images,
+            num_images_generated=len(images),
+            image_ids=[img.id for img in images]
         )
 
         return response
@@ -350,6 +368,80 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                 "details": str(e)
             }
         )
+
+
+@router.get(
+    "/get_character_reference/{image_id}",
+    responses={
+        200: {"description": "Character reference image", "content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}}},
+        404: {"description": "Image not found"}
+    },
+    summary="Retrieve Character Reference Image",
+    description="""
+Retrieve a character reference image by its UUID.
+
+Returns the image file directly for download or display.
+
+**Example:**
+```
+GET /api/mv/get_character_reference/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+"""
+)
+async def get_character_reference(image_id: str):
+    """
+    Retrieve a character reference image by ID.
+
+    This endpoint:
+    1. Validates the image_id format
+    2. Searches for the image file (supports png, jpg, webp)
+    3. Returns the image file as a streaming response
+    """
+    # Validate image_id format (basic UUID validation)
+    if not image_id or len(image_id) != 36 or image_id.count("-") != 4:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ValidationError",
+                "message": "Invalid image_id format",
+                "details": "image_id must be a valid UUID"
+            }
+        )
+
+    # Search for image file (could be png, jpg, or webp)
+    image_dir = Path(__file__).parent.parent / "mv" / "outputs" / "character_reference"
+
+    # Try different extensions
+    for ext in ["png", "jpg", "jpeg", "webp"]:
+        image_path = image_dir / f"{image_id}.{ext}"
+        if image_path.exists():
+            # Determine media type
+            media_type_map = {
+                "png": "image/png",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "webp": "image/webp"
+            }
+            media_type = media_type_map.get(ext, "application/octet-stream")
+
+            logger.info("get_character_reference_serving", image_id=image_id, image_path=str(image_path))
+
+            return FileResponse(
+                path=str(image_path),
+                media_type=media_type,
+                filename=f"{image_id}.{ext}"
+            )
+
+    # Not found
+    logger.warning("get_character_reference_not_found", image_id=image_id)
+    raise HTTPException(
+        status_code=404,
+        detail={
+            "error": "NotFound",
+            "message": f"Character reference image with ID {image_id} not found",
+            "details": "The image may have been deleted or the ID is incorrect"
+        }
+    )
 
 
 @router.post(
@@ -882,3 +974,194 @@ async def get_video_info(video_id: str):
             }
     
     return response
+
+
+@router.post(
+    "/lipsync",
+    response_model=LipsyncResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Lipsync video generated successfully"},
+        400: {"description": "Invalid request parameters"},
+        500: {"description": "Internal server error or API failure"},
+        503: {"description": "Backend service unavailable"}
+    },
+    summary="Generate Lipsync Video",
+    description="""
+Generate a lip-synced video by syncing audio to a video scene using Sync Labs' Lipsync-2-Pro model.
+
+**IMPORTANT: This is a synchronous endpoint that may take 20-300+ seconds to complete.**
+
+This endpoint takes a video URL (scene) and an audio URL, then generates a lip-synced version
+where the video's lip movements match the provided audio track.
+
+**Limitations:**
+- Synchronous processing (20-300s response times)
+- No progress tracking (client waits for completion)
+- File-based storage (videos saved with UUID filenames)
+- Requires Scale plan or higher for Replicate API access
+
+**Required Fields:**
+- video_url: URL to the video file (scene) - supports MP4, MOV, WEBM, M4V, GIF
+- audio_url: URL to the audio file - supports MP3, OGG, WAV, M4A, AAC
+
+**Optional Fields:**
+- temperature: Control expressiveness of lip movements (0.0 = subtle, 1.0 = exaggerated)
+- occlusion_detection_enabled: Enable for complex scenes with obstructions (may slow processing)
+- active_speaker_detection: Auto-detect active speaker in multi-person videos
+
+**Best Practices:**
+- Ensure input video shows the speaker actively talking for natural speaking motion
+- For AI-generated videos, include a text prompt like "person is speaking naturally"
+- Use occlusion_detection_enabled for scenes with partial face obstructions
+"""
+)
+async def lipsync_video(request: LipsyncRequest):
+    """
+    Generate a lip-synced video.
+
+    This endpoint:
+    1. Validates the request parameters
+    2. Calls Replicate's Lipsync-2-Pro model with video and audio URLs
+    3. Saves the result to filesystem with UUID-based filename
+    4. Returns video ID, path, URL, and metadata
+
+    **Example Request:**
+    ```json
+    {
+        "video_url": "https://example.com/scene.mp4",
+        "audio_url": "https://example.com/audio.mp3",
+        "temperature": 0.5,
+        "active_speaker_detection": true
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "video_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "video_path": "/path/to/lipsync/a1b2c3d4...mp4",
+        "video_url": "/api/mv/get_video/a1b2c3d4...",
+        "metadata": {
+            "video_url": "https://example.com/scene.mp4",
+            "audio_url": "https://example.com/audio.mp3",
+            "model_used": "sync/lipsync-2-pro",
+            "parameters_used": {
+                "temperature": 0.5,
+                "active_speaker_detection": true
+            },
+            "generation_timestamp": "2025-11-16T10:30:25Z",
+            "processing_time_seconds": 45.7,
+            "file_size_bytes": 15234567
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "lipsync_request_received",
+            video_url=request.video_url[:100] + "..." if len(request.video_url) > 100 else request.video_url,
+            audio_url=request.audio_url[:100] + "..." if len(request.audio_url) > 100 else request.audio_url,
+            temperature=request.temperature,
+            occlusion_detection_enabled=request.occlusion_detection_enabled,
+            active_speaker_detection=request.active_speaker_detection
+        )
+
+        # Validate required fields
+        if not request.video_url or not request.video_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Video URL is required",
+                    "details": "The 'video_url' field cannot be empty"
+                }
+            )
+
+        if not request.audio_url or not request.audio_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Audio URL is required",
+                    "details": "The 'audio_url' field cannot be empty"
+                }
+            )
+
+        # Generate lipsync video
+        video_id, video_path, video_url, metadata = generate_lipsync(
+            video_url=request.video_url.strip(),
+            audio_url=request.audio_url.strip(),
+            temperature=request.temperature,
+            occlusion_detection_enabled=request.occlusion_detection_enabled,
+            active_speaker_detection=request.active_speaker_detection,
+        )
+
+        response = LipsyncResponse(
+            video_id=video_id,
+            video_path=video_path,
+            video_url=video_url,
+            metadata=metadata
+        )
+
+        logger.info(
+            "lipsync_request_completed",
+            video_id=video_id,
+            video_path=video_path,
+            processing_time_seconds=metadata.get("processing_time_seconds"),
+            file_size_bytes=metadata.get("file_size_bytes")
+        )
+
+        return response
+
+    except ValueError as e:
+        # Handle configuration errors (e.g., missing API token)
+        logger.error("lipsync_config_error", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "ConfigurationError",
+                "message": str(e),
+                "details": "Check your environment configuration"
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except TimeoutError as e:
+        logger.error("lipsync_timeout", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ServiceTimeout",
+                "message": str(e),
+                "details": "Lipsync generation service timed out"
+            }
+        )
+
+    except Exception as e:
+        logger.error("lipsync_unexpected_error", error=str(e), exc_info=True)
+
+        # Try to provide structured error information
+        error_code = "UNKNOWN_ERROR"
+        if "content" in str(e).lower() and "policy" in str(e).lower():
+            error_code = "CONTENT_POLICY_VIOLATION"
+        elif "rate" in str(e).lower() and "limit" in str(e).lower():
+            error_code = "RATE_LIMIT_EXCEEDED"
+        elif "authentication" in str(e).lower() or "auth" in str(e).lower():
+            error_code = "AUTHENTICATION_ERROR"
+        elif "plan" in str(e).lower() or "scale" in str(e).lower():
+            error_code = "PLAN_REQUIREMENT_ERROR"
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "LipsyncGenerationError",
+                "error_code": error_code,
+                "message": "An unexpected error occurred during lipsync generation",
+                "model_used": "sync/lipsync-2-pro",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": str(e)
+            }
+        )
