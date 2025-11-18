@@ -3,9 +3,9 @@
 Quick script to check if a project exists in DynamoDB.
 
 Usage:
-    python check_project.py <project_id>    # Check specific project
-    python check_project.py --list          # List all projects
-    python check_project.py --recent 5      # Show 5 most recent projects
+    python scripts/check_project.py <project_id>    # Check specific project
+    python scripts/check_project.py --list          # List all projects
+    python scripts/check_project.py --recent 5      # Show 5 most recent projects
 """
 
 import sys
