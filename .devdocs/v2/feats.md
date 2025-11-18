@@ -73,3 +73,30 @@ on the fronend /create page make the following modifications:
     - don't display the product image upload, and don't require for validation for "generate video" button
     - display character & style input box by default with "use ai generation" toggled on by default
 
+## v9
+
+on the frontend /quick-gen-page make a large refactor of the page display:
+- combine the scene cards with the clip cards:
+    - scene prompt on the left of the card, corresponding clip on the right
+        - refactor how scene prompt displays to be more visually appealing, and emphasize description with negative description as toggeable, default collpased
+        - for both scene prompts and video clips improve the loading animation to be more visually compelling for the long wait times. Use input data about what the video description and character description in the loading state so use understand what's going to be generated there. Note: scene prompts take an estimated 20-30s, and video clips take 2-7minutes to generate
+        - enable new buttons and associate routes with them for these combined cards:
+            - scene prompt:
+                - enable edit of the prompt
+                - regenerate the prompt
+            - video prompt:
+                - regenerate video
+        - remove the scene generation loading page, and move the progress bar loading to the individual scene prompt cards
+        - collapse the input data section into a toggeable expand/collapse when scene prompt generation returns.
+        - when scene generation returns, teletype the scene prompts into the display over 10 second duration.
+
+### Implementation Details (Clarified):
+- **Layout**: Side-by-side on desktop (50/50 split), vertical stack on mobile (scene top, video bottom)
+- **Edit Prompt**: Inline editing within card with Save/Cancel buttons
+- **Regenerate Prompt**: Calls `/api/mv/create_scenes` and updates only that specific card's scene prompt (using scene index)
+- **Regenerate Video**: Calls `/api/mv/generate_video` with current scene prompt (edited or original)
+- **Loading Snippets**: Brief contextual text that rotates every 3-5s (scene) or 10-15s (video) based on input data
+- **Teletype**: Parallel animation - all scenes type simultaneously within 10 second total duration (configurable constant)
+- **Input Data Collapse**: Auto-collapses when scene generation completes, manually toggleable
+- **Auto-scroll**: Automatically scrolls to Full Video section when stitching completes
+- **Responsive**: Uses Tailwind `flex-col md:flex-row` for responsive behavior

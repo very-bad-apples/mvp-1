@@ -611,3 +611,333 @@ Improve the /create page UX for music video mode by defaulting to "music video" 
   - Document music-video mode as default
   - Document optional vs required character generation per mode
   - Note UX improvements for music video workflow
+
+---
+
+## v9 - Quick Gen Page Visual Refactor & Interactive Controls
+
+### Summary
+Major UX overhaul of `/quick-gen-page` to combine scene prompts and video clips into unified cards with side-by-side layout (desktop) or vertical (mobile). Add interactive controls for editing/regenerating prompts and videos. Enhance loading animations with contextual snippets. Implement teletype effect for scene prompts. Auto-collapse input data section and auto-scroll to final stitched video.
+
+### Frontend Tasks - Card Layout Refactor
+
+- [ ] **Design combined scene/clip card component**
+  - Create new component: `SceneVideoCard` (or similar name)
+  - Desktop layout: Split card horizontally (scene left, video right)
+  - Mobile layout: Stack vertically (scene top, video bottom)
+  - Use responsive Tailwind classes (flex-col md:flex-row)
+  - Match existing card styling (gray-800/50, border-gray-700)
+  - Card header shows scene number/title
+
+- [ ] **Implement scene prompt section (left/top)**
+  - Display scene description prominently (larger text, clear hierarchy)
+  - Add collapsible section for negative description (default: collapsed)
+  - Use Accordion or Collapsible component for negative description
+  - Label clearly: "Negative Prompt" or similar
+  - Add visual emphasis to description (primary content)
+  - Make description area scrollable if content is long
+
+- [ ] **Implement video clip section (right/bottom)**
+  - Display video player in right half (desktop) or bottom (mobile)
+  - Maintain aspect ratio (16:9 or as appropriate)
+  - Video controls: enabled, sound enabled, no autoplay
+  - Loading state placeholder when video is generating
+  - Error state display within video section
+
+- [ ] **Handle responsive breakpoints**
+  - Desktop (md and up): side-by-side layout, 50/50 split
+  - Mobile: vertical stack, scene prompt full width above video
+  - Test on tablet sizes for optimal layout
+  - Ensure cards don't become too narrow on desktop
+
+### Frontend Tasks - Loading Animations & States
+
+- [ ] **Scene prompt loading animation (20-30s)**
+  - Create enhanced loading component for scene prompt section
+  - Show contextual loading text using video description + character description
+  - Implement rotating snippet system:
+    - Display brief text snippets that change every 3-5 seconds
+    - Example snippets: "Analyzing video concept...", "Crafting scene narrative...", "Optimizing character integration..."
+    - Make snippets contextual to input data when possible
+  - Add visual loading indicator (spinner, skeleton, or custom animation)
+  - Make loading visually compelling for 20-30 second wait
+  - Include estimated time indicator: "Generating scene... (~25s)"
+
+- [ ] **Video clip loading animation (2-7min)**
+  - Create enhanced loading component for video clip section
+  - Show contextual loading text using scene description + character description
+  - Implement rotating snippet system for long wait times:
+    - Display brief text snippets that change every 10-15 seconds
+    - Example snippets: "Rendering scene...", "Applying character style...", "Processing video effects...", "Almost there..."
+    - Make snippets contextual to scene and character descriptions
+  - Add visual loading indicator (progress simulation, animated placeholder, etc.)
+  - Make loading visually compelling for 2-7 minute wait
+  - Include estimated time indicator: "Generating video... (~3 min)"
+  - Consider progress bar or animated preview placeholder
+
+- [ ] **Create snippet configuration constants**
+  - Define configurable arrays for scene loading snippets
+  - Define configurable arrays for video loading snippets
+  - Make snippet rotation timing configurable (constants in code)
+  - Document snippet customization in code comments
+
+### Frontend Tasks - Interactive Controls
+
+- [ ] **Add "Edit Prompt" button to scene section**
+  - Button location: Scene prompt card header or below description
+  - Click behavior: Make description editable inline
+  - Show "Save" and "Cancel" buttons when editing
+  - Replace description text with textarea/input when editing
+  - Validate input (non-empty description)
+  - Update local state with edited prompt
+  - Provide visual feedback when in edit mode (highlight, border change)
+
+- [ ] **Add "Regenerate Prompt" button to scene section**
+  - Button location: Scene prompt card header or action area
+  - Click behavior:
+    - Call `/api/mv/create_scenes` with original video description + character description
+    - Show loading state in THIS card only (other cards unchanged)
+    - On response: extract one scene from response (use scene index to match)
+    - Update this card's scene prompt with new description/negative_description
+    - Keep other scene cards unchanged
+  - Handle errors gracefully (show error in this card only)
+  - Disable button while regenerating (prevent double-clicks)
+
+- [ ] **Add "Regenerate Video" button to video section**
+  - Button location: Video clip card header or below video
+  - Click behavior:
+    - Call `/api/mv/generate_video` with current scene prompt (edited or original)
+    - Use current `description` as `prompt` and `negative_description` as `negative_prompt`
+    - Show loading state in video section (replace video with loading animation)
+    - On response: update this card's video with new video_id and video_url
+    - Keep other video cards unchanged
+  - Handle errors gracefully (show error in this card only)
+  - Disable button while regenerating (prevent double-clicks)
+  - Confirm with user if they want to regenerate (optional, or just proceed)
+
+- [ ] **Button styling and placement**
+  - Use consistent button styling across all actions
+  - Consider icon buttons or icon+text for better UX
+  - Group buttons logically (edit/regenerate near their respective sections)
+  - Ensure buttons are accessible and clearly labeled
+  - Add hover states and tooltips for clarity
+
+### Frontend Tasks - Scene Generation Flow Changes
+
+- [ ] **Remove scene generation loading page**
+  - Remove or skip the full-page loading state for scene generation
+  - Scene generation now happens within individual cards
+  - Users see placeholder cards immediately with loading states
+
+- [ ] **Move progress bar to individual scene cards**
+  - Each scene card shows its own progress/loading indicator during scene prompt generation
+  - Progress indicators should be visible in the scene prompt section (left/top)
+  - All scene cards show loading state simultaneously when page first loads
+  - Update to completed state as scene data arrives
+
+- [ ] **Create placeholder cards on page load**
+  - Immediately render X placeholder `SceneVideoCard` components (X = expected number of scenes)
+  - Each card shows loading state in both scene and video sections
+  - Scene section: contextual loading animation (20-30s estimate)
+  - Video section: disabled/greyed out (waits for scene to complete)
+  - Determine number of expected scenes from:
+    - Backend response metadata if available
+    - Default assumption (e.g., 4 scenes) if not specified
+    - Or progressively add cards as scenes arrive
+
+### Frontend Tasks - Input Data Section
+
+- [ ] **Implement auto-collapse functionality**
+  - Input data section starts expanded when page loads
+  - When scene generation completes (all scene prompts received):
+    - Automatically collapse the input data section
+    - Animate collapse transition (smooth accordion-style)
+  - Add toggle button to manually expand/collapse anytime
+  - Visual indicator (chevron icon) showing collapsed/expanded state
+  - Ensure collapsed section still shows summary or title
+
+- [ ] **Improve collapsed state design**
+  - Show minimal info when collapsed (e.g., "Input Data" with expand icon)
+  - Make it clear users can re-expand to view details
+  - Use subtle styling to not distract from main content (scenes/videos)
+
+### Frontend Tasks - Teletype Animation
+
+- [ ] **Implement teletype effect for scene prompts**
+  - When scene data arrives, animate the text appearing character-by-character
+  - Total duration for ALL scene prompts: 10 seconds (configurable)
+  - Make duration configurable via constant: `TELETYPE_TOTAL_DURATION_MS = 10000`
+  - Calculate per-character delay based on total text length across all scenes
+  - Use smooth typing animation (not choppy)
+
+- [ ] **Implement parallel teletype sequencing**
+  - All scenes teletype simultaneously (parallel animation)
+  - All scenes complete their typing within the 10 second total duration
+  - Each scene's typing speed is independent (depends on text length)
+  - Scenes with less text will finish earlier than scenes with more text
+
+- [ ] **Teletype animation polish**
+  - Add blinking cursor effect at end of typing
+  - Ensure animation doesn't interfere with user interactions
+  - Allow users to skip animation (click to reveal all text immediately)
+  - Smooth transition from teletype to static text
+
+### Frontend Tasks - Auto-scroll to Full Video
+
+- [ ] **Detect when stitched video is ready**
+  - Monitor `stitchingStatus` state from v7 implementation
+  - Trigger scroll when status changes from 'loading' to 'completed'
+  - Only scroll if stitched video successfully loaded
+
+- [ ] **Implement auto-scroll functionality**
+  - Scroll page to Full Video card when stitching completes
+  - Use smooth scroll behavior (`behavior: 'smooth'`)
+  - Scroll to top of Full Video card (not middle/bottom of page)
+  - Add small offset so card isn't at very top edge (e.g., 20px margin)
+
+- [ ] **Add scroll configuration**
+  - Make auto-scroll behavior configurable (constant in code)
+  - Allow disabling if it becomes annoying in testing
+  - Consider adding user preference toggle (optional, future enhancement)
+
+### Frontend Tasks - State Management
+
+- [ ] **Update state structure for combined cards**
+  - Each scene/video pair should be managed as a single state object:
+    ```typescript
+    {
+      sceneIndex: number,
+      scene: { description, negative_description, status: 'loading' | 'completed' | 'error', error? },
+      video: { videoId?, videoUrl?, status: 'idle' | 'loading' | 'completed' | 'error', error? }
+    }
+    ```
+  - Track editing state per scene (isEditing, editedDescription)
+  - Track regeneration states (isRegenerating, regenerationType)
+
+- [ ] **Handle scene regeneration state updates**
+  - When regenerating a single scene, update only that scene's state
+  - Preserve other scenes and videos unchanged
+  - Handle race conditions (what if user regenerates multiple scenes simultaneously?)
+
+- [ ] **Handle video regeneration state updates**
+  - When regenerating a video, update only that video's state
+  - Preserve scene prompt and other videos unchanged
+  - Handle race conditions gracefully
+
+### Frontend Tasks - Error Handling
+
+- [ ] **Scene prompt regeneration errors**
+  - Display error message within the scene section of that card
+  - Show "Retry" button to retry regeneration
+  - Keep other cards functional
+  - Use Alert component within scene section
+
+- [ ] **Video regeneration errors**
+  - Display error message within the video section of that card
+  - Show "Retry" button to retry video generation
+  - Keep other cards functional
+  - Use Alert component within video section
+
+- [ ] **Edit prompt validation errors**
+  - Validate edited prompts (non-empty, reasonable length)
+  - Show inline error messages if validation fails
+  - Prevent saving invalid prompts
+  - Provide clear feedback on requirements
+
+### Testing Tasks
+
+- [ ] **Test combined card layout**
+  - Verify side-by-side layout on desktop (md breakpoint and up)
+  - Verify vertical stack on mobile
+  - Test on various screen sizes (phone, tablet, desktop, ultrawide)
+  - Ensure no layout breaks or overflow issues
+  - Check that negative description collapse works correctly
+
+- [ ] **Test loading animations**
+  - Verify scene prompt loading shows for ~20-30 seconds with contextual snippets
+  - Verify video loading shows for estimated 2-7 minutes with rotating snippets
+  - Check that snippets rotate at configured intervals
+  - Ensure loading animations are visually compelling and not boring
+  - Verify estimated time indicators display correctly
+
+- [ ] **Test edit prompt functionality**
+  - Click "Edit Prompt" and verify inline editing works
+  - Edit description text and save changes
+  - Cancel editing and verify no changes applied
+  - Verify edited prompt is used when regenerating video
+  - Test validation (empty prompt, very long prompt)
+
+- [ ] **Test regenerate prompt functionality**
+  - Click "Regenerate Prompt" and verify only that scene regenerates
+  - Verify loading state shows in that card only
+  - Confirm other scenes/videos are unaffected
+  - Test error handling (backend down, invalid response)
+  - Verify regenerated prompt displays correctly
+
+- [ ] **Test regenerate video functionality**
+  - Click "Regenerate Video" and verify video regenerates with current prompt
+  - Verify loading animation displays during regeneration
+  - Confirm other videos are unaffected
+  - Test regenerating with edited prompt
+  - Test error handling (generation failure)
+
+- [ ] **Test input data auto-collapse**
+  - Verify input section is expanded on page load
+  - Verify it auto-collapses when scene generation completes
+  - Test manual expand/collapse toggle
+  - Ensure smooth animation
+
+- [ ] **Test teletype animation**
+  - Verify scene prompts teletype after generation completes
+  - Confirm total duration is ~10 seconds (or configured value)
+  - Test sequential vs parallel (based on chosen approach)
+  - Verify click-to-skip functionality works
+  - Check that animation doesn't block other interactions
+
+- [ ] **Test auto-scroll to Full Video**
+  - Verify scroll triggers when stitched video completes
+  - Confirm smooth scroll behavior
+  - Test on different page scroll positions
+  - Verify scroll doesn't trigger on error or if video already visible
+
+- [ ] **Test state persistence**
+  - Verify edited prompts persist when regenerating videos
+  - Test multiple regenerations on same scene/video
+  - Ensure state consistency across all cards
+
+- [ ] **Test error scenarios**
+  - Scene generation failures (some or all)
+  - Video generation failures (some or all)
+  - Regeneration failures (scene or video)
+  - Network errors during editing operations
+  - Verify graceful degradation and user-friendly error messages
+
+- [ ] **Test with both storage backends**
+  - Verify works with SERVE_FROM_CLOUD=true (S3)
+  - Verify works with SERVE_FROM_CLOUD=false (local)
+  - Test regenerated videos work with both storage modes
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document combined card architecture and component structure
+  - Document loading animation snippet system with configuration
+  - Document teletype animation implementation and timing
+  - Document interactive controls (edit, regenerate) and API interactions
+  - Document auto-collapse and auto-scroll behaviors
+  - Note configuration constants added (teletype duration, snippet timing, etc.)
+  - Document state management approach for combined cards
+  - Note responsive design breakpoints and layout decisions
+
+- [ ] **Add code comments for configuration**
+  - Document snippet arrays and how to customize
+  - Document timing constants (teletype, snippet rotation)
+  - Document any feature flags or toggles added
+  - Provide examples for future customization
+
+- [ ] **Update user-facing documentation** (if exists)
+  - Document new edit/regenerate functionality
+  - Explain loading states and estimated times
+  - Note auto-collapse and auto-scroll behaviors
+
+---
