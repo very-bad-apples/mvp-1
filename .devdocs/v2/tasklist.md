@@ -407,3 +407,114 @@ Implement `/api/mv/stitch-videos` endpoint that merges multiple video clips into
   - Note MoviePy usage and codecs
   - Document storage backend handling
   - Note temporary file management
+
+---
+
+## v7 - Automatic Video Stitching Integration
+
+### Summary
+Automatically trigger video stitching when all individual scene clips finish generating. Display a loading indicator with estimated completion time (5 seconds per video), then show the final stitched video in a special "Full Video" card below the individual clips. Include error handling with retry capability and user-friendly error messages.
+
+### Frontend Tasks
+
+- [ ] **Detect when all scene videos complete**
+  - Monitor video generation state array
+  - Trigger stitching when all videos have status: 'completed'
+  - Only trigger if at least one video succeeded (skip if all failed)
+  - Ensure stitching only triggers once (use flag or status check)
+
+- [ ] **Prepare video IDs for stitching**
+  - Collect all successfully generated video IDs in sequential order
+  - Filter out any failed videos from the stitching list
+  - Maintain original scene order for stitching
+
+- [ ] **Call /api/mv/stitch-videos endpoint**
+  - POST request with body: `{ "video_ids": [...] }`
+  - Pass array of video IDs in sequential order
+  - Handle response with video_id, video_url, metadata
+
+- [ ] **Create "Full Video" card section**
+  - Display below individual scene video cards
+  - Card title: "Full Video"
+  - Section header to visually separate from individual clips
+  - Use same card styling as other cards (gray-800/50, border-gray-700)
+
+- [ ] **Implement stitching loading state**
+  - Show loading indicator in Full Video card while stitching
+  - Display progress message: "Stitching videos..."
+  - Show estimated time: "Estimated time: X seconds" (5 seconds × number of videos)
+  - Use Progress component or loading spinner
+  - Update timer/progress as time elapses
+
+- [ ] **Display stitched video on success**
+  - Replace loading state with video player
+  - Use resolved video URL (handle both local and S3 URLs like individual videos)
+  - Video controls: enabled, sound enabled, no autoplay
+  - Display metadata below video:
+    - Number of clips stitched
+    - Total duration (if available in metadata)
+    - Stitched video ID
+
+- [ ] **Error handling for stitching failures**
+  - Catch API errors from stitch-videos endpoint
+  - Display user-friendly error message in Full Video card:
+    - "Failed to stitch videos. Please try again."
+    - Show specific error if available (e.g., "Video not found")
+  - Add "Retry Stitching" button
+  - Allow user to retry without regenerating individual videos
+  - Use Alert component with destructive variant for errors
+
+- [ ] **Implement retry functionality**
+  - "Retry Stitching" button clears error state
+  - Re-triggers stitch-videos API call with same video IDs
+  - Returns to loading state
+  - Limit retries or allow unlimited attempts (TBD based on preference)
+
+- [ ] **State management for stitching**
+  - Add state variables:
+    - `stitchingStatus`: 'idle' | 'loading' | 'completed' | 'error'
+    - `stitchedVideo`: { videoId, videoUrl, metadata }
+    - `stitchingError`: error message string
+    - `estimatedStitchTime`: calculated based on video count
+  - Track whether stitching has been triggered to prevent duplicates
+
+- [ ] **Handle edge cases**
+  - No videos generated successfully (don't show Full Video card)
+  - Only 1 video generated (still stitch for consistency, or skip?)
+  - Partial video failures (stitch only successful ones)
+
+### Testing Tasks
+
+- [ ] **Manual testing - Happy path**
+  - Generate multiple scene videos (2-4 clips)
+  - Verify stitching triggers automatically when all complete
+  - Check loading indicator shows correct estimated time
+  - Confirm stitched video plays correctly
+  - Verify individual clips remain visible above stitched video
+
+- [ ] **Manual testing - Error scenarios**
+  - Simulate backend stitching failure (backend down, invalid IDs)
+  - Verify user-friendly error message displays
+  - Test retry button functionality
+  - Confirm retry works after fixing backend issue
+
+- [ ] **Manual testing - Edge cases**
+  - Test with single generated video
+  - Test when some individual videos fail (partial success)
+  - Test with both storage modes (SERVE_FROM_CLOUD=true/false)
+  - Verify stitched video URL resolution works for both modes
+
+- [ ] **Manual testing - State management**
+  - Verify stitching only triggers once
+  - Check that page refresh doesn't re-trigger stitching
+  - Test loading state displays correctly during processing
+  - Verify state transitions (idle → loading → completed/error)
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document automatic stitching trigger logic
+  - Note estimated time calculation (5 seconds per video)
+  - Document error handling and retry mechanism
+  - Note edge case handling (partial failures, single video, etc.)
+  - Document Full Video card placement and styling

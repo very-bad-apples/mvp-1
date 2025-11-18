@@ -61,3 +61,6 @@ implement the file storage logic in generate_video of utilizing storage buckets 
 
 also utilize the MV_DEBUG_MODE logic to print out debugging data when that setting is enabled.
 
+## v7
+
+Integrate the /api/stitch-videos endpoint with quick-gen-page frontend page: when the all the individual scene clips finish generating call the stitch-video endpoint with each clips, then when that's finished processing, return the fully stitched-video and display below all the individual clips.

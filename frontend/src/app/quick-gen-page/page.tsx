@@ -14,6 +14,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // Configuration
 const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 // Expected time for video generation
+const STITCH_EXPECTED_TIME_PER_VIDEO_SECONDS = 5 // Expected time for stitching per video
 
 /**
  * Resolves video URL to handle both local and S3 storage backends.
@@ -50,6 +51,17 @@ interface VideoState {
 
 type GenerationStatus = 'idle' | 'loading' | 'completed' | 'error'
 
+interface StitchedVideo {
+  videoId: string
+  videoUrl: string
+  metadata?: {
+    num_clips?: number
+    total_duration?: number
+  }
+}
+
+type StitchingStatus = 'idle' | 'loading' | 'completed' | 'error'
+
 export default function QuickGenPage() {
   const router = useRouter()
   const [jobData, setJobData] = useState<QuickJobData>({
@@ -69,6 +81,13 @@ export default function QuickGenPage() {
   // Video generation state
   const [videoStates, setVideoStates] = useState<VideoState[]>([])
   const hasStartedVideoGenRef = useRef(false)
+
+  // Video stitching state
+  const [stitchingStatus, setStitchingStatus] = useState<StitchingStatus>('idle')
+  const [stitchedVideo, setStitchedVideo] = useState<StitchedVideo | null>(null)
+  const [stitchingError, setStitchingError] = useState<string | null>(null)
+  const [estimatedStitchTime, setEstimatedStitchTime] = useState(0)
+  const hasStartedStitchingRef = useRef(false)
 
   // Load job data from sessionStorage
   useEffect(() => {
@@ -122,6 +141,31 @@ export default function QuickGenPage() {
     hasStartedVideoGenRef.current = true
     generateVideos()
   }, [scenes, generationStatus])
+
+  // Start video stitching when all videos complete
+  useEffect(() => {
+    // Check if we should trigger stitching
+    if (
+      hasStartedStitchingRef.current ||
+      videoStates.length === 0 ||
+      stitchingStatus !== 'idle'
+    ) {
+      return
+    }
+
+    // Check if all videos have finished (completed or error)
+    const allFinished = videoStates.every(
+      v => v.status === 'completed' || v.status === 'error'
+    )
+
+    // Check if at least one video succeeded
+    const hasSuccessful = videoStates.some(v => v.status === 'completed')
+
+    if (allFinished && hasSuccessful) {
+      hasStartedStitchingRef.current = true
+      stitchVideos()
+    }
+  }, [videoStates, stitchingStatus])
 
   const generateScenes = async () => {
     setGenerationStatus('loading')
@@ -255,6 +299,69 @@ export default function QuickGenPage() {
         )
       )
     }
+  }
+
+  const stitchVideos = async () => {
+    // Collect successfully generated video IDs in sequential order
+    const successfulVideoIds = videoStates
+      .filter(v => v.status === 'completed' && v.videoId)
+      .sort((a, b) => a.sceneIndex - b.sceneIndex)
+      .map(v => v.videoId!)
+
+    if (successfulVideoIds.length === 0) {
+      console.error('No successful videos to stitch')
+      return
+    }
+
+    // Calculate estimated time based on number of videos
+    const estimatedTime = successfulVideoIds.length * STITCH_EXPECTED_TIME_PER_VIDEO_SECONDS
+    setEstimatedStitchTime(estimatedTime)
+
+    setStitchingStatus('loading')
+    setStitchingError(null)
+    setStitchedVideo(null)
+
+    try {
+      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_ids: successfulVideoIds,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        throw new Error(errorData.detail?.message || errorData.detail || 'Failed to stitch videos')
+      }
+
+      const data = await response.json()
+
+      // Resolve video URL (handles both S3 presigned URLs and local backend paths)
+      const resolvedVideoUrl = resolveVideoUrl(data.video_url)
+
+      setStitchedVideo({
+        videoId: data.video_id,
+        videoUrl: resolvedVideoUrl,
+        metadata: data.metadata,
+      })
+      setStitchingStatus('completed')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to stitch videos'
+      setStitchingError(errorMessage)
+      setStitchingStatus('error')
+      console.error('Video stitching error:', err)
+    }
+  }
+
+  const retryStitching = () => {
+    // Reset stitching state and trigger again
+    hasStartedStitchingRef.current = false
+    setStitchingStatus('idle')
+    setStitchingError(null)
+    setStitchedVideo(null)
   }
 
   // Calculate video generation summary stats
@@ -556,6 +663,129 @@ export default function QuickGenPage() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+
+            {/* Full Video Section - Stitched Video */}
+            {stitchingStatus !== 'idle' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <Film className="h-6 w-6" />
+                    Full Video
+                  </h2>
+                  {stitchingStatus === 'loading' && (
+                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                      Stitching
+                    </Badge>
+                  )}
+                  {stitchingStatus === 'completed' && (
+                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
+                      Ready
+                    </Badge>
+                  )}
+                  {stitchingStatus === 'error' && (
+                    <Badge className="bg-red-500/10 text-red-400 border-red-500/20">
+                      Failed
+                    </Badge>
+                  )}
+                </div>
+
+                <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-white">Stitched Video</CardTitle>
+                    {stitchedVideo?.videoId && (
+                      <CardDescription className="text-gray-400 font-mono text-xs">
+                        ID: {stitchedVideo.videoId}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {/* Loading State */}
+                    {stitchingStatus === 'loading' && (
+                      <div className="space-y-4">
+                        <div className="aspect-video bg-gray-900/50 rounded-lg flex items-center justify-center border border-gray-700">
+                          <div className="text-center space-y-3">
+                            <Loader2 className="h-12 w-12 text-blue-400 animate-spin mx-auto" />
+                            <div className="space-y-1">
+                              <p className="text-gray-400 text-sm font-medium">
+                                Stitching videos...
+                              </p>
+                              <p className="text-gray-500 text-xs">
+                                Estimated time: {estimatedStitchTime} seconds
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Completed State - Video Player */}
+                    {stitchingStatus === 'completed' && stitchedVideo?.videoUrl && (
+                      <div className="space-y-4">
+                        <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+                          <video
+                            src={stitchedVideo.videoUrl}
+                            controls
+                            className="w-full h-full"
+                            preload="metadata"
+                          >
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+
+                        {/* Metadata */}
+                        {stitchedVideo.metadata && (
+                          <div className="grid grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                            {stitchedVideo.metadata.num_clips !== undefined && (
+                              <div className="space-y-1">
+                                <p className="text-xs text-gray-500">Clips Stitched</p>
+                                <p className="text-sm text-white font-medium">
+                                  {stitchedVideo.metadata.num_clips}
+                                </p>
+                              </div>
+                            )}
+                            {stitchedVideo.metadata.total_duration !== undefined && (
+                              <div className="space-y-1">
+                                <p className="text-xs text-gray-500">Total Duration</p>
+                                <p className="text-sm text-white font-medium">
+                                  {stitchedVideo.metadata.total_duration.toFixed(1)}s
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Error State */}
+                    {stitchingStatus === 'error' && stitchingError && (
+                      <div className="space-y-4">
+                        <Alert variant="destructive" className="bg-red-950/50 border-red-900">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-red-300">
+                            Failed to stitch videos. Please try again.
+                            {stitchingError && (
+                              <span className="block mt-1 text-xs text-red-400">
+                                Error: {stitchingError}
+                              </span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={retryStitching}
+                            variant="outline"
+                            className="border-gray-600 text-white hover:bg-gray-800"
+                          >
+                            <Loader2 className="mr-2 h-4 w-4" />
+                            Retry Stitching
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
