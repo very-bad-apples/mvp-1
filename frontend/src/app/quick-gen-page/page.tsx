@@ -21,6 +21,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Music,
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -63,6 +64,9 @@ interface QuickJobData {
   videoDescription: string
   characterDescription: string
   characterReferenceImageId: string
+  audioId?: string
+  audioUrl?: string
+  audioTitle?: string
 }
 
 interface Scene {
@@ -105,6 +109,9 @@ export default function QuickGenPage() {
     videoDescription: '',
     characterDescription: '',
     characterReferenceImageId: '',
+    audioId: undefined,
+    audioUrl: undefined,
+    audioTitle: undefined,
   })
 
   // Combined scene/video state
@@ -142,6 +149,9 @@ export default function QuickGenPage() {
           videoDescription: parsed.videoDescription || '',
           characterDescription: parsed.characterDescription || '',
           characterReferenceImageId: parsed.characterReferenceImageId || '',
+          audioId: parsed.audioId || undefined,
+          audioUrl: parsed.audioUrl || undefined,
+          audioTitle: parsed.audioTitle || undefined,
         })
       } catch (error) {
         console.error('Failed to parse quickJobData from sessionStorage:', error)
@@ -645,14 +655,27 @@ export default function QuickGenPage() {
     setStitchedVideo(null)
 
     try {
+      // Build request body with optional audio parameters
+      const requestBody: {
+        video_ids: string[]
+        audio_overlay_id?: string
+        suppress_video_audio?: boolean
+      } = {
+        video_ids: successfulVideoIds,
+      }
+
+      // Add audio overlay parameters if audio is available
+      if (jobData.audioId) {
+        requestBody.audio_overlay_id = jobData.audioId
+        requestBody.suppress_video_audio = true
+      }
+
       const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          video_ids: successfulVideoIds,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -799,6 +822,30 @@ export default function QuickGenPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Audio Track Section */}
+                    {jobData.audioId && (
+                      <div>
+                        <label className="text-sm font-medium text-white block mb-2">
+                          Audio Track
+                        </label>
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Music className="h-4 w-4 text-red-400" />
+                            <span className="text-xs text-gray-400">Audio from YouTube</span>
+                          </div>
+                          {jobData.audioTitle && (
+                            <p className="text-sm text-white mb-2 truncate">{jobData.audioTitle}</p>
+                          )}
+                          <audio
+                            controls
+                            src={`${API_URL}/api/audio/get/${jobData.audioId}`}
+                            className="w-full h-10"
+                          />
+                          <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               )}

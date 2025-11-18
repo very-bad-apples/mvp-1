@@ -1029,3 +1029,495 @@ Refactored `/api/mv/generate_video` endpoint to accept character reference UUID 
 5. **Caching**: Cache resolved file paths for frequently used UUIDs
 
 ---
+
+## v12 - Audio Trimming and Overlay for Video Stitching
+
+### Implementation Summary
+
+**Objective**: Add audio overlay support to video stitching with automatic trimming to match video duration.
+
+**Status**: ✅ Completed
+
+**Date**: 2025-11-18
+
+### Key Components Added
+
+1. **Audio Trimmer Utility** (`backend/services/audio_trimmer.py`)
+   - Standalone utility for trimming audio files to specific time ranges
+   - Creates new UUID for trimmed audio, preserves original
+   - Uses pydub for audio manipulation
+
+2. **Video Stitcher Audio Overlay** (`backend/mv/video_stitcher.py`)
+   - Enhanced with audio overlay support
+   - Automatic audio trimming when longer than video
+   - Optional video audio suppression
+
+3. **Frontend Audio Display** (`frontend/src/app/quick-gen-page/page.tsx`)
+   - Audio player in Input Data section
+   - Conditional rendering based on audioId
+   - Audio parameters passed to stitch endpoint
+
+### Technical Flow
+
+```
+1. User downloads YouTube audio on /create page
+2. Frontend stores audioId in sessionStorage
+3. User clicks "Quick Job" → navigates to /quick-gen-page
+4. quick-gen-page displays audio player with audioId
+5. Scene generation → Video clips generated
+6. User triggers stitch → Frontend calls /api/mv/stitch-videos with:
+   - video_ids: [scene_video_uuids]
+   - audio_overlay_id: audioId
+   - suppress_video_audio: true (if audio present)
+7. Backend stitch_videos():
+   a. Retrieves all video clips
+   b. Calculates total video duration
+   c. Retrieves audio file by audio_overlay_id
+   d. If audio > video: trims audio from start (0 to video_duration)
+   e. Removes audio from video clips (if suppress_video_audio=true)
+   f. Overlays trimmed/original audio on concatenated video
+   g. Returns stitched video with audio overlay
+8. Frontend displays stitched video with background music
+```
+
+### Code Changes
+
+#### 1. Audio Trimmer Module
+
+**File**: `backend/services/audio_trimmer.py`
+
+**New Functions**:
+- `get_audio_file_path(audio_id)` - Locate audio file by UUID
+- `trim_audio(audio_id, start_time, end_time, output_quality)` - Trim and save audio
+
+**Key Features**:
+- Generates new UUID for trimmed audio
+- Validates time ranges
+- Handles audio duration mismatches gracefully (clamps end_time)
+- Saves metadata to `{uuid}_metadata.json`
+- Supports debug logging via `MV_DEBUG_MODE`
+
+**Example Usage**:
+```python
+from services.audio_trimmer import trim_audio
+
+# Trim audio from 0 to 30 seconds
+new_id, path, metadata = trim_audio(
+    audio_id="abc-123-def",
+    start_time=0.0,
+    end_time=30.5
+)
+# Returns: ("new-uuid", "/path/to/new-uuid.mp3", {...metadata...})
+```
+
+#### 2. Video Stitcher Updates
+
+**File**: `backend/mv/video_stitcher.py`
+
+**Model Changes**:
+
+```python
+# Request Model
+class StitchVideosRequest(BaseModel):
+    video_ids: list[str]
+    audio_overlay_id: Optional[str] = None  # NEW
+    suppress_video_audio: Optional[bool] = False  # NEW
+
+# Response Model  
+class StitchVideosResponse(BaseModel):
+    video_id: str
+    video_path: str
+    video_url: str
+    metadata: dict
+    audio_overlay_applied: bool = False  # NEW
+    audio_overlay_warning: Optional[str] = None  # NEW
+```
+
+**New Functions**:
+- `_get_audio_file_path(audio_id)` - Retrieve audio file by UUID
+  - Checks `mv/outputs/audio/{audio_id}.mp3`
+  - Fallback to other formats (.m4a, .opus, .webm, .ogg, .aac)
+
+**Updated Functions**:
+
+- `_merge_video_clips()` - Added audio overlay parameters:
+  ```python
+  def _merge_video_clips(
+      video_paths: list[str],
+      output_path: str,
+      audio_overlay_path: Optional[str] = None,  # NEW
+      suppress_video_audio: bool = False  # NEW
+  ) -> tuple[float, float]:  # Returns (processing_time, total_duration)
+  ```
+
+  - If `suppress_video_audio=True`: Calls `clip.without_audio()` on each clip
+  - If `audio_overlay_path` provided: Loads audio, trims if needed, applies via `final_clip.with_audio(audio_clip)`
+  - Uses moviepy's `AudioFileClip` and `subclipped()` for trimming
+
+- `stitch_videos()` - Added audio overlay logic:
+  ```python
+  def stitch_videos(
+      video_ids: list[str],
+      audio_overlay_id: Optional[str] = None,  # NEW
+      suppress_video_audio: bool = False  # NEW
+  ) -> tuple[str, str, str, dict, bool, Optional[str]]:  # Added audio status fields
+  ```
+
+  **Audio Overlay Flow**:
+  1. If `audio_overlay_id` provided, retrieve audio file
+  2. Calculate total video duration by summing clip durations
+  3. Check if audio needs trimming (audio > video duration)
+  4. If yes: Use `trim_audio()` to create trimmed version
+  5. If no: Use original audio as-is
+  6. Pass audio path to `_merge_video_clips()`
+  7. Track status: `audio_overlay_applied`, `audio_overlay_warning`
+
+**Error Handling**:
+- Audio file not found: Log warning, continue without overlay
+- Audio trimming fails: Log error, continue without overlay
+- Audio overlay fails: Log error, continue with video-only output
+- **Never fails entire stitch operation due to audio issues**
+
+**Metadata Additions**:
+```json
+{
+  "audio_overlay_id": "audio-uuid",
+  "audio_overlay_applied": true,
+  "video_audio_suppressed": true,
+  "audio_overlay_duration_seconds": 45.2,
+  "audio_overlay_warning": null  // or error message
+}
+```
+
+**Cleanup**:
+- Temp trimmed audio file deleted in `finally` block
+- Prevents disk space accumulation
+
+#### 3. Router Endpoint Updates
+
+**File**: `backend/routers/mv.py`
+
+**Endpoint**: `POST /api/mv/stitch-videos`
+
+**Request Validation**:
+- Validates `audio_overlay_id` format (UUID check)
+- Passes audio parameters to `stitch_videos()`
+
+**Response Updates**:
+```python
+response = StitchVideosResponse(
+    video_id=video_id,
+    video_path=video_path,
+    video_url=video_url,
+    metadata=metadata,
+    audio_overlay_applied=audio_overlay_applied,  # NEW
+    audio_overlay_warning=audio_overlay_warning  # NEW
+)
+```
+
+**Logging**:
+```python
+logger.info(
+    "stitch_videos_request_received",
+    video_ids=request.video_ids,
+    audio_overlay_id=request.audio_overlay_id,  # NEW
+    suppress_video_audio=request.suppress_video_audio  # NEW
+)
+```
+
+#### 4. Frontend - quick-gen-page Updates
+
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+**Interface Changes**:
+```typescript
+interface QuickJobData {
+  videoDescription: string
+  characterDescription: string
+  characterReferenceImageId: string
+  audioId?: string  // NEW
+  audioUrl?: string  // NEW
+  audioTitle?: string  // NEW
+}
+```
+
+**Audio Display** (lines 812-834):
+```tsx
+{/* Audio Track Section */}
+{jobData.audioId && (
+  <div>
+    <label className="text-sm font-medium text-white block mb-2">
+      Audio Track
+    </label>
+    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Music className="h-4 w-4 text-red-400" />
+        <span className="text-xs text-gray-400">Audio from YouTube</span>
+      </div>
+      {jobData.audioTitle && (
+        <p className="text-sm text-white mb-2 truncate">{jobData.audioTitle}</p>
+      )}
+      <audio
+        controls
+        src={`${API_URL}/api/audio/get/${jobData.audioId}`}
+        className="w-full h-10"
+      />
+      <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>
+    </div>
+  </div>
+)}
+```
+
+**Stitch Request Updates** (lines 657-679):
+```typescript
+// Build request body with optional audio parameters
+const requestBody: {
+  video_ids: string[]
+  audio_overlay_id?: string
+  suppress_video_audio?: boolean
+} = {
+  video_ids: successfulVideoIds,
+}
+
+// Add audio overlay parameters if audio is available
+if (jobData.audioId) {
+  requestBody.audio_overlay_id = jobData.audioId
+  requestBody.suppress_video_audio = true
+}
+
+const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(requestBody),
+})
+```
+
+#### 5. Frontend - create Page Updates
+
+**File**: `frontend/src/app/create/page.tsx`
+
+**handleQuickJob() Updates** (lines 173-185):
+```typescript
+const handleQuickJob = () => {
+  const quickJobData = {
+    videoDescription: prompt,
+    characterDescription: characterDescription,
+    characterReferenceImageId: selectedImageIndex !== null 
+      ? generatedImageIds[selectedImageIndex] 
+      : '',
+    // Include audio data if YouTube audio was downloaded
+    audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
+    audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
+  }
+  sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
+  router.push('/quick-gen-page')
+}
+```
+
+### Request/Response Examples
+
+#### Stitch Videos Request (WITH Audio Overlay)
+
+```bash
+curl -X POST "http://localhost:8000/api/mv/stitch-videos" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "video_ids": [
+      "abc-123-video1",
+      "def-456-video2",
+      "ghi-789-video3"
+    ],
+    "audio_overlay_id": "xyz-audio-uuid",
+    "suppress_video_audio": true
+  }'
+```
+
+#### Stitch Videos Response (WITH Audio Overlay)
+
+```json
+{
+  "video_id": "stitched-video-uuid",
+  "video_path": "/path/to/stitched-video.mp4",
+  "video_url": "https://s3.../stitched-video.mp4",
+  "audio_overlay_applied": true,
+  "audio_overlay_warning": null,
+  "metadata": {
+    "input_video_ids": ["abc-123", "def-456", "ghi-789"],
+    "num_videos_stitched": 3,
+    "video_duration_seconds": 45.2,
+    "audio_overlay_id": "xyz-audio-uuid",
+    "audio_overlay_applied": true,
+    "video_audio_suppressed": true,
+    "audio_overlay_duration_seconds": 45.2,
+    "merge_time_seconds": 12.5,
+    "total_processing_time_seconds": 15.8,
+    "storage_backend": "s3"
+  }
+}
+```
+
+#### Stitch Videos Request (WITHOUT Audio)
+
+```bash
+curl -X POST "http://localhost:8000/api/mv/stitch-videos" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "video_ids": ["abc-123", "def-456"]
+  }'
+```
+
+#### Stitch Videos Response (WITHOUT Audio)
+
+```json
+{
+  "video_id": "stitched-video-uuid",
+  "video_path": "/path/to/stitched-video.mp4",
+  "video_url": "/api/mv/get_video/stitched-video-uuid",
+  "audio_overlay_applied": false,
+  "audio_overlay_warning": null,
+  "metadata": {
+    "input_video_ids": ["abc-123", "def-456"],
+    "num_videos_stitched": 2,
+    "video_duration_seconds": 30.0,
+    "merge_time_seconds": 8.2,
+    "total_processing_time_seconds": 10.1,
+    "storage_backend": "local"
+  }
+}
+```
+
+### Configuration & Environment
+
+**Debug Mode**:
+```bash
+# Enable detailed logging
+MV_DEBUG_MODE=true
+```
+
+**Debug Logs Emitted**:
+- `audio_trim_started` - Audio trimming initiated
+- `audio_trim_completed` - Audio trimming successful
+- `stitch_audio_params` - Audio overlay parameters
+- `audio_overlay_not_found` - Audio file missing
+- `audio_trimmed_for_overlay` - Audio trimmed to match video
+- `audio_overlay_applying` - Applying audio to video
+- `audio_overlay_applied` - Audio overlay successful
+- `audio_overlay_failed` - Audio overlay error
+- `video_audio_suppression` - Video audio suppressed
+- `trimmed_audio_cleanup` - Temp audio file cleanup
+
+### Benefits
+
+1. **Seamless Audio Integration**: YouTube audio overlaid on music videos automatically
+2. **No Manual Trimming**: Audio trimmed to match video duration automatically
+3. **Graceful Degradation**: Audio errors never fail video stitching
+4. **Performance**: Direct file handling, minimal overhead
+5. **Flexibility**: Optional audio overlay with video audio suppression
+6. **Clean Implementation**: Separation of concerns (audio trimmer utility)
+7. **Debugging**: Comprehensive logging when debug mode enabled
+
+### Limitations & Known Issues
+
+1. **Audio Shorter Than Video**: If audio < video duration, audio plays and ends early (no looping)
+2. **Audio Format Support**: Requires MP3 format (others converted on download)
+3. **Trimming From Start Only**: Always trims from beginning (no configurable trim strategy)
+4. **No Audio Fade**: Trimmed audio has abrupt ending (no fade-out)
+5. **Single Audio Track**: Only one audio overlay supported (no mixing)
+
+### Future Improvements
+
+1. **Audio Looping**: Repeat audio to match video duration if shorter
+2. **Fade Effects**: Add fade-in/fade-out to trimmed audio
+3. **Trim Strategy**: Allow trimming from end or middle
+4. **Audio Mixing**: Support multiple audio tracks with volume control
+5. **Audio Preview**: Show audio waveform in frontend
+6. **Custom Trim Points**: Let users specify start/end times in UI
+7. **Audio Normalization**: Balance audio levels across clips
+8. **Format Support**: Direct support for more audio formats without conversion
+
+### Testing
+
+**Manual Testing Steps**:
+
+1. **Basic Audio Overlay**:
+   - Download YouTube audio on /create page
+   - Click "Quick Job" → Navigate to /quick-gen-page
+   - Verify audio player displays
+   - Generate scenes → Generate videos
+   - Verify stitched video has audio overlay
+
+2. **Audio Longer Than Video**:
+   - Use long audio (5+ minutes)
+   - Generate short video (30 seconds)
+   - Verify audio trimmed to 30 seconds
+
+3. **Audio Shorter Than Video**:
+   - Use short audio (30 seconds)
+   - Generate long video (2 minutes)
+   - Verify audio plays then ends (no loop)
+
+4. **Missing Audio File**:
+   - Modify audioId to invalid UUID
+   - Verify stitching succeeds with warning in response
+
+5. **Without Audio**:
+   - Don't select YouTube audio on /create page
+   - Verify stitching works normally (backward compatible)
+
+6. **Video Audio Suppression**:
+   - Compare stitched video with/without audio overlay
+   - Verify video clips have no audio when overlay present
+
+### Migration Notes
+
+**Backward Compatibility**: ✅ Fully backward compatible
+- `audio_overlay_id` and `suppress_video_audio` are optional
+- Existing stitch requests work without changes
+- New fields in response default to sensible values
+
+**Frontend Migration**: No breaking changes
+- Audio display conditionally rendered
+- Works with or without audio data in sessionStorage
+
+---
+
+
+## v12 Bugfix - MoviePy 2.0.0 Compatibility
+
+### Issue
+
+**Error**: `'VideoClip' object has no attribute 'set_audio'`
+
+**Root Cause**: 
+- MoviePy 2.0.0 uses different method names than newer versions
+- Documentation referenced newer API
+
+### Fix
+
+Changed audio application method from `set_audio()` to `with_audio()`:
+
+```python
+# BEFORE (incorrect for moviepy 2.0.0)
+final_clip = final_clip.set_audio(audio_clip)
+
+# AFTER (correct for moviepy 2.0.0)
+final_clip = final_clip.with_audio(audio_clip)
+```
+
+### MoviePy 2.0.0 API Reference
+
+**Audio methods on VideoClip**:
+- `with_audio(audio_clip)` - Replace/add audio track
+- `without_audio()` - Remove audio track
+
+**Audio trimming on AudioFileClip**:
+- `with_subclip(start, end)` - Extract time range (already correct)
+
+**Verification**:
+```bash
+uv run python -c "import moviepy; print(moviepy.__version__)"
+# Output: 2.0.0
+```
+
+---
+

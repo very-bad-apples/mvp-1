@@ -31,6 +31,12 @@ class StitchVideosRequest(BaseModel):
     video_ids: list[str] = Field(
         ..., description="List of video UUIDs to stitch together in order"
     )
+    audio_overlay_id: Optional[str] = Field(
+        None, description="Optional UUID of audio file to overlay on stitched video"
+    )
+    suppress_video_audio: Optional[bool] = Field(
+        False, description="Whether to remove audio from video clips (default: False)"
+    )
 
 
 class StitchVideosResponse(BaseModel):
@@ -40,6 +46,38 @@ class StitchVideosResponse(BaseModel):
     video_path: str = Field(..., description="Filesystem path to stitched video")
     video_url: str = Field(..., description="URL path to retrieve stitched video")
     metadata: dict = Field(..., description="Stitching metadata")
+    audio_overlay_applied: bool = Field(
+        False, description="Whether audio overlay was successfully applied"
+    )
+    audio_overlay_warning: Optional[str] = Field(
+        None, description="Warning message if audio overlay failed or was skipped"
+    )
+
+
+def _get_audio_file_path(audio_id: str) -> Optional[Path]:
+    """
+    Get the local filesystem path for an audio file by UUID.
+
+    Args:
+        audio_id: UUID of the audio file
+
+    Returns:
+        Path to audio file if found, None otherwise
+    """
+    audio_dir = Path(__file__).parent / "outputs" / "audio"
+
+    # Check for .mp3 extension (primary format)
+    audio_path = audio_dir / f"{audio_id}.mp3"
+    if audio_path.exists():
+        return audio_path
+
+    # Fallback to other formats
+    for ext in ['.m4a', '.opus', '.webm', '.ogg', '.aac']:
+        audio_path = audio_dir / f"{audio_id}{ext}"
+        if audio_path.exists():
+            return audio_path
+
+    return None
 
 
 def _get_local_video_path(video_id: str) -> Optional[Path]:
@@ -154,16 +192,23 @@ def _retrieve_video_files(video_ids: list[str]) -> tuple[list[str], Optional[str
     return video_paths, temp_dir
 
 
-def _merge_video_clips(video_paths: list[str], output_path: str) -> float:
+def _merge_video_clips(
+    video_paths: list[str],
+    output_path: str,
+    audio_overlay_path: Optional[str] = None,
+    suppress_video_audio: bool = False
+) -> tuple[float, float]:
     """
-    Merge multiple video clips into a single video.
+    Merge multiple video clips into a single video with optional audio overlay.
 
     Args:
         video_paths: List of paths to video files
         output_path: Path to save the merged video
+        audio_overlay_path: Optional path to audio file to overlay
+        suppress_video_audio: Whether to remove audio from video clips
 
     Returns:
-        Processing time in seconds
+        Tuple of (processing_time_seconds, total_video_duration_seconds)
     """
     start_time = time.time()
 
@@ -174,9 +219,52 @@ def _merge_video_clips(video_paths: list[str], output_path: str) -> float:
     # Load video clips
     clips = [VideoFileClip(path) for path in video_paths]
 
+    # Remove audio from clips if requested
+    if suppress_video_audio:
+        if settings.MV_DEBUG_MODE:
+            from mv.debug import debug_log
+            debug_log("video_audio_suppression", enabled=True)
+        clips = [clip.without_audio() for clip in clips]
+
     try:
         # Concatenate clips
         final_clip = concatenate_videoclips(clips)
+
+        # Calculate total video duration
+        total_duration = final_clip.duration
+
+        # Apply audio overlay if provided
+        if audio_overlay_path:
+            from moviepy import AudioFileClip
+
+            if settings.MV_DEBUG_MODE:
+                from mv.debug import debug_log
+                debug_log(
+                    "audio_overlay_applying",
+                    audio_path=audio_overlay_path,
+                    video_duration=total_duration
+                )
+
+            try:
+                audio_clip = AudioFileClip(audio_overlay_path)
+
+                # Set audio duration to match video duration (trim if needed)
+                if audio_clip.duration > total_duration:
+                    audio_clip = audio_clip.with_subclip(0, total_duration)
+
+                # Apply audio to video (moviepy 2.0.0 uses with_audio)
+                final_clip = final_clip.with_audio(audio_clip)
+
+                if settings.MV_DEBUG_MODE:
+                    from mv.debug import debug_log
+                    debug_log("audio_overlay_applied", audio_duration=audio_clip.duration)
+
+            except Exception as e:
+                logger.error(f"Failed to apply audio overlay: {e}")
+                # Continue without audio overlay
+                if settings.MV_DEBUG_MODE:
+                    from mv.debug import debug_log
+                    debug_log("audio_overlay_failed", error=str(e))
 
         # Write the final video
         final_clip.write_videofile(
@@ -192,7 +280,7 @@ def _merge_video_clips(video_paths: list[str], output_path: str) -> float:
             from mv.debug import log_stitch_merge_complete
             log_stitch_merge_complete(output_path, processing_time)
 
-        return processing_time
+        return processing_time, total_duration
     finally:
         # Clean up clips
         for clip in clips:
@@ -220,22 +308,29 @@ async def _upload_to_s3(local_path: str, cloud_path: str) -> str:
     return url
 
 
-def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
+def stitch_videos(
+    video_ids: list[str],
+    audio_overlay_id: Optional[str] = None,
+    suppress_video_audio: bool = False
+) -> tuple[str, str, str, dict, bool, Optional[str]]:
     """
-    Stitch multiple video clips into a single video.
+    Stitch multiple video clips into a single video with optional audio overlay.
 
     This function:
     1. Validates video IDs
     2. Retrieves video files (from local or S3)
-    3. Merges videos using MoviePy
-    4. Saves to appropriate storage (local or S3)
-    5. Returns video ID, path, URL, and metadata
+    3. Optionally retrieves and trims audio overlay
+    4. Merges videos using MoviePy with audio overlay
+    5. Saves to appropriate storage (local or S3)
+    6. Returns video ID, path, URL, metadata, and audio status
 
     Args:
         video_ids: List of video UUIDs to stitch in order
+        audio_overlay_id: Optional UUID of audio file to overlay
+        suppress_video_audio: Whether to remove audio from video clips (default: False)
 
     Returns:
-        Tuple of (video_id, video_path, video_url, metadata)
+        Tuple of (video_id, video_path, video_url, metadata, audio_overlay_applied, audio_overlay_warning)
 
     Raises:
         ValueError: If video_ids is empty
@@ -245,8 +340,20 @@ def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
         raise ValueError("video_ids list cannot be empty")
 
     if settings.MV_DEBUG_MODE:
-        from mv.debug import log_stitch_request
+        from mv.debug import log_stitch_request, debug_log
         log_stitch_request(video_ids)
+        if audio_overlay_id or suppress_video_audio:
+            debug_log(
+                "stitch_audio_params",
+                audio_overlay_id=audio_overlay_id,
+                suppress_video_audio=suppress_video_audio
+            )
+
+    # Track audio overlay status
+    audio_overlay_applied = False
+    audio_overlay_warning = None
+    audio_overlay_path = None
+    trimmed_audio_path = None
 
     # Track total processing time
     total_start_time = time.time()
@@ -269,8 +376,72 @@ def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
     output_path_compat = videos_dir / f"{stitched_video_id}.mp4"
 
     try:
-        # Merge videos
-        merge_time = _merge_video_clips(video_paths, str(output_path))
+        # Handle audio overlay if requested
+        if audio_overlay_id:
+            # Retrieve audio file
+            audio_path = _get_audio_file_path(audio_overlay_id)
+
+            if audio_path is None:
+                audio_overlay_warning = f"Audio file with ID '{audio_overlay_id}' not found"
+                logger.warning(audio_overlay_warning)
+
+                if settings.MV_DEBUG_MODE:
+                    from mv.debug import debug_log
+                    debug_log("audio_overlay_not_found", audio_id=audio_overlay_id)
+            else:
+                # Calculate total video duration first (need to load clips briefly)
+                from moviepy import VideoFileClip
+                total_video_duration = sum(VideoFileClip(path).duration for path in video_paths)
+
+                # Check if audio needs trimming
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(str(audio_path))
+                audio_duration = len(audio) / 1000.0  # Convert to seconds
+
+                if audio_duration > total_video_duration:
+                    # Trim audio to match video duration
+                    from services.audio_trimmer import trim_audio
+
+                    try:
+                        logger.info(
+                            f"Trimming audio {audio_overlay_id} from {audio_duration}s to {total_video_duration}s"
+                        )
+
+                        trimmed_id, trimmed_path, trim_metadata = trim_audio(
+                            audio_overlay_id,
+                            start_time=0.0,
+                            end_time=total_video_duration
+                        )
+
+                        audio_overlay_path = trimmed_path
+                        trimmed_audio_path = trimmed_path  # Track for cleanup
+
+                        if settings.MV_DEBUG_MODE:
+                            from mv.debug import debug_log
+                            debug_log(
+                                "audio_trimmed_for_overlay",
+                                original_duration=audio_duration,
+                                trimmed_duration=total_video_duration,
+                                trimmed_audio_id=trimmed_id
+                            )
+                    except Exception as e:
+                        audio_overlay_warning = f"Failed to trim audio: {str(e)}"
+                        logger.error(audio_overlay_warning, exc_info=True)
+                        audio_overlay_path = None
+                else:
+                    # Use audio as-is
+                    audio_overlay_path = str(audio_path)
+
+                if audio_overlay_path:
+                    audio_overlay_applied = True
+
+        # Merge videos with optional audio overlay
+        merge_time, total_duration = _merge_video_clips(
+            video_paths,
+            str(output_path),
+            audio_overlay_path=audio_overlay_path,
+            suppress_video_audio=suppress_video_audio
+        )
 
         # Copy to legacy location
         import shutil
@@ -286,7 +457,24 @@ def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
             "total_processing_time_seconds": round(total_processing_time, 2),
             "generation_timestamp": datetime.now(timezone.utc).isoformat(),
             "local_path": str(output_path),
+            "video_duration_seconds": round(total_duration, 2),
         }
+
+        # Add audio overlay metadata if used
+        if audio_overlay_id:
+            metadata["audio_overlay_id"] = audio_overlay_id
+            metadata["audio_overlay_applied"] = audio_overlay_applied
+            metadata["video_audio_suppressed"] = suppress_video_audio
+            if audio_overlay_warning:
+                metadata["audio_overlay_warning"] = audio_overlay_warning
+            if audio_overlay_applied and audio_overlay_path:
+                # Get audio duration
+                try:
+                    from pydub import AudioSegment
+                    audio = AudioSegment.from_file(audio_overlay_path)
+                    metadata["audio_overlay_duration_seconds"] = round(len(audio) / 1000.0, 2)
+                except Exception:
+                    pass
 
         # Save metadata
         metadata_path = job_dir / "metadata.json"
@@ -346,9 +534,17 @@ def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
                 "video_url": video_url,
                 "file_size_bytes": os.path.getsize(output_path),
                 "storage_backend": metadata["storage_backend"],
+                "audio_overlay_applied": audio_overlay_applied,
             })
 
-        return stitched_video_id, str(output_path), video_url, metadata
+        return (
+            stitched_video_id,
+            str(output_path),
+            video_url,
+            metadata,
+            audio_overlay_applied,
+            audio_overlay_warning
+        )
 
     finally:
         # Clean up temp directory if created
@@ -359,3 +555,13 @@ def stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]:
             if settings.MV_DEBUG_MODE:
                 from mv.debug import log_stitch_cleanup
                 log_stitch_cleanup(temp_dir)
+
+        # Clean up trimmed audio file if created
+        if trimmed_audio_path and os.path.exists(trimmed_audio_path):
+            try:
+                os.unlink(trimmed_audio_path)
+                if settings.MV_DEBUG_MODE:
+                    from mv.debug import debug_log
+                    debug_log("trimmed_audio_cleanup", path=trimmed_audio_path)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup trimmed audio: {e}")

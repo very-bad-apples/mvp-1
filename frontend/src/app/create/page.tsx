@@ -185,6 +185,9 @@ export default function CreatePage() {
       videoDescription: prompt,
       characterDescription: characterDescription,
       characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+      // Include audio data if YouTube audio was downloaded
+      audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
+      audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')

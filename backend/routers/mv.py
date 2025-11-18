@@ -1393,7 +1393,9 @@ async def stitch_videos_endpoint(request: StitchVideosRequest):
         logger.info(
             "stitch_videos_request_received",
             video_ids=request.video_ids,
-            num_videos=len(request.video_ids)
+            num_videos=len(request.video_ids),
+            audio_overlay_id=request.audio_overlay_id,
+            suppress_video_audio=request.suppress_video_audio
         )
 
         # Validate request
@@ -1419,14 +1421,32 @@ async def stitch_videos_endpoint(request: StitchVideosRequest):
                     }
                 )
 
-        # Stitch videos
-        video_id, video_path, video_url, metadata = stitch_videos(request.video_ids)
+        # Validate audio_overlay_id format if provided
+        if request.audio_overlay_id:
+            if len(request.audio_overlay_id) != 36 or request.audio_overlay_id.count("-") != 4:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": f"Invalid audio_overlay_id format: {request.audio_overlay_id}",
+                        "details": "audio_overlay_id must be a valid UUID"
+                    }
+                )
+
+        # Stitch videos with optional audio overlay
+        video_id, video_path, video_url, metadata, audio_overlay_applied, audio_overlay_warning = stitch_videos(
+            video_ids=request.video_ids,
+            audio_overlay_id=request.audio_overlay_id,
+            suppress_video_audio=request.suppress_video_audio or False
+        )
 
         response = StitchVideosResponse(
             video_id=video_id,
             video_path=video_path,
             video_url=video_url,
-            metadata=metadata
+            metadata=metadata,
+            audio_overlay_applied=audio_overlay_applied,
+            audio_overlay_warning=audio_overlay_warning
         )
 
         logger.info(
@@ -1434,7 +1454,8 @@ async def stitch_videos_endpoint(request: StitchVideosRequest):
             video_id=video_id,
             num_videos_stitched=len(request.video_ids),
             total_processing_time_seconds=metadata.get("total_processing_time_seconds"),
-            storage_backend=metadata.get("storage_backend")
+            storage_backend=metadata.get("storage_backend"),
+            audio_overlay_applied=audio_overlay_applied
         )
 
         return response

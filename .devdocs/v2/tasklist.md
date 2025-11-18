@@ -673,3 +673,311 @@ Possible paths:
 6. Response includes warning field if UUID not found
 
 ---
+
+## v12 - Audio Trimming and Overlay for Video Stitching
+
+### Summary
+Implement audio trimming functionality for YouTube downloads, display audio player on quick-gen-page, and add audio overlay support to video stitching with optional video audio suppression.
+
+### Backend Tasks
+
+#### Audio Trimming Module
+
+- [ ] **Create audio trimming utility module**
+  - Create `backend/services/audio_trimmer.py`
+  - Implement `trim_audio()` function that accepts:
+    - `audio_id`: UUID of source audio file
+    - `start_time`: Start time in seconds (float)
+    - `end_time`: End time in seconds (float)
+  - Returns new audio_id for trimmed audio file
+  - Uses pydub or moviepy for audio trimming
+
+- [ ] **Implement audio file retrieval logic**
+  - Locate source audio file by UUID in `mv/outputs/audio/` directory
+  - Check for `.mp3` extension (primary format)
+  - Raise clear error if audio file not found
+
+- [ ] **Implement audio trimming logic**
+  - Load audio file using pydub's `AudioSegment.from_file()`
+  - Extract segment from `start_time * 1000` to `end_time * 1000` (milliseconds)
+  - Validate start_time < end_time
+  - Validate times are within audio duration
+
+- [ ] **Generate new UUID and save trimmed audio**
+  - Generate new UUID for trimmed audio
+  - Save to `mv/outputs/audio/{new_uuid}.mp3`
+  - Preserve original audio file (don't overwrite)
+  - Export with same quality as original (192kbps default)
+
+- [ ] **Add error handling**
+  - Handle audio file not found
+  - Handle invalid time ranges (start >= end)
+  - Handle times outside audio duration
+  - Handle FFmpeg/pydub errors gracefully
+  - Log all errors to stdout
+
+- [ ] **Add metadata tracking**
+  - Store trimmed audio metadata (source_audio_id, start_time, end_time)
+  - Save metadata to `mv/outputs/audio/{new_uuid}_metadata.json`
+
+- [ ] **Add debug logging**
+  - Log when MV_DEBUG_MODE is enabled
+  - Log source audio, time range, output path, file sizes
+
+#### Audio Trim Endpoint (Optional)
+
+- [ ] **Create audio trim endpoint** (if needed for frontend)
+  - `POST /api/audio/trim`
+  - Request model: `{ audio_id, start_time, end_time }`
+  - Response model: `{ trimmed_audio_id, audio_path, audio_url, metadata }`
+  - Uses `trim_audio()` utility function
+
+#### Video Stitcher Audio Overlay
+
+- [ ] **Update StitchVideosRequest model**
+  - Add `audio_overlay_id: Optional[str]` field
+  - Add `suppress_video_audio: Optional[bool]` field (default: False)
+  - Update docstrings with parameter descriptions
+
+- [ ] **Update StitchVideosResponse model**
+  - Add `audio_overlay_applied: bool` field
+  - Add `audio_overlay_warning: Optional[str]` field for errors
+
+- [ ] **Implement audio file retrieval in stitcher**
+  - Add `_get_audio_file_path()` helper function
+  - Locate audio by UUID in `mv/outputs/audio/` directory
+  - Return None if not found (don't fail)
+  - Log warning if audio_overlay_id provided but file not found
+
+- [ ] **Calculate total video duration**
+  - Sum durations of all input video clips
+  - Store as `target_duration` for audio trimming
+
+- [ ] **Implement audio trimming to match video duration**
+  - If audio longer than video: trim from start to match video duration
+  - Use audio_trimmer utility to create trimmed version
+  - Calculate: `trim_end_time = target_duration`
+  - Generate temp trimmed audio file
+
+- [ ] **Update _merge_video_clips() for audio overlay**
+  - Accept optional `audio_overlay_path` parameter
+  - Accept optional `suppress_video_audio` parameter
+  - Load audio file using `AudioFileClip(audio_overlay_path)`
+  - Set audio duration to match video duration
+
+- [ ] **Implement video audio suppression**
+  - If `suppress_video_audio=True`:
+    - Call `clip.without_audio()` on each video clip before concatenation
+    - This removes audio tracks from video clips
+  - Overlay audio track on final concatenated video
+  - Use `final_clip.set_audio(audio_clip)`
+
+- [ ] **Update metadata with audio info**
+  - Add `audio_overlay_id` to metadata if used
+  - Add `audio_overlay_duration` to metadata
+  - Add `video_audio_suppressed` boolean to metadata
+  - Add `audio_overlay_warning` if audio file not found
+
+- [ ] **Add error handling for audio overlay**
+  - If audio file not found: log warning, continue without overlay
+  - If audio trimming fails: log error, continue without overlay
+  - If audio overlay fails: log error, continue with video-only output
+  - Never fail the entire stitch operation due to audio issues
+
+- [ ] **Update stitch_videos() function signature**
+  - Add `audio_overlay_id: Optional[str] = None` parameter
+  - Add `suppress_video_audio: bool = False` parameter
+  - Pass parameters to _merge_video_clips()
+
+- [ ] **Add cleanup for temporary trimmed audio**
+  - Delete temp trimmed audio file after stitching
+  - Add to finally block for guaranteed cleanup
+
+- [ ] **Update debug logging for audio stitching**
+  - Log audio overlay parameters when MV_DEBUG_MODE enabled
+  - Log audio file path, duration, trim operations
+  - Log whether video audio was suppressed
+
+#### Router Updates
+
+- [ ] **Update /api/mv/stitch-videos endpoint**
+  - Extract `audio_overlay_id` from request
+  - Extract `suppress_video_audio` from request (default: False)
+  - Pass to `stitch_videos()` function
+  - Build response with audio overlay fields
+
+- [ ] **Update endpoint documentation**
+  - Document new `audio_overlay_id` parameter
+  - Document new `suppress_video_audio` parameter
+  - Add examples with audio overlay
+  - Update Swagger/OpenAPI docs
+
+#### Testing
+
+- [ ] **Unit tests for audio trimmer**
+  - Test basic trimming (middle segment)
+  - Test trimming from start
+  - Test trimming to end
+  - Test invalid time ranges
+  - Test missing audio file
+  - Test times outside duration
+
+- [ ] **Integration tests for audio overlay**
+  - Test stitch with audio overlay
+  - Test stitch with suppress_video_audio=True
+  - Test stitch with missing audio file (should succeed with warning)
+  - Test stitch with audio longer than video (should trim)
+  - Test stitch without audio overlay (existing behavior)
+
+- [ ] **Manual testing**
+  - Download YouTube audio via `/api/audio/download`
+  - Stitch videos with that audio_id
+  - Verify audio plays over stitched video
+  - Verify video audio is suppressed when requested
+  - Verify audio is trimmed to match video duration
+
+### Frontend Tasks
+
+#### Audio Display on quick-gen-page
+
+- [ ] **Locate existing AudioPlayer component**
+  - Find AudioPlayer component in `/frontend/src/app/create/page.tsx`
+  - Review component props and usage
+  - Determine if reusable or needs refactoring
+
+- [ ] **Extract AudioPlayer to shared component** (if needed)
+  - Move to `/frontend/src/components/AudioPlayer.tsx`
+  - Make component reusable with props: `audioId`, `audioUrl`, `title`, etc.
+  - Update create page to use shared component
+
+- [ ] **Update quick-gen-page state management**
+  - Add `audioId: string | null` to page state
+  - Pass audio_id from create page via router state or sessionStorage
+  - Retrieve from navigation state on mount
+
+- [ ] **Add audio display to Input Data section**
+  - Position below character_reference display
+  - Conditionally render: only if audioId exists
+  - Display section heading: "Audio Track" or "Background Music"
+
+- [ ] **Integrate AudioPlayer component**
+  - Pass `audioId` to AudioPlayer
+  - Construct `audioUrl`: `/api/audio/get/${audioId}`
+  - Display audio title/metadata if available
+  - Add loading state while audio loads
+
+- [ ] **Add audio indicator/label**
+  - Show YouTube icon or music note icon
+  - Display "Audio from YouTube" or similar label
+  - Show audio duration if available in metadata
+
+- [ ] **Handle missing audio gracefully**
+  - Don't show audio section if audioId is null/undefined
+  - Show error state if audio fails to load
+  - Provide fallback UI for missing audio
+
+#### Stitch Videos Request with Audio
+
+- [ ] **Update stitch videos API call**
+  - Modify `POST /api/mv/stitch-videos` request payload
+  - Add `audio_overlay_id` field if audioId exists
+  - Add `suppress_video_audio: true` field if audioId exists
+
+- [ ] **Conditional audio parameters**
+  - Only include audio fields if YouTube song was selected on create page
+  - Check if `audioId` is present in state
+  - If present: add both `audio_overlay_id` and `suppress_video_audio`
+  - If not present: omit audio fields (existing behavior)
+
+- [ ] **Update response handling**
+  - Handle new `audio_overlay_applied` field
+  - Display `audio_overlay_warning` if present
+  - Show user feedback if audio overlay failed
+
+- [ ] **Update stitched video display**
+  - Verify video plays with audio overlay
+  - Show indicator that audio was overlaid
+  - Display warning message if audio overlay failed
+
+#### Data Flow from Create Page
+
+- [ ] **Verify create page passes audioId**
+  - Check that create page stores audioId when YouTube audio is downloaded
+  - Verify audioId is passed via router state to quick-gen-page
+  - Add audioId to sessionStorage as backup
+
+- [ ] **Update quick-gen-page navigation**
+  - Read audioId from navigation state on mount
+  - Fallback to sessionStorage if navigation state missing
+  - Store in component state for use in requests
+
+#### UI/UX Polish
+
+- [ ] **Add loading states**
+  - Audio player loading spinner
+  - Audio metadata loading state
+
+- [ ] **Add error states**
+  - Audio file not found error
+  - Audio load failed error
+  - Stitch with audio overlay failed warning
+
+- [ ] **Add visual indicators**
+  - Icon showing audio is included
+  - Badge or chip: "With Background Music"
+  - Visual feedback on stitched video card
+
+- [ ] **Responsive design**
+  - Ensure audio player works on mobile
+  - Test layout with/without audio section
+  - Verify audio controls are accessible
+
+### Documentation Tasks
+
+- [ ] **Update API documentation**
+  - Document `/api/mv/stitch-videos` audio parameters
+  - Add code examples with audio overlay
+  - Document audio trimming behavior
+  - Document error handling for missing audio
+
+- [ ] **Update impl-notes.md**
+  - Add v12 implementation section
+  - Document audio trimming flow
+  - Document audio overlay flow
+  - Document frontend integration
+  - Add technical flow diagram
+
+- [ ] **Add inline code comments**
+  - Comment audio trimming logic
+  - Comment audio overlay logic in stitcher
+  - Comment video audio suppression
+
+- [ ] **Update user-facing documentation** (if exists)
+  - How to use audio overlay feature
+  - How audio is trimmed to match video
+  - Limitations and known issues
+
+### Technical Flow Diagram
+
+```
+1. User selects YouTube URL on create page
+2. Frontend calls /api/audio/download → Returns audio_id
+3. User clicks "Quick Job" → Navigates to quick-gen-page with audioId
+4. quick-gen-page displays AudioPlayer with audioId
+5. Scene generation completes → Video clips generated
+6. User triggers stitch → Frontend calls /api/mv/stitch-videos with:
+   - video_ids: [...scene video IDs...]
+   - audio_overlay_id: audioId (from YouTube download)
+   - suppress_video_audio: true
+7. Backend stitch_videos():
+   - Retrieves all video clips
+   - Calculates total video duration
+   - Retrieves audio file by audio_overlay_id
+   - If audio > video: trims audio from start to match video duration
+   - Removes audio from video clips (suppress_video_audio=true)
+   - Overlays trimmed audio on final concatenated video
+   - Returns stitched video with audio overlay
+8. Frontend displays stitched video with background music
+```
+
+---

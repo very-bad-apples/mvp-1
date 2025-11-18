@@ -136,3 +136,32 @@ for the generate_video endpoint refactor the character_reference handling: repla
 - **Response Warning**: Add optional `character_reference_warning` field if UUID not found
 - **Performance**: Eliminates base64 encoding/decoding overhead, reduces request payload
 - **Frontend**: Not implemented yet - frontend doesn't currently send character reference to generate_video
+
+## v12
+
+implement a trim_audio method that will operate on youtube video audio download and accept start/end duration.
+
+for the frontend quick-gen-page add the id of audio file and the audio component that will allow the user to play the clip. do this only if a youtube video's audio has been selected.
+
+on the stitch-videos endpoint add an optional paramater for audio stiching that accepts optional params:
+    - audio_overlay_id: which is an id to audio track downloaded from youtube which will be overlaid to the sitched video output
+    - suppress_video_audio: which will strip the audio from the video clips leaving only the audio_overlay audio in the final video.
+
+thes desired behavior here is to make the target output duration equal to the sum of the video clip duration so clip the audio to make this work.
+
+have the frontend attach those new params to the stitch-video request if a youtube song is selected on the create page.
+
+### Implementation Details (Clarified):
+- **Audio Trimmer Module**: New utility in `services/audio_trimmer.py` with `trim_audio(audio_id, start_time, end_time)` function
+- **Trimming Strategy**: Create new UUID for trimmed audio, preserve original file
+- **Audio Storage**: All audio files in `mv/outputs/audio/{uuid}.mp3` format
+- **Duration Matching**: If audio > video duration, trim audio from start (0 to video_duration)
+- **Video Audio Suppression**: Use `clip.without_audio()` on video clips when `suppress_video_audio=True`
+- **Audio Overlay**: Use `final_clip.set_audio(audio_clip)` from moviepy's `AudioFileClip`
+- **Error Handling**: Audio errors never fail stitching - log warning and continue without audio overlay
+- **Frontend Audio Display**: Reuse AudioPlayer component from create page in quick-gen-page Input Data section
+- **Data Flow**: audioId passed from create page → quick-gen-page via router state/sessionStorage
+- **Conditional Parameters**: Only send `audio_overlay_id` and `suppress_video_audio` to stitch endpoint if audioId exists
+- **Response Fields**: Add `audio_overlay_applied` (bool) and `audio_overlay_warning` (optional string) to StitchVideosResponse
+- **Debug Logging**: Log audio operations when `MV_DEBUG_MODE=true`
+- **Metadata Tracking**: Store trimmed audio metadata in `{uuid}_metadata.json` with source_audio_id, start_time, end_time
