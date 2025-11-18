@@ -33,9 +33,16 @@ variable "iam_user_name" {
 }
 
 variable "cors_allowed_origins" {
-  description = "List of allowed origins for CORS"
+  description = "List of allowed origins for CORS (wildcards not recommended for production)"
   type        = list(string)
-  default     = ["http://localhost:3000", "http://localhost:8000"]
+  default     = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://badapples.vercel.app"
+  ]
+  
+  # Add your production frontend URLs:
+  # Example: ["https://yourdomain.com", "https://www.yourdomain.com", "https://app.yourdomain.com"]
 }
 
 variable "asset_retention_days" {
@@ -170,6 +177,27 @@ variable "database_url" {
 
 variable "redis_url" {
   description = "Redis connection URL"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_access_key_id" {
+  description = "AWS Access Key ID for S3 access (sensitive)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS Secret Access Key for S3 access (sensitive)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "api_key" {
+  description = "API key for authenticating API requests (sensitive)"
   type        = string
   default     = ""
   sensitive   = true

@@ -64,7 +64,27 @@ output "alb_zone_id" {
 
 output "alb_url" {
   description = "Full URL of the Application Load Balancer"
+  value       = var.create_vpc ? (var.enable_https ? "https://${aws_lb.main[0].dns_name}" : "http://${aws_lb.main[0].dns_name}") : "VPC not created"
+}
+
+output "alb_http_url" {
+  description = "HTTP URL of the Application Load Balancer"
   value       = var.create_vpc ? "http://${aws_lb.main[0].dns_name}" : "VPC not created"
+}
+
+output "alb_https_url" {
+  description = "HTTPS URL of the Application Load Balancer (if HTTPS enabled)"
+  value       = var.create_vpc && var.enable_https ? "https://${aws_lb.main[0].dns_name}" : "HTTPS not enabled"
+}
+
+output "https_enabled" {
+  description = "Whether HTTPS is enabled"
+  value       = var.enable_https
+}
+
+output "certificate_arn" {
+  description = "ARN of the ACM certificate (if HTTPS enabled)"
+  value       = var.enable_https ? var.certificate_arn : "HTTPS not enabled"
 }
 
 # Target Group
@@ -130,11 +150,6 @@ output "cloudwatch_log_group" {
   value       = aws_cloudwatch_log_group.ecs.name
 }
 
-output "redis_log_group" {
-  description = "Name of the Redis CloudWatch log group"
-  value       = aws_cloudwatch_log_group.redis.name
-}
-
 # Redis Service
 output "redis_service_name" {
   description = "Name of the Redis ECS service"
@@ -152,7 +167,7 @@ output "redis_endpoint" {
 
 output "deployment_url" {
   description = "URL to access the deployed application"
-  value       = var.create_vpc ? "http://${aws_lb.main[0].dns_name}/health" : "VPC not created"
+  value       = var.create_vpc ? (var.enable_https ? "https://${aws_lb.main[0].dns_name}/health" : "http://${aws_lb.main[0].dns_name}/health") : "VPC not created"
 }
 
 output "github_secrets_config" {
@@ -178,7 +193,7 @@ output "quick_start_commands" {
   description = "Quick start commands for deployment"
   value = <<-EOT
     # Test the deployment
-    curl ${var.create_vpc ? "http://${aws_lb.main[0].dns_name}/health" : "VPC not created"}
+    curl ${var.create_vpc ? (var.enable_https ? "https://${aws_lb.main[0].dns_name}/health" : "http://${aws_lb.main[0].dns_name}/health") : "VPC not created"}
     
     # View logs
     aws logs tail /ecs/${var.ecs_task_family} --follow

@@ -259,7 +259,7 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
-# HTTP Listener
+# HTTP Listener - Forward or Redirect to HTTPS
 resource "aws_lb_listener" "http" {
   count = var.create_vpc ? 1 : 0
 
@@ -268,8 +268,20 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main[0].arn
+    type = var.enable_https && var.redirect_http_to_https ? "redirect" : "forward"
+    
+    # Redirect to HTTPS if enabled
+    dynamic "redirect" {
+      for_each = var.enable_https && var.redirect_http_to_https ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+    
+    # Forward to target group if not redirecting
+    target_group_arn = var.enable_https && var.redirect_http_to_https ? null : aws_lb_target_group.main[0].arn
   }
 }
 
@@ -457,17 +469,6 @@ resource "aws_ecs_cluster" "main" {
 # Redis Service (for job queue and pub/sub)
 # =============================================================================
 
-# CloudWatch Log Group for Redis
-resource "aws_cloudwatch_log_group" "redis" {
-  name              = "/ecs/${var.ecs_task_family}-redis"
-  retention_in_days = var.log_retention_days
-
-  tags = {
-    Name        = "${var.ecs_task_family}-redis-logs"
-    Environment = var.environment
-  }
-}
-
 # Redis Task Definition
 resource "aws_ecs_task_definition" "redis" {
   family                   = "${var.ecs_task_family}-redis"
@@ -503,14 +504,8 @@ resource "aws_ecs_task_definition" "redis" {
         "--appendfsync", "everysec"
       ]
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.redis.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "redis"
-        }
-      }
+      # CloudWatch logging disabled for Redis to reduce costs
+      # Redis logs are not critical for operation
 
       healthCheck = {
         command     = ["CMD-SHELL", "redis-cli ping || exit 1"]
@@ -689,18 +684,82 @@ resource "aws_ecs_task_definition" "main" {
           value = tostring(var.container_port)
         },
         {
+          name  = "API_PORT"
+          value = tostring(var.container_port)
+        },
+        {
+          name  = "API_HOST"
+          value = "0.0.0.0"
+        },
+        {
           name  = "REDIS_URL"
           value = "redis://redis.${var.environment}.local:6379/0"
+        },
+        {
+          name  = "CORS_ORIGINS"
+          value = join(",", var.cors_allowed_origins)
+        },
+        {
+          name  = "SERVE_FROM_CLOUD"
+          value = "true"
+        },
+        {
+          name  = "MOCK_VID_GENS"
+          value = "false"
+        },
+        {
+          name  = "DEBUG"
+          value = "true"
+        },
+        {
+          name  = "MV_DEBUG_MODE"
+          value = "false"
+        },
+        {
+          name  = "DATABASE_URL"
+          value = "sqlite:///./video_generator.db"
         }
       ]
 
-      # Add sensitive environment variables here or use AWS Secrets Manager
-      # secrets = [
-      #   {
-      #     name      = "ANTHROPIC_API_KEY"
-      #     valueFrom = "arn:aws:secretsmanager:region:account:secret:name"
-      #   }
-      # ]
+      # Secrets from AWS Secrets Manager
+      secrets = [
+        {
+          name      = "ANTHROPIC_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ANTHROPIC_API_KEY::"
+        },
+        {
+          name      = "OPENAI_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:OPENAI_API_KEY::"
+        },
+        {
+          name      = "REPLICATE_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:REPLICATE_API_KEY::"
+        },
+        {
+          name      = "REPLICATE_API_TOKEN"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:REPLICATE_API_KEY::"
+        },
+        {
+          name      = "ELEVENLABS_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ELEVENLABS_API_KEY::"
+        },
+        {
+          name      = "GEMINI_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GEMINI_API_KEY::"
+        },
+        {
+          name      = "AWS_ACCESS_KEY_ID"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:AWS_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "AWS_SECRET_ACCESS_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:AWS_SECRET_ACCESS_KEY::"
+        },
+        {
+          name      = "API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:API_KEY::"
+        }
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -711,6 +770,7 @@ resource "aws_ecs_task_definition" "main" {
         }
       }
 
+      # Container health check - gives app time to start before ALB checks
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}/health || exit 1"]
         interval    = 30
