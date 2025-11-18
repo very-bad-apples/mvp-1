@@ -115,6 +115,11 @@ export default function QuickGenPage() {
   // Input data collapse state
   const [isInputDataExpanded, setIsInputDataExpanded] = useState(true)
 
+  // Character reference image state
+  const [characterImageUrl, setCharacterImageUrl] = useState<string | null>(null)
+  const [characterImageLoading, setCharacterImageLoading] = useState(false)
+  const [characterImageError, setCharacterImageError] = useState(false)
+
   // Video stitching state
   const [stitchingStatus, setStitchingStatus] = useState<StitchingStatus>('idle')
   const [stitchedVideo, setStitchedVideo] = useState<StitchedVideo | null>(null)
@@ -143,6 +148,52 @@ export default function QuickGenPage() {
       }
     }
   }, [])
+
+  // Fetch character reference image
+  useEffect(() => {
+    const fetchCharacterImage = async (imageId: string) => {
+      setCharacterImageLoading(true)
+      setCharacterImageError(false)
+
+      try {
+        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`)
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image ${imageId}`)
+        }
+
+        const contentType = response.headers.get('content-type')
+
+        if (contentType?.includes('application/json')) {
+          // Cloud storage mode - get presigned URL from JSON
+          const data = await response.json()
+          setCharacterImageUrl(data.image_url || data.video_url)
+        } else {
+          // Local storage mode - create object URL from blob
+          const blob = await response.blob()
+          const objectUrl = URL.createObjectURL(blob)
+          setCharacterImageUrl(objectUrl)
+        }
+
+        setCharacterImageLoading(false)
+      } catch (error) {
+        console.error('Failed to fetch character image:', error)
+        setCharacterImageError(true)
+        setCharacterImageLoading(false)
+      }
+    }
+
+    if (jobData.characterReferenceImageId) {
+      fetchCharacterImage(jobData.characterReferenceImageId)
+    }
+
+    // Cleanup function to revoke object URLs
+    return () => {
+      if (characterImageUrl && characterImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(characterImageUrl)
+      }
+    }
+  }, [jobData.characterReferenceImageId])
 
   // Initialize placeholder cards and start scene generation
   useEffect(() => {
@@ -715,12 +766,37 @@ export default function QuickGenPage() {
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-400">
-                        Character Reference Image ID
+                        Character Reference Image
                       </label>
                       <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
-                        <p className="text-white text-sm font-mono">
-                          {jobData.characterReferenceImageId || <span className="text-gray-500 italic">Empty</span>}
-                        </p>
+                        {!jobData.characterReferenceImageId && (
+                          <p className="text-gray-500 italic text-sm">No image selected</p>
+                        )}
+
+                        {jobData.characterReferenceImageId && characterImageLoading && (
+                          <div className="flex items-center justify-center aspect-square max-w-[200px] bg-gray-800 rounded-lg">
+                            <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
+                          </div>
+                        )}
+
+                        {jobData.characterReferenceImageId && characterImageError && (
+                          <div className="flex flex-col items-center justify-center aspect-square max-w-[200px] bg-gray-800 rounded-lg p-4">
+                            <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
+                            <p className="text-xs text-red-300 text-center">Failed to load image</p>
+                            <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.characterReferenceImageId}</p>
+                          </div>
+                        )}
+
+                        {jobData.characterReferenceImageId && characterImageUrl && !characterImageLoading && !characterImageError && (
+                          <div className="space-y-2">
+                            <img
+                              src={characterImageUrl}
+                              alt="Character reference"
+                              className="max-w-[200px] rounded-lg border border-gray-600"
+                            />
+                            <p className="text-xs text-gray-500 font-mono">ID: {jobData.characterReferenceImageId}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

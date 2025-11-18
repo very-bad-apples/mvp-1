@@ -774,3 +774,49 @@ Optimized character reference image delivery by removing base64 encoding from AP
 5. **Image Preload Hints** - Add `<link rel="preload">` for faster loading
 
 ---
+
+## Quick Gen Page - Character Image Display Enhancement
+
+### Implementation Summary
+
+Updated the `/quick-gen-page` Input Data section to display the actual character reference image instead of just the image ID.
+
+### Key Changes
+
+#### Frontend (`/frontend/src/app/quick-gen-page/page.tsx`)
+
+1. **New State Variables** (lines 118-121):
+   ```typescript
+   const [characterImageUrl, setCharacterImageUrl] = useState<string | null>(null)
+   const [characterImageLoading, setCharacterImageLoading] = useState(false)
+   const [characterImageError, setCharacterImageError] = useState(false)
+   ```
+
+2. **Image Fetching Logic** (lines 152-196):
+   - Reuses the same fetch pattern from `/create` page (v10 implementation)
+   - Uses `redirect=false` query parameter to handle both storage modes
+   - Cloud storage: Returns presigned URL via JSON
+   - Local storage: Creates blob URL from response
+   - Includes proper cleanup for blob URLs
+
+3. **Enhanced UI** (lines 767-801):
+   - Displays loading spinner while image loads
+   - Shows error state if image fails to load
+   - Displays actual image (max-width: 200px) when loaded
+   - Includes image ID below for reference
+   - Fallback message for no image selected
+
+### Benefits
+
+1. **Better User Experience** - Visual confirmation of selected character
+2. **Consistency** - Uses same image fetching approach as `/create` page
+3. **Dual Storage Support** - Works with both local and cloud storage backends
+4. **Proper Loading States** - Clear feedback during image loading
+
+### Implementation Notes
+
+- Image fetches when `jobData.characterReferenceImageId` changes
+- Blob URLs properly cleaned up on component unmount
+- Same image display pattern can be reused elsewhere in the app
+
+---
