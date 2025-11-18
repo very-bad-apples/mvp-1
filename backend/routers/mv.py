@@ -672,7 +672,8 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             "generate_video_request_received",
             prompt=request.prompt[:100] + "..." if len(request.prompt) > 100 else request.prompt,
             backend=request.backend,
-            has_reference_image=request.reference_image_base64 is not None
+            character_reference_id=request.character_reference_id,
+            has_reference_image_base64=request.reference_image_base64 is not None
         )
 
         # Validate required fields
@@ -698,13 +699,14 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             )
 
         # Generate video
-        video_id, video_path, video_url, metadata = generate_video(
+        video_id, video_path, video_url, metadata, character_reference_warning = generate_video(
             prompt=request.prompt.strip(),
             negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
             aspect_ratio=request.aspect_ratio.strip() if request.aspect_ratio else None,
             duration=request.duration,
             generate_audio=request.generate_audio,
             seed=request.seed,
+            character_reference_id=request.character_reference_id,
             reference_image_base64=request.reference_image_base64,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
@@ -714,7 +716,8 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             video_id=video_id,
             video_path=video_path,
             video_url=video_url,
-            metadata=metadata
+            metadata=metadata,
+            character_reference_warning=character_reference_warning
         )
 
         logger.info(
@@ -722,7 +725,8 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             video_id=video_id,
             video_path=video_path,
             processing_time_seconds=metadata.get("processing_time_seconds"),
-            backend_used=metadata.get("backend_used")
+            backend_used=metadata.get("backend_used"),
+            character_reference_warning=character_reference_warning
         )
 
         return response

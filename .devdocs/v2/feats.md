@@ -118,3 +118,21 @@ on the frontend /quick-gen-page make a large refactor of the page display:
 - **UI/UX**: Fixed aspect ratio placeholders prevent layout shift, parallel loading with individual loading states
 - **Error Handling**: Show error icon/message on failed images, use existing "Regenerate All" button (no individual retry)
 - **Performance**: Reduces response payload from 4-16MB to ~1KB, enables HTTP caching, parallel image loading
+
+## v11
+
+for the generate_video endpoint refactor the character_reference handling: replace the request paramater of expecting base64 and instead expect a uuid of the character_reference which can be converted into to url via /get_character_reference that can be used by replicate service call supply the reference_image to the video generation call to replicate's api.
+
+### Implementation Details (Clarified):
+- **New Parameter**: Add `character_reference_id: Optional[str]` to request model
+- **Backward Compatibility**: Keep `reference_image_base64` parameter (deprecated) for transition period
+- **Priority**: If both UUID and base64 provided, UUID takes precedence with warning log
+- **File Resolution**: Backend resolves UUID to file path: `mv/outputs/character_reference/{uuid}.{ext}`
+- **File Extensions**: Check for `.png`, `.jpg`, `.jpeg`, `.webp` extensions
+- **Replicate Integration**: Pass open file handle to `input_params["reference_images"]`
+- **Error Handling**:
+  - UUID not found: Log warning to stdout, add warning to response metadata, continue without reference (don't fail)
+  - Invalid file path: Raise clear error with UUID and attempted paths
+- **Response Warning**: Add optional `character_reference_warning` field if UUID not found
+- **Performance**: Eliminates base64 encoding/decoding overhead, reduces request payload
+- **Frontend**: Not implemented yet - frontend doesn't currently send character reference to generate_video

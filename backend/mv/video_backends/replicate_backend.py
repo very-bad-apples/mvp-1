@@ -19,6 +19,7 @@ def generate_video_replicate(
     duration: int = 8,
     generate_audio: bool = True,
     seed: Optional[int] = None,
+    character_reference_path: Optional[str] = None,
     reference_image_base64: Optional[str] = None,
     model: str = "google/veo-3.1",
     **kwargs,
@@ -33,7 +34,8 @@ def generate_video_replicate(
         duration: Video duration in seconds
         generate_audio: Whether to generate audio
         seed: Random seed for reproducibility
-        reference_image_base64: Base64 encoded reference image
+        character_reference_path: File path to character reference image (preferred)
+        reference_image_base64: [DEPRECATED] Base64 encoded reference image
         model: Replicate model to use
         **kwargs: Additional parameters for forward compatibility
 
@@ -74,8 +76,18 @@ def generate_video_replicate(
     file_handle = None
 
     try:
-        if reference_image_base64:
-            # Decode base64 image and write to temp file
+        # Prioritize character_reference_path over reference_image_base64
+        if character_reference_path:
+            # Use direct file path (no temp file needed)
+            if not os.path.exists(character_reference_path):
+                raise FileNotFoundError(
+                    f"Character reference image not found at: {character_reference_path}"
+                )
+            file_handle = open(character_reference_path, "rb")
+            input_params["reference_images"] = [file_handle]
+
+        elif reference_image_base64:
+            # Deprecated: Decode base64 image and write to temp file
             image_data = base64.b64decode(reference_image_base64)
             temp_file = tempfile.NamedTemporaryFile(
                 suffix=".png", delete=False
@@ -106,5 +118,6 @@ def generate_video_replicate(
         # Clean up file handles and temp files
         if file_handle:
             file_handle.close()
+        # Only delete temp file if we created one (base64 path)
         if temp_file and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)

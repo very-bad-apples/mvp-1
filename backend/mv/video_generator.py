@@ -48,8 +48,11 @@ class GenerateVideoRequest(BaseModel):
     seed: Optional[int] = Field(
         None, description="Random seed for reproducibility"
     )
+    character_reference_id: Optional[str] = Field(
+        None, description="UUID of character reference image for character consistency"
+    )
     reference_image_base64: Optional[str] = Field(
-        None, description="Base64 encoded reference image for character consistency"
+        None, description="[DEPRECATED] Base64 encoded reference image. Use character_reference_id instead."
     )
     video_rules_template: Optional[str] = Field(
         None, description="Custom template for video generation rules"
@@ -66,6 +69,9 @@ class GenerateVideoResponse(BaseModel):
     video_path: str = Field(..., description="Filesystem path to generated video")
     video_url: str = Field(..., description="URL path to retrieve video")
     metadata: dict = Field(..., description="Generation metadata")
+    character_reference_warning: Optional[str] = Field(
+        None, description="Warning message if character reference UUID was not found"
+    )
 
 
 class VideoGenerationError(BaseModel):
@@ -100,6 +106,37 @@ def load_video_configs() -> None:
             if settings.MV_DEBUG_MODE:
                 from mv.debug import debug_log
                 debug_log("video_configs_loaded", **_video_params_config)
+
+
+def get_character_reference_image(character_reference_id: str) -> tuple[Optional[Path], bool]:
+    """
+    Resolve character reference UUID to file path.
+
+    Args:
+        character_reference_id: UUID of the character reference image
+
+    Returns:
+        Tuple of (file_path, exists) where file_path is Path object or None
+    """
+    base_dir = Path(__file__).parent / "outputs" / "character_reference"
+
+    # Check common image extensions
+    extensions = [".png", ".jpg", ".jpeg", ".webp"]
+
+    for ext in extensions:
+        file_path = base_dir / f"{character_reference_id}{ext}"
+        if file_path.exists():
+            logger.info(f"Found character reference: {file_path}")
+            return file_path, True
+
+    # Log all attempted paths
+    attempted_paths = [str(base_dir / f"{character_reference_id}{ext}") for ext in extensions]
+    logger.warning(
+        f"Character reference UUID '{character_reference_id}' not found. "
+        f"Attempted paths: {attempted_paths}"
+    )
+
+    return None, False
 
 
 def get_default_video_parameters() -> dict:
@@ -138,10 +175,11 @@ def generate_video(
     duration: Optional[int] = None,
     generate_audio: Optional[bool] = None,
     seed: Optional[int] = None,
+    character_reference_id: Optional[str] = None,
     reference_image_base64: Optional[str] = None,
     video_rules_template: Optional[str] = None,
     backend: str = "replicate",
-) -> tuple[str, str, str, dict]:
+) -> tuple[str, str, str, dict, Optional[str]]:
     """
     Generate a single video clip from a text prompt.
 
@@ -152,21 +190,42 @@ def generate_video(
         duration: Video duration in seconds (default from config)
         generate_audio: Whether to generate audio (default from config)
         seed: Random seed for reproducibility
-        reference_image_base64: Base64 encoded reference image
+        character_reference_id: UUID of character reference image (preferred)
+        reference_image_base64: [DEPRECATED] Base64 encoded reference image
         video_rules_template: Custom template for video rules
         backend: Backend to use ('replicate' or 'gemini')
 
     Returns:
-        Tuple of (video_id, video_path, video_url, metadata)
+        Tuple of (video_id, video_path, video_url, metadata, character_reference_warning)
 
     Raises:
         ValueError: If API token is not configured
         Exception: If video generation fails
     """
+    # Handle character reference resolution
+    character_reference_path: Optional[str] = None
+    character_reference_warning: Optional[str] = None
+
+    # Prioritize character_reference_id over reference_image_base64
+    if character_reference_id and reference_image_base64:
+        logger.warning(
+            f"Both character_reference_id and reference_image_base64 provided. "
+            f"Using character_reference_id (UUID: {character_reference_id})"
+        )
+
+    if character_reference_id:
+        file_path, exists = get_character_reference_image(character_reference_id)
+        if exists and file_path:
+            character_reference_path = str(file_path)
+            logger.info(f"Using character reference: {character_reference_path}")
+        else:
+            character_reference_warning = f"Character reference image with UUID '{character_reference_id}' not found"
+            logger.warning(character_reference_warning)
+
     # Check for mock mode first
     if settings.MOCK_VID_GENS:
         from mv.mock_video_generator import generate_mock_video
-        return generate_mock_video(
+        result = generate_mock_video(
             prompt=prompt,
             negative_prompt=negative_prompt,
             aspect_ratio=aspect_ratio,
@@ -176,6 +235,8 @@ def generate_video(
             reference_image_base64=reference_image_base64,
             video_rules_template=video_rules_template,
         )
+        # Append warning to result
+        return (*result, character_reference_warning)
 
     from mv.video_backends import get_video_backend
 
@@ -189,7 +250,9 @@ def generate_video(
             "duration": duration,
             "generate_audio": generate_audio,
             "seed": seed,
-            "has_reference_image": reference_image_base64 is not None,
+            "character_reference_id": character_reference_id,
+            "character_reference_path": character_reference_path,
+            "has_reference_image_base64": reference_image_base64 is not None,
             "video_rules_template": video_rules_template,
             "backend": backend,
         })
@@ -245,6 +308,7 @@ def generate_video(
         duration=duration,
         generate_audio=generate_audio,
         seed=seed,
+        character_reference_path=character_reference_path,
         reference_image_base64=reference_image_base64,
         model=model,
     )
@@ -292,6 +356,16 @@ def generate_video(
         metadata["parameters_used"]["negative_prompt"] = negative_prompt
     if seed is not None:
         metadata["parameters_used"]["seed"] = seed
+
+    # Store character reference ID if provided
+    if character_reference_id:
+        metadata["character_reference_id"] = character_reference_id
+        if character_reference_path:
+            metadata["character_reference_path"] = character_reference_path
+        if character_reference_warning:
+            metadata["character_reference_warning"] = character_reference_warning
+
+    # Handle deprecated base64 reference image (backward compatibility)
     if reference_image_base64:
         metadata["has_reference_image"] = True
         # Save reference image if provided
@@ -306,7 +380,7 @@ def generate_video(
             missing_padding = len(image_data) % 4
             if missing_padding:
                 image_data += '=' * (4 - missing_padding)
-            
+
             ref_image_data = base64.b64decode(image_data)
             ref_image_path = job_dir / "reference_image.jpg"
             with open(ref_image_path, "wb") as f:
@@ -389,6 +463,8 @@ def generate_video(
             "video_path": str(video_path),
             "processing_time_seconds": metadata["processing_time_seconds"],
             "file_size_bytes": os.path.getsize(video_path),
+            "character_reference_id": character_reference_id,
+            "character_reference_path": character_reference_path,
         })
 
-    return video_id, str(video_path), video_url, metadata
+    return video_id, str(video_path), video_url, metadata, character_reference_warning

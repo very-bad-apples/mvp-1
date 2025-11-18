@@ -48,1053 +48,628 @@ Enable batch generation of 1-4 character reference images from a single prompt, 
 ### Frontend Tasks
 
 - [x] **Update API client**
-  - Modify character reference generation request to include `num_images` parameter
-  - Update response type to handle list of images
+  - Handle batch image response (array instead of single image)
+  - Store all image IDs for user selection
 
-- [x] **Create image selection UI**
-  - Display 4 images in a grid layout (2x2 or horizontal)
-  - Each image should be clearly visible and comparable
+- [x] **Create multi-image display component**
+  - Display 4 images in grid layout (2x2 or 1x4)
+  - Support selecting one image
   - Add selection indicator (border, checkmark, etc.)
 
-- [x] **Implement single-select logic**
+- [x] **Update character reference selection logic**
   - Allow only one image to be selected at a time
-  - Clear previous selection when new image is clicked
-  - Highlight selected image
+  - Store selected image ID for next step
+  - Update "Generate Videos" button to use selected ID
 
-- [x] **Add proceed button/action**
-  - Enable "Continue" or "Select" button only when an image is selected
-  - Pass selected image ID to next step (video generation)
+- [x] **Update UI/UX**
+  - Loading state for all 4 images
+  - Individual loading indicators per image
+  - Error state if generation fails
+  - Placeholder UI before images load
 
-- [x] **Handle loading state**
-  - Show loading indicator while generating 4 images
-  - Consider progressive loading if images return at different times
+- [x] **Update form validation**
+  - Require at least one image selected to proceed
+  - Disable "Generate Videos" if no selection
+  - Show error message if user tries to proceed without selection
+
+---
+
+## v2 - Quick Job Button and Page
+
+### Summary
+Add "Quick Job" button to /create page that routes to /quick-gen-page and displays input data without validation.
+
+### Frontend Tasks
+
+- [x] **Add Quick Job button to /create page**
+  - Position below "Generate Videos" button
+  - No validation logic required (button always enabled)
+  - Route to `/quick-gen-page`
+
+- [x] **Create /quick-gen-page route and component**
+  - Create `src/app/quick-gen-page/page.tsx`
+  - Use similar layout/styling as `/result/job_[id]` page
+
+- [x] **Pass data from /create to /quick-gen-page**
+  - Use Next.js router state or sessionStorage
+  - Pass: video description, character & style, character reference image ID
+
+- [x] **Display input data on /quick-gen-page**
+  - Create card component to display data
+  - Show "video description" field
+  - Show "character and style" field
+  - Show "character reference image ID" field
+
+- [x] **Basic styling**
+  - Match overall theme of existing pages
+  - Card layout for input data display
+  - Placeholder for future sections
+
+---
+
+## v3 - Scene Generation on Quick Gen Page
+
+### Summary
+Kick off `/api/mv/create_scenes` call on page load and display scenes in cards with progress bar.
+
+### Frontend Tasks
+
+- [x] **Implement scene generation trigger**
+  - Auto-trigger on page load when data is available
+  - Call `/api/mv/create_scenes` with idea and character_description
+  - Handle loading state
+
+- [x] **Add progress/loading UI**
+  - Progress bar similar to `/result/job_[id]` page
+  - Expected time: 10-30 seconds
+  - Loading message
+
+- [x] **Display scene cards when response arrives**
+  - Parse scenes array from response
+  - Create card component for each scene
+  - Display scene data (description, negative_description, etc.)
 
 - [x] **Error handling**
-  - Handle partial failures (e.g., 3 of 4 images generated)
-  - Display error message if all generations fail
-
-- [x] **Update video generation flow**
-  - Accept selected image ID from previous step
-  - Fetch image data by ID for reference_image_base64 parameter
-  - Or pass image ID directly if video endpoint supports it
-
-### Documentation Tasks
-
-- [ ] **Update API documentation**
-  - Document new `num_images` parameter
-  - Document new response structure
-  - Add examples for batch generation
-
-- [ ] **Update client implementation notes**
-  - Document selection flow for frontend developers
-  - Explain how to pass selected image to video generation
-
-- [ ] **Update impl-notes.md**
-  - Document UUID storage change
-  - Document batch generation architecture decisions
-  - Note any limitations (Replicate API constraints, etc.)
-
----
-
-## v2 - Quick Job Button & Data Display Page
-
-### Summary
-Add a "Quick Job" button to the create page that navigates to a new `/quick-gen-page` route, passing form data via URL state and displaying it in a card.
-
-### Frontend Tasks
-
-- [ ] **Add "Quick Job" button to create page**
-  - Add button below "Generate videos" button
-  - Match styling of "Generate videos" button
-  - No validation logic required (always enabled)
-  - On click: navigate to `/quick-gen-page` with form data
-
-- [ ] **Implement data passing via URL state**
-  - Use Next.js `router.push` with state object
-  - Pass: `videoDescription`, `characterDescription`, `selectedImageId`
-  - Handle case where state is empty/undefined
-
-- [ ] **Create /quick-gen-page route**
-  - Create `frontend/src/app/quick-gen-page/page.tsx`
-  - Match layout/styling of `/result/[id]/page.tsx`:
-    - Dark gradient background
-    - Nav bar with logo and "Back to Create" button
-    - Centered content with max-w-4xl
-
-- [ ] **Create input data display card**
-  - Display card at top of page with form data:
-    - "Video Description" field
-    - "Character and Style" field (characterDescription)
-    - "Character Reference Image ID" field
-  - Show empty/placeholder if data not provided
-  - Use Card component with gray-800/50 background styling
-
-- [ ] **Handle missing state gracefully**
-  - If no state passed (direct URL access), show empty values
-  - Consider redirect to `/create` if state is missing (optional)
-
-### Testing Tasks
-
-- [ ] **Manual testing**
-  - Test navigation from create page to quick-gen-page
-  - Verify data displays correctly in card
-  - Test with missing/empty fields
-  - Test direct URL access (no state)
-  - Test "Back to Create" navigation
-
----
-
-## v3 - Scene Generation API Integration
-
-### Summary
-Integrate `/api/mv/create_scenes` API call on `/quick-gen-page`, showing simulated progress bar during request and displaying generated scenes in cards.
-
-### Frontend Tasks
-
-- [ ] **Add API call on page load**
-  - Call `/api/mv/create_scenes` immediately when page mounts
-  - Request body: `{ "idea": videoDescription, "character_description": characterDescription }`
-  - Only call if both fields are non-empty
-  - Handle case where data is missing (skip API call)
-
-- [ ] **Implement simulated progress bar**
-  - Show progress bar during API call (10-30 second expected duration)
-  - Simulate progress from 0% to ~90% over time
-  - Jump to 100% when response arrives
-  - Use same Progress component as `/result/[id]/page.tsx`
-  - Show "Generating scenes..." status message
-
-- [ ] **Display scenes in cards**
-  - Parse response: `response.scenes` array
-  - Each scene contains: `description` and `negative_description`
-  - Create card for each scene with:
-    - Scene number/title
-    - Description text
-    - Negative description text (clearly labeled)
-  - Use same Card styling as existing cards (gray-800/50, border-gray-700)
-
-- [ ] **Handle loading states**
-  - Show progress bar card while loading
-  - Replace with scene cards when complete
-  - Show status indicators (pending → processing → completed)
-
-- [ ] **Error handling**
-  - Display error message in card area if API fails
-  - Show error details (network error, server error, etc.)
-  - Use Alert component with destructive variant
-  - Allow retry or navigation back to create page
-
-- [ ] **Update state management**
-  - Track: isLoading, progress, scenes array, error state
-  - Clear progress simulation interval on response/error
-
-### Testing Tasks
-
-- [ ] **Manual testing**
-  - Test API call triggers on page load
-  - Verify progress bar animates during wait
-  - Check scene cards display correctly with both fields
-  - Test error scenarios (backend down, invalid data)
-  - Test with missing input data (no API call)
+  - Handle API errors
+  - Display error message if scene generation fails
+  - Retry option
 
 ---
 
 ## v4 - Video Generation from Scenes
 
 ### Summary
-After scenes are generated, automatically trigger parallel video generation for each scene via `/api/mv/generate_video`. Display videos in individual cards with loading states and an overall status summary bar.
+Generate videos for each scene and display in individual cards with loading states.
 
 ### Frontend Tasks
 
-- [ ] **Trigger video generation after scenes complete**
-  - After scenes array is populated, automatically start video generation
-  - One API call per scene, all in parallel
-  - Request body per scene:
-    - `prompt`: scene.description
-    - `negative_prompt`: scene.negative_description
-  - Omit all other parameters (reference_image_base64, etc.)
-  - NOTE: Character reference image integration deferred (document as limitation)
+- [x] **Trigger video generation when scenes arrive**
+  - One `/api/mv/generate_video` call per scene
+  - Map scene fields: `description → prompt`, `negative_description → negative_prompt`
+  - Generate videos in parallel
 
-- [ ] **Create video cards immediately**
-  - Create placeholder cards for each video before generation starts
-  - Show loading state per card (spinner, "Generating video...")
-  - Display scene number in card header
-  - Use configurable expected load time (default: 7 seconds)
+- [x] **Create video card placeholders immediately**
+  - Show loading state for each video
+  - Display alongside or within scene cards
 
-- [ ] **Handle individual video responses**
-  - Track state per video: loading | completed | error
-  - On success: store video_id and video_url from response
-  - On error: store error message for that specific card
-  - Update card state as each response arrives
+- [x] **Fetch and display videos as they complete**
+  - Call `/api/mv/get_video` with UUID/video_url
+  - Update card from loading to video player
+  - Handle individual video failures
 
-- [ ] **Display videos in cards**
-  - Replace loading state with video player when ready
-  - Video controls: enabled, sound enabled, no autoplay
-  - Show video metadata (video_id, etc.)
-  - Use video URL from response (or fetch via `/api/mv/get_video/{id}`)
+- [x] **Loading states per video**
+  - Spinner/progress indicator
+  - Expected time display (can be 2-7 minutes)
+  - Video title or scene number
 
-- [ ] **Implement overall status summary bar**
-  - Show at top of videos section
-  - Display counts: "X loading / Y succeeded / Z failed"
-  - Update in real-time as videos complete
-  - Use Badge components for status colors:
-    - Blue: loading
-    - Green: succeeded
-    - Red: failed
-
-- [ ] **Error handling per card**
-  - Display error message within the specific video card
-  - Show which scene number failed
-  - Keep other videos unaffected
-  - Use Alert component within card
-
-- [ ] **State management**
-  - Track array of video states (one per scene)
-  - Each entry: { sceneIndex, status, videoId?, videoUrl?, error? }
-  - Calculate summary stats from this array
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document character reference image limitation
-  - Note that reference_image_base64 is not passed to generate_video
-  - Document parallel generation approach
-  - Document expected load time configuration
-
-### Testing Tasks
-
-- [ ] **Manual testing**
-  - Verify video generation triggers after scenes complete
-  - Check all videos generate in parallel
-  - Test loading states display correctly
-  - Verify videos play with controls and sound
-  - Test error scenarios (some videos fail, all fail)
-  - Check status summary bar updates correctly
-  - Test with mock mode enabled (MOCK_VID_GENS=true)
+- [x] **Error handling**
+  - Individual error states per video
+  - Don't block other videos if one fails
+  - Retry option per video
 
 ---
 
-## v5 - Dual Storage Backend Support (Local/S3)
+## v5 - Dual Storage Backend Support
 
 ### Summary
-Enable the quick-gen-page frontend to seamlessly handle video URLs from both local filesystem (relative paths) and S3 cloud storage (presigned URLs) without backend changes. The frontend should automatically detect the URL type and handle appropriately.
+Fix `/quick-gen-page` to work with both local filesystem and S3 cloud storage backends.
+
+### Backend Tasks
+
+- [x] **Verify SERVE_FROM_CLOUD environment variable**
+  - Check behavior when `SERVE_FROM_CLOUD=true`
+  - Check behavior when `SERVE_FROM_CLOUD=false`
+  - Document the difference in video_url format
+
+- [x] **Document get_video redirect parameter**
+  - `redirect=false` returns JSON with presigned URL (cloud) or file URL (local)
+  - `redirect=true` returns actual video file
+  - Update API docs
 
 ### Frontend Tasks
 
-- [ ] **Update video URL handling logic**
-  - Detect if `video_url` from `generate_video` response is absolute (starts with `http`)
-  - If absolute URL (S3 presigned): use directly as video src
-  - If relative URL (local): prepend `API_URL` as before
-  - Update `generateSingleVideo()` function in `/quick-gen-page/page.tsx`
+- [x] **Update video URL resolution logic**
+  - Check if video_url is absolute URL (S3 presigned) or relative path (local API)
+  - Handle both formats seamlessly
+  - Add helper function to resolve video URLs
 
-- [ ] **Add helper function for URL resolution**
-  - Create `resolveVideoUrl(videoUrl: string)` function
-  - Returns absolute URL ready for use in video player
-  - Handles both S3 presigned URLs and local backend paths
+- [x] **Use redirect=false for video fetching** (if needed)
+  - Fetch video metadata before displaying
+  - Extract presigned URL from JSON response
+  - Use URL in video element src
 
-- [ ] **Update video player src assignment**
-  - Use resolved URL in video card component
-  - Ensure video element can load from both sources
-
-### Testing Tasks
-
-- [ ] **Test with SERVE_FROM_CLOUD=true (S3 mode)**
-  - Verify video URLs are S3 presigned URLs (start with https://)
-  - Confirm videos load and play correctly from S3
-  - Check that no API_URL is incorrectly prepended
-
-- [ ] **Test with SERVE_FROM_CLOUD=false (local mode)**
-  - Verify video URLs are relative paths (/api/mv/get_video/{uuid})
-  - Confirm API_URL is prepended correctly
-  - Check videos load from local backend
-
-- [ ] **Edge case testing**
-  - Test switching between modes (requires backend restart)
-  - Verify mixed responses don't cause issues
-  - Check error handling for both storage backends
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document dual storage backend detection logic
-  - Note that frontend auto-detects based on URL format
-  - Document the URL resolution approach
+- [x] **Test both storage modes**
+  - Test with local filesystem storage
+  - Test with S3 cloud storage
+  - Verify video playback in both modes
 
 ---
 
 ## v6 - Video Stitching Endpoint
 
 ### Summary
-Implement `/api/mv/stitch-videos` endpoint that merges multiple video clips into a single video using MoviePy. Support both local filesystem and S3 storage backends based on SERVE_FROM_CLOUD setting. Include debug logging when MV_DEBUG_MODE is enabled.
+Implement `/api/mv/stitch-videos` endpoint to merge multiple video clips into one.
 
 ### Backend Tasks
 
-- [ ] **Add MoviePy dependency**
-  - Add `moviepy` to requirements.txt
-  - Verify installation with `uv pip install moviepy`
+- [x] **Create /api/mv/stitch-videos endpoint**
+  - Accept list of video IDs in request body
+  - Implement merge functionality (reference: `.ref-pipeline/src/main.py:merge_videos`)
 
-- [ ] **Create video stitching module**
-  - Create `backend/mv/video_stitcher.py`
-  - Implement `stitch_videos(video_ids: list[str]) -> tuple[str, str, str, dict]`
-  - Return format: (video_id, video_path, video_url, metadata)
-  - Handle both local and S3 storage modes
+- [x] **Implement video merging logic**
+  - Fetch videos by IDs
+  - Concatenate videos in order
+  - Return stitched video with new UUID
 
-- [ ] **Implement video file retrieval**
-  - For SERVE_FROM_CLOUD=false: read from local filesystem
-  - For SERVE_FROM_CLOUD=true: download from S3 to temp directory
-  - Validate all video IDs exist before processing
-  - Fail entire operation if any video is missing
+- [x] **Handle storage backend logic**
+  - Save to local filesystem if `SERVE_FROM_CLOUD=false`
+  - Upload to S3 if `SERVE_FROM_CLOUD=true`
+  - Return appropriate video_url based on storage mode
 
-- [ ] **Implement video merging logic**
-  - Use MoviePy's `VideoFileClip` and `concatenate_videoclips`
-  - Configure codec (libx264) and audio codec (aac)
-  - Generate new UUID for merged video
-  - Save to appropriate location based on SERVE_FROM_CLOUD
-
-- [ ] **Implement storage backend logic**
-  - SERVE_FROM_CLOUD=false: save to local filesystem
-  - SERVE_FROM_CLOUD=true: upload merged video to S3
-  - Return appropriate video_url (relative path vs S3 presigned URL)
-
-- [ ] **Create request/response models**
-  - Request: `StitchVideosRequest` with `video_ids: list[str]`
-  - Response: `StitchVideosResponse` similar to `GenerateVideoResponse`
-  - Include metadata: input video IDs, processing time, storage backend
-
-- [ ] **Add endpoint to router**
-  - POST `/api/mv/stitch-videos`
-  - Validate video IDs format (UUID)
-  - Call stitch_videos function
-  - Return response with video_id, video_url, metadata
-
-- [ ] **Add debug logging**
+- [x] **Add debug logging**
   - Log when MV_DEBUG_MODE is enabled
-  - Log: video IDs received, storage mode, temp file locations
-  - Log: merging start/end, upload progress, final URL
-  - Add debug functions to `backend/mv/debug.py`
+  - Log stitch operation details (num videos, IDs, output size)
 
-- [ ] **Error handling**
-  - Return 400 if empty video_ids list
-  - Return 404 if any video ID not found
-  - Return 500 for MoviePy processing errors
-  - Clean up temp files on error
-
-- [ ] **Cleanup temporary files**
-  - Remove downloaded S3 files after merging
-  - Remove intermediate files from MoviePy processing
-
-### Testing Tasks
-
-- [ ] **Manual testing with SERVE_FROM_CLOUD=false**
-  - Test with 2-3 local video files
-  - Verify merged video plays correctly
-  - Check metadata contains input video IDs
-
-- [ ] **Manual testing with SERVE_FROM_CLOUD=true**
-  - Test with videos stored in S3
-  - Verify S3 download and re-upload works
-  - Check presigned URL returned for merged video
-
-- [ ] **Error case testing**
-  - Test with non-existent video ID
-  - Test with empty video_ids list
-  - Test with single video (edge case)
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document video stitching implementation
-  - Note MoviePy usage and codecs
-  - Document storage backend handling
-  - Note temporary file management
+- [x] **Error handling**
+  - Handle missing video IDs
+  - Handle merge failures
+  - Return meaningful error messages
 
 ---
 
-## v7 - Automatic Video Stitching Integration
+## v7 - Frontend Video Stitching Integration
 
 ### Summary
-Automatically trigger video stitching when all individual scene clips finish generating. Display a loading indicator with estimated completion time (5 seconds per video), then show the final stitched video in a special "Full Video" card below the individual clips. Include error handling with retry capability and user-friendly error messages.
+Call `/api/mv/stitch-videos` when all scene clips finish and display result.
 
 ### Frontend Tasks
 
-- [ ] **Detect when all scene videos complete**
-  - Monitor video generation state array
-  - Trigger stitching when all videos have status: 'completed'
-  - Only trigger if at least one video succeeded (skip if all failed)
-  - Ensure stitching only triggers once (use flag or status check)
+- [x] **Detect when all videos are complete**
+  - Track status of all video generation tasks
+  - Trigger stitch when all succeeded (or some failed)
 
-- [ ] **Prepare video IDs for stitching**
-  - Collect all successfully generated video IDs in sequential order
-  - Filter out any failed videos from the stitching list
-  - Maintain original scene order for stitching
+- [x] **Call /api/mv/stitch-videos endpoint**
+  - Pass array of successful video IDs in order
+  - Handle loading state during stitching
+  - Expected time: ~5 seconds per video
 
-- [ ] **Call /api/mv/stitch-videos endpoint**
-  - POST request with body: `{ "video_ids": [...] }`
-  - Pass array of video IDs in sequential order
-  - Handle response with video_id, video_url, metadata
+- [x] **Display stitched video**
+  - Create "Full Video" section below individual clips
+  - Show video player when stitching completes
+  - Display metadata (duration, num clips, etc.)
 
-- [ ] **Create "Full Video" card section**
-  - Display below individual scene video cards
-  - Card title: "Full Video"
-  - Section header to visually separate from individual clips
-  - Use same card styling as other cards (gray-800/50, border-gray-700)
+- [x] **Loading state**
+  - Progress indicator during stitching
+  - Estimated time display
+  - Message: "Stitching X videos together..."
 
-- [ ] **Implement stitching loading state**
-  - Show loading indicator in Full Video card while stitching
-  - Display progress message: "Stitching videos..."
-  - Show estimated time: "Estimated time: X seconds" (5 seconds × number of videos)
-  - Use Progress component or loading spinner
-  - Update timer/progress as time elapses
-
-- [ ] **Display stitched video on success**
-  - Replace loading state with video player
-  - Use resolved video URL (handle both local and S3 URLs like individual videos)
-  - Video controls: enabled, sound enabled, no autoplay
-  - Display metadata below video:
-    - Number of clips stitched
-    - Total duration (if available in metadata)
-    - Stitched video ID
-
-- [ ] **Error handling for stitching failures**
-  - Catch API errors from stitch-videos endpoint
-  - Display user-friendly error message in Full Video card:
-    - "Failed to stitch videos. Please try again."
-    - Show specific error if available (e.g., "Video not found")
-  - Add "Retry Stitching" button
-  - Allow user to retry without regenerating individual videos
-  - Use Alert component with destructive variant for errors
-
-- [ ] **Implement retry functionality**
-  - "Retry Stitching" button clears error state
-  - Re-triggers stitch-videos API call with same video IDs
-  - Returns to loading state
-  - Limit retries or allow unlimited attempts (TBD based on preference)
-
-- [ ] **State management for stitching**
-  - Add state variables:
-    - `stitchingStatus`: 'idle' | 'loading' | 'completed' | 'error'
-    - `stitchedVideo`: { videoId, videoUrl, metadata }
-    - `stitchingError`: error message string
-    - `estimatedStitchTime`: calculated based on video count
-  - Track whether stitching has been triggered to prevent duplicates
-
-- [ ] **Handle edge cases**
-  - No videos generated successfully (don't show Full Video card)
-  - Only 1 video generated (still stitch for consistency, or skip?)
-  - Partial video failures (stitch only successful ones)
-
-### Testing Tasks
-
-- [ ] **Manual testing - Happy path**
-  - Generate multiple scene videos (2-4 clips)
-  - Verify stitching triggers automatically when all complete
-  - Check loading indicator shows correct estimated time
-  - Confirm stitched video plays correctly
-  - Verify individual clips remain visible above stitched video
-
-- [ ] **Manual testing - Error scenarios**
-  - Simulate backend stitching failure (backend down, invalid IDs)
-  - Verify user-friendly error message displays
-  - Test retry button functionality
-  - Confirm retry works after fixing backend issue
-
-- [ ] **Manual testing - Edge cases**
-  - Test with single generated video
-  - Test when some individual videos fail (partial success)
-  - Test with both storage modes (SERVE_FROM_CLOUD=true/false)
-  - Verify stitched video URL resolution works for both modes
-
-- [ ] **Manual testing - State management**
-  - Verify stitching only triggers once
-  - Check that page refresh doesn't re-trigger stitching
-  - Test loading state displays correctly during processing
-  - Verify state transitions (idle → loading → completed/error)
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document automatic stitching trigger logic
-  - Note estimated time calculation (5 seconds per video)
-  - Document error handling and retry mechanism
-  - Note edge case handling (partial failures, single video, etc.)
-  - Document Full Video card placement and styling
+- [x] **Error handling**
+  - Handle stitch failures
+  - Retry option
+  - Fallback: still show individual clips
 
 ---
 
-## v8 - Music Video Mode UX Improvements
+## v8 - Create Page Form Improvements
 
 ### Summary
-Improve the /create page UX for music video mode by defaulting to "music video" mode, hiding product image upload for music videos, making Character & Style section always visible, and defaulting "use AI generation" to ON while making character generation optional.
+Update /create page to default to "Music Video" mode with appropriate field visibility.
 
 ### Frontend Tasks
 
-- [ ] **Change default generation mode**
-  - Update initial state of `mode` from 'ad-creative' to 'music-video'
-  - This makes music video the default selected mode on page load
+- [x] **Update generation mode toggle default**
+  - Set default to "music video" instead of product video
+  - Update initial state
 
-- [ ] **Make Character & Style section always visible in music-video mode**
-  - Remove conditional rendering based on `useAICharacter` for music-video mode
-  - Character & Style section should always be visible when mode === 'music-video'
-  - Keep toggle behavior (user can still toggle AI generation on/off)
-  - For ad-creative mode, keep existing behavior (only show when toggle is on)
+- [x] **Update field visibility for music video mode**
+  - Hide product image upload field
+  - Show character & style input by default
+  - Default "use AI generation" to toggled ON
 
-- [ ] **Set "use AI generation" default based on mode**
-  - When mode changes to 'music-video', set `useAICharacter` to true
-  - When mode changes to 'ad-creative', set `useAICharacter` to false (existing default)
-  - Allow user to toggle on/off regardless of mode
+- [x] **Update validation logic**
+  - Don't require product image for music video mode
+  - Enable "Generate Videos" button without product image in music video mode
 
-- [ ] **Hide product image upload in music-video mode**
-  - Product image upload section should not render when mode === 'music-video'
-  - Only show music source (audio upload/YouTube) in music-video mode
-  - Keep product image upload visible in ad-creative mode
-
-- [ ] **Update validation logic for music-video mode**
-  - Remove character image selection requirement from validation for music-video mode
-  - Character generation/selection remains optional in music-video mode
-  - Keep character image selection required for ad-creative mode (if AI toggle is on)
-  - Update `isFormValid()` function to handle mode-specific requirements
-
-- [ ] **Update validation messages**
-  - Remove "Please generate and select a character image" messages for music-video mode
-  - Keep character image selection messages for ad-creative mode
-  - Ensure validation messages accurately reflect optional vs required fields per mode
-
-- [ ] **Update character section label/description**
-  - Consider updating label or adding description to clarify:
-    - In music-video mode: "Character & Style (Optional)"
-    - In ad-creative mode: Keep current behavior
-
-- [ ] **Handle mode switching edge cases**
-  - When switching from ad-creative to music-video:
-    - Set `useAICharacter` to true
-    - Keep existing character description/images if present
-  - When switching from music-video to ad-creative:
-    - Set `useAICharacter` to false
-    - Keep existing character description/images if present (user can toggle back on)
-
-### Testing Tasks
-
-- [ ] **Test default mode selection**
-  - Verify page loads with "music video" mode selected
-  - Verify Character & Style section is visible by default
-  - Verify "use AI generation" toggle is ON by default
-
-- [ ] **Test music-video mode behavior**
-  - Verify product image upload is NOT visible
-  - Verify music source (upload/YouTube) IS visible
-  - Verify Character & Style section is always visible (regardless of toggle)
-  - Verify form can be submitted without character images
-  - Verify form can be submitted with character images (if user generates them)
-
-- [ ] **Test ad-creative mode behavior**
-  - Switch to ad-creative mode
-  - Verify product image upload IS visible
-  - Verify Character & Style section is hidden by default
-  - Verify toggling "use AI generation" shows/hides Character & Style section
-  - Verify character image selection IS required when toggle is on
-
-- [ ] **Test mode switching**
-  - Test switching from music-video to ad-creative
-  - Test switching from ad-creative to music-video
-  - Verify toggle states update correctly
-  - Verify validation messages update correctly
-  - Verify form validity updates correctly
-
-- [ ] **Test Quick Job button**
-  - Verify Quick Job works without character images in music-video mode
-  - Verify Quick Job works with character images in music-video mode
-  - Verify existing ad-creative Quick Job behavior still works
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document music-video mode as default
-  - Document optional vs required character generation per mode
-  - Note UX improvements for music video workflow
+- [x] **Test mode switching**
+  - Verify switching between modes works correctly
+  - Verify field visibility changes
+  - Verify validation changes
 
 ---
 
-## v9 - Quick Gen Page Visual Refactor & Interactive Controls
+## v9 - Quick Gen Page UI Refactor
 
 ### Summary
-Major UX overhaul of `/quick-gen-page` to combine scene prompts and video clips into unified cards with side-by-side layout (desktop) or vertical (mobile). Add interactive controls for editing/regenerating prompts and videos. Enhance loading animations with contextual snippets. Implement teletype effect for scene prompts. Auto-collapse input data section and auto-scroll to final stitched video.
+Major refactor of /quick-gen-page to combine scene and video cards, improve loading animations, and add editing/regeneration controls.
 
-### Frontend Tasks - Card Layout Refactor
+### Frontend Tasks
 
-- [ ] **Design combined scene/clip card component**
-  - Create new component: `SceneVideoCard` (or similar name)
-  - Desktop layout: Split card horizontally (scene left, video right)
-  - Mobile layout: Stack vertically (scene top, video bottom)
-  - Use responsive Tailwind classes (flex-col md:flex-row)
-  - Match existing card styling (gray-800/50, border-gray-700)
-  - Card header shows scene number/title
+#### Layout Refactor
 
-- [ ] **Implement scene prompt section (left/top)**
-  - Display scene description prominently (larger text, clear hierarchy)
-  - Add collapsible section for negative description (default: collapsed)
-  - Use Accordion or Collapsible component for negative description
-  - Label clearly: "Negative Prompt" or similar
-  - Add visual emphasis to description (primary content)
-  - Make description area scrollable if content is long
+- [x] **Combine scene and video cards**
+  - Single card per scene with two sections: scene prompt (left/top) and video clip (right/bottom)
+  - Responsive layout: side-by-side on desktop (50/50 split), stacked on mobile (scene top, video bottom)
+  - Use Tailwind: `flex-col md:flex-row`
 
-- [ ] **Implement video clip section (right/bottom)**
-  - Display video player in right half (desktop) or bottom (mobile)
-  - Maintain aspect ratio (16:9 or as appropriate)
-  - Video controls: enabled, sound enabled, no autoplay
-  - Loading state placeholder when video is generating
-  - Error state display within video section
+- [x] **Refactor scene prompt display**
+  - Emphasize description text
+  - Make negative_description collapsible (default collapsed)
+  - Improve typography and spacing
 
-- [ ] **Handle responsive breakpoints**
-  - Desktop (md and up): side-by-side layout, 50/50 split
-  - Mobile: vertical stack, scene prompt full width above video
-  - Test on tablet sizes for optimal layout
-  - Ensure cards don't become too narrow on desktop
+#### Loading Animations
 
-### Frontend Tasks - Loading Animations & States
+- [x] **Improve scene prompt loading**
+  - Remove separate scene generation loading page
+  - Move progress bar to individual scene cards
+  - Show contextual snippets based on input data
+  - Display video description and character description excerpts
+  - Estimated time: 20-30 seconds
 
-- [ ] **Scene prompt loading animation (20-30s)**
-  - Create enhanced loading component for scene prompt section
-  - Show contextual loading text using video description + character description
-  - Implement rotating snippet system:
-    - Display brief text snippets that change every 3-5 seconds
-    - Example snippets: "Analyzing video concept...", "Crafting scene narrative...", "Optimizing character integration..."
-    - Make snippets contextual to input data when possible
-  - Add visual loading indicator (spinner, skeleton, or custom animation)
-  - Make loading visually compelling for 20-30 second wait
-  - Include estimated time indicator: "Generating scene... (~25s)"
+- [x] **Improve video clip loading**
+  - Show contextual loading message using scene prompt
+  - Brief snippets that rotate every 10-15 seconds
+  - Estimated time: 2-7 minutes
+  - Visual spinner or animated placeholder
 
-- [ ] **Video clip loading animation (2-7min)**
-  - Create enhanced loading component for video clip section
-  - Show contextual loading text using scene description + character description
-  - Implement rotating snippet system for long wait times:
-    - Display brief text snippets that change every 10-15 seconds
-    - Example snippets: "Rendering scene...", "Applying character style...", "Processing video effects...", "Almost there..."
-    - Make snippets contextual to scene and character descriptions
-  - Add visual loading indicator (progress simulation, animated placeholder, etc.)
-  - Make loading visually compelling for 2-7 minute wait
-  - Include estimated time indicator: "Generating video... (~3 min)"
-  - Consider progress bar or animated preview placeholder
+#### Interactive Controls
 
-- [ ] **Create snippet configuration constants**
-  - Define configurable arrays for scene loading snippets
-  - Define configurable arrays for video loading snippets
-  - Make snippet rotation timing configurable (constants in code)
-  - Document snippet customization in code comments
+- [x] **Scene prompt editing**
+  - Add "Edit" button on completed scene cards
+  - Inline text editing within card (not modal)
+  - Save/Cancel buttons when editing
 
-### Frontend Tasks - Interactive Controls
+- [x] **Scene prompt regeneration**
+  - Add "Regenerate" button
+  - Call `/api/mv/create_scenes` again
+  - Update only that specific card's scene prompt (using scene index from response)
 
-- [ ] **Add "Edit Prompt" button to scene section**
-  - Button location: Scene prompt card header or below description
-  - Click behavior: Make description editable inline
-  - Show "Save" and "Cancel" buttons when editing
-  - Replace description text with textarea/input when editing
-  - Validate input (non-empty description)
-  - Update local state with edited prompt
-  - Provide visual feedback when in edit mode (highlight, border change)
+- [x] **Video clip regeneration**
+  - Add "Regenerate" button on video section
+  - Call `/api/mv/generate_video` with current scene prompt (edited or original)
+  - Replace video in that card
 
-- [ ] **Add "Regenerate Prompt" button to scene section**
-  - Button location: Scene prompt card header or action area
-  - Click behavior:
-    - Call `/api/mv/create_scenes` with original video description + character description
-    - Show loading state in THIS card only (other cards unchanged)
-    - On response: extract one scene from response (use scene index to match)
-    - Update this card's scene prompt with new description/negative_description
-    - Keep other scene cards unchanged
-  - Handle errors gracefully (show error in this card only)
-  - Disable button while regenerating (prevent double-clicks)
+#### Special Effects
 
-- [ ] **Add "Regenerate Video" button to video section**
-  - Button location: Video clip card header or below video
-  - Click behavior:
-    - Call `/api/mv/generate_video` with current scene prompt (edited or original)
-    - Use current `description` as `prompt` and `negative_description` as `negative_prompt`
-    - Show loading state in video section (replace video with loading animation)
-    - On response: update this card's video with new video_id and video_url
-    - Keep other video cards unchanged
-  - Handle errors gracefully (show error in this card only)
-  - Disable button while regenerating (prevent double-clicks)
-  - Confirm with user if they want to regenerate (optional, or just proceed)
+- [x] **Teletype animation for scene prompts**
+  - When scenes return from API, animate text appearing character-by-character
+  - Total duration: 10 seconds for all scenes combined
+  - Parallel animation: all scenes type simultaneously
+  - Configurable duration constant in code
+  - Click to skip animation
 
-- [ ] **Button styling and placement**
-  - Use consistent button styling across all actions
-  - Consider icon buttons or icon+text for better UX
-  - Group buttons logically (edit/regenerate near their respective sections)
-  - Ensure buttons are accessible and clearly labeled
-  - Add hover states and tooltips for clarity
+- [x] **Auto-collapse input data**
+  - Collapse input data section when scene generation completes
+  - Add expand/collapse toggle button
+  - Smooth animation
 
-### Frontend Tasks - Scene Generation Flow Changes
+- [x] **Auto-scroll to stitched video**
+  - When video stitching completes, auto-scroll to "Full Video" section
+  - Smooth scroll animation
+  - Small delay before scrolling (300ms)
 
-- [ ] **Remove scene generation loading page**
-  - Remove or skip the full-page loading state for scene generation
-  - Scene generation now happens within individual cards
-  - Users see placeholder cards immediately with loading states
+#### Implementation Notes
 
-- [ ] **Move progress bar to individual scene cards**
-  - Each scene card shows its own progress/loading indicator during scene prompt generation
-  - Progress indicators should be visible in the scene prompt section (left/top)
-  - All scene cards show loading state simultaneously when page first loads
-  - Update to completed state as scene data arrives
-
-- [ ] **Create placeholder cards on page load**
-  - Immediately render X placeholder `SceneVideoCard` components (X = expected number of scenes)
-  - Each card shows loading state in both scene and video sections
-  - Scene section: contextual loading animation (20-30s estimate)
-  - Video section: disabled/greyed out (waits for scene to complete)
-  - Determine number of expected scenes from:
-    - Backend response metadata if available
-    - Default assumption (e.g., 4 scenes) if not specified
-    - Or progressively add cards as scenes arrive
-
-### Frontend Tasks - Input Data Section
-
-- [ ] **Implement auto-collapse functionality**
-  - Input data section starts expanded when page loads
-  - When scene generation completes (all scene prompts received):
-    - Automatically collapse the input data section
-    - Animate collapse transition (smooth accordion-style)
-  - Add toggle button to manually expand/collapse anytime
-  - Visual indicator (chevron icon) showing collapsed/expanded state
-  - Ensure collapsed section still shows summary or title
-
-- [ ] **Improve collapsed state design**
-  - Show minimal info when collapsed (e.g., "Input Data" with expand icon)
-  - Make it clear users can re-expand to view details
-  - Use subtle styling to not distract from main content (scenes/videos)
-
-### Frontend Tasks - Teletype Animation
-
-- [ ] **Implement teletype effect for scene prompts**
-  - When scene data arrives, animate the text appearing character-by-character
-  - Total duration for ALL scene prompts: 10 seconds (configurable)
-  - Make duration configurable via constant: `TELETYPE_TOTAL_DURATION_MS = 10000`
-  - Calculate per-character delay based on total text length across all scenes
-  - Use smooth typing animation (not choppy)
-
-- [ ] **Implement parallel teletype sequencing**
-  - All scenes teletype simultaneously (parallel animation)
-  - All scenes complete their typing within the 10 second total duration
-  - Each scene's typing speed is independent (depends on text length)
-  - Scenes with less text will finish earlier than scenes with more text
-
-- [ ] **Teletype animation polish**
-  - Add blinking cursor effect at end of typing
-  - Ensure animation doesn't interfere with user interactions
-  - Allow users to skip animation (click to reveal all text immediately)
-  - Smooth transition from teletype to static text
-
-### Frontend Tasks - Auto-scroll to Full Video
-
-- [ ] **Detect when stitched video is ready**
-  - Monitor `stitchingStatus` state from v7 implementation
-  - Trigger scroll when status changes from 'loading' to 'completed'
-  - Only scroll if stitched video successfully loaded
-
-- [ ] **Implement auto-scroll functionality**
-  - Scroll page to Full Video card when stitching completes
-  - Use smooth scroll behavior (`behavior: 'smooth'`)
-  - Scroll to top of Full Video card (not middle/bottom of page)
-  - Add small offset so card isn't at very top edge (e.g., 20px margin)
-
-- [ ] **Add scroll configuration**
-  - Make auto-scroll behavior configurable (constant in code)
-  - Allow disabling if it becomes annoying in testing
-  - Consider adding user preference toggle (optional, future enhancement)
-
-### Frontend Tasks - State Management
-
-- [ ] **Update state structure for combined cards**
-  - Each scene/video pair should be managed as a single state object:
-    ```typescript
-    {
-      sceneIndex: number,
-      scene: { description, negative_description, status: 'loading' | 'completed' | 'error', error? },
-      video: { videoId?, videoUrl?, status: 'idle' | 'loading' | 'completed' | 'error', error? }
-    }
-    ```
-  - Track editing state per scene (isEditing, editedDescription)
-  - Track regeneration states (isRegenerating, regenerationType)
-
-- [ ] **Handle scene regeneration state updates**
-  - When regenerating a single scene, update only that scene's state
-  - Preserve other scenes and videos unchanged
-  - Handle race conditions (what if user regenerates multiple scenes simultaneously?)
-
-- [ ] **Handle video regeneration state updates**
-  - When regenerating a video, update only that video's state
-  - Preserve scene prompt and other videos unchanged
-  - Handle race conditions gracefully
-
-### Frontend Tasks - Error Handling
-
-- [ ] **Scene prompt regeneration errors**
-  - Display error message within the scene section of that card
-  - Show "Retry" button to retry regeneration
-  - Keep other cards functional
-  - Use Alert component within scene section
-
-- [ ] **Video regeneration errors**
-  - Display error message within the video section of that card
-  - Show "Retry" button to retry video generation
-  - Keep other cards functional
-  - Use Alert component within video section
-
-- [ ] **Edit prompt validation errors**
-  - Validate edited prompts (non-empty, reasonable length)
-  - Show inline error messages if validation fails
-  - Prevent saving invalid prompts
-  - Provide clear feedback on requirements
-
-### Testing Tasks
-
-- [ ] **Test combined card layout**
-  - Verify side-by-side layout on desktop (md breakpoint and up)
-  - Verify vertical stack on mobile
-  - Test on various screen sizes (phone, tablet, desktop, ultrawide)
-  - Ensure no layout breaks or overflow issues
-  - Check that negative description collapse works correctly
-
-- [ ] **Test loading animations**
-  - Verify scene prompt loading shows for ~20-30 seconds with contextual snippets
-  - Verify video loading shows for estimated 2-7 minutes with rotating snippets
-  - Check that snippets rotate at configured intervals
-  - Ensure loading animations are visually compelling and not boring
-  - Verify estimated time indicators display correctly
-
-- [ ] **Test edit prompt functionality**
-  - Click "Edit Prompt" and verify inline editing works
-  - Edit description text and save changes
-  - Cancel editing and verify no changes applied
-  - Verify edited prompt is used when regenerating video
-  - Test validation (empty prompt, very long prompt)
-
-- [ ] **Test regenerate prompt functionality**
-  - Click "Regenerate Prompt" and verify only that scene regenerates
-  - Verify loading state shows in that card only
-  - Confirm other scenes/videos are unaffected
-  - Test error handling (backend down, invalid response)
-  - Verify regenerated prompt displays correctly
-
-- [ ] **Test regenerate video functionality**
-  - Click "Regenerate Video" and verify video regenerates with current prompt
-  - Verify loading animation displays during regeneration
-  - Confirm other videos are unaffected
-  - Test regenerating with edited prompt
-  - Test error handling (generation failure)
-
-- [ ] **Test input data auto-collapse**
-  - Verify input section is expanded on page load
-  - Verify it auto-collapses when scene generation completes
-  - Test manual expand/collapse toggle
-  - Ensure smooth animation
-
-- [ ] **Test teletype animation**
-  - Verify scene prompts teletype after generation completes
-  - Confirm total duration is ~10 seconds (or configured value)
-  - Test sequential vs parallel (based on chosen approach)
-  - Verify click-to-skip functionality works
-  - Check that animation doesn't block other interactions
-
-- [ ] **Test auto-scroll to Full Video**
-  - Verify scroll triggers when stitched video completes
-  - Confirm smooth scroll behavior
-  - Test on different page scroll positions
-  - Verify scroll doesn't trigger on error or if video already visible
-
-- [ ] **Test state persistence**
-  - Verify edited prompts persist when regenerating videos
-  - Test multiple regenerations on same scene/video
-  - Ensure state consistency across all cards
-
-- [ ] **Test error scenarios**
-  - Scene generation failures (some or all)
-  - Video generation failures (some or all)
-  - Regeneration failures (scene or video)
-  - Network errors during editing operations
-  - Verify graceful degradation and user-friendly error messages
-
-- [ ] **Test with both storage backends**
-  - Verify works with SERVE_FROM_CLOUD=true (S3)
-  - Verify works with SERVE_FROM_CLOUD=false (local)
-  - Test regenerated videos work with both storage modes
-
-### Documentation Tasks
-
-- [ ] **Update impl-notes.md**
-  - Document combined card architecture and component structure
-  - Document loading animation snippet system with configuration
-  - Document teletype animation implementation and timing
-  - Document interactive controls (edit, regenerate) and API interactions
-  - Document auto-collapse and auto-scroll behaviors
-  - Note configuration constants added (teletype duration, snippet timing, etc.)
-  - Document state management approach for combined cards
-  - Note responsive design breakpoints and layout decisions
-
-- [ ] **Add code comments for configuration**
-  - Document snippet arrays and how to customize
-  - Document timing constants (teletype, snippet rotation)
-  - Document any feature flags or toggles added
-  - Provide examples for future customization
-
-- [ ] **Update user-facing documentation** (if exists)
-  - Document new edit/regenerate functionality
-  - Explain loading states and estimated times
-  - Note auto-collapse and auto-scroll behaviors
+- Use React hooks for edit state management
+- Store edited prompts in component state
+- Scene regeneration uses same API, just updates one card
+- Video regeneration uses current (possibly edited) prompt
+- Teletype calculates character delay: `totalDuration / totalCharacters`
+- Loading snippets rotate on timer (useEffect with setInterval)
+- Input collapse state persists during session
+- Auto-scroll uses `scrollIntoView({ behavior: 'smooth' })`
 
 ---
 
-## v10 - Remove Base64 Image Transfer for Character References
+## v10 - Remove Base64 Image Transfer
 
 ### Summary
-Optimize character reference image delivery by removing base64 encoding from API responses. Instead, have the frontend fetch images via the existing `/get_character_reference/{image_id}` endpoint. This reduces initial response payload size (from 4-16MB to ~1KB), improves performance, and better utilizes HTTP caching.
+Optimize character reference image handling by removing base64 encoding from API responses and using separate image fetch endpoint.
 
 ### Backend Tasks
 
-- [ ] **Update CharacterReferenceImage model**
-  - Remove `base64` field from `CharacterReferenceImage` model in `backend/mv/image_generator.py`
+- [x] **Update CharacterReferenceImage model**
+  - Remove `base64` field from model definition
   - Keep `id`, `path`, and `cloud_url` fields
-  - Update model docstring to reflect that base64 is no longer included
-  - Note: `path` field will be removed in future, keeping for now
+  - Update docstring to note base64 removal
 
-- [ ] **Update generate_character_reference_image function**
-  - Locate the function that populates `CharacterReferenceImage` objects
-  - Remove logic that reads image file and converts to base64
-  - Ensure `cloud_url` is still populated when `SERVE_FROM_CLOUD=true`
-  - Ensure `path` is still populated for all modes
-  - Ensure `id` (UUID) is still generated and assigned
+- [x] **Update generate_character_reference_image()**
+  - Remove base64 encoding logic
+  - Don't read image into memory for encoding
+  - Just save file and return metadata (id, path, cloud_url)
 
-- [ ] **Update API endpoint response**
-  - Verify `/api/mv/generate_character_reference` endpoint in `backend/routers/mv.py`
-  - Confirm response no longer includes base64 data
-  - Verify response model validation passes without base64 field
-  - Test response payload size (should be ~1KB instead of 4-16MB)
+- [x] **Update response building**
+  - Remove base64 encoding from image objects
+  - Reduce response payload size dramatically (4-16MB → ~1KB)
 
-- [ ] **Verify get_character_reference endpoint compatibility**
-  - Confirm `/api/mv/get_character_reference/{image_id}` endpoint works correctly
-  - Test with `redirect=false` (should return JSON with image URL for cloud, serve file for local)
-  - Test with both `SERVE_FROM_CLOUD=true` and `SERVE_FROM_CLOUD=false`
-  - Verify CORS headers allow frontend to fetch images
-  - Verify presigned URLs work correctly for cloud storage
+- [x] **Verify /get_character_reference endpoint**
+  - Ensure `redirect=false` returns JSON with presigned URL (cloud) or serves file (local)
+  - Test both storage modes
+  - Verify CORS headers allow frontend access
 
 ### Frontend Tasks
 
-- [ ] **Update character image fetching logic**
-  - Locate image generation handler in `src/app/create/page.tsx` (around line 232-254)
-  - Remove base64 → Blob → Object URL conversion logic
-  - After receiving response from `/generate_character_reference`:
-    - Extract image IDs from `data.images`
-    - Store image IDs in state
-    - Trigger parallel image fetches for all 4 images
+- [x] **Remove base64 handling from create page**
+  - Don't expect `base64` field in API response
+  - Store only image IDs
 
-- [ ] **Implement parallel image fetching**
-  - Create function `fetchCharacterImage(imageId: string): Promise<string>`
-  - Fetch from `/api/mv/get_character_reference/{imageId}?redirect=false`
-  - Parse JSON response to get image URL
-  - Handle both cloud (presigned URL) and local (direct file) responses
-  - Return image URL for use in `<img src>`
+- [x] **Implement image fetching logic**
+  - Create `fetchCharacterImage(imageId)` function
+  - Use `/api/mv/get_character_reference/{id}?redirect=false`
+  - Handle JSON response (cloud) vs blob response (local)
+  - Create blob URLs for local mode
 
-- [ ] **Add loading states for individual images**
-  - Add state: `imageLoadingStates: { [imageId: string]: 'loading' | 'loaded' | 'error' }`
-  - Initialize all images as 'loading' when fetch starts
-  - Update to 'loaded' when image successfully fetches
-  - Update to 'error' if fetch fails
+- [x] **Fetch all images in parallel**
+  - Use `Promise.allSettled()` for parallel fetching
+  - Don't block on individual failures
+  - Update UI as each image loads
 
-- [ ] **Update image display grid**
-  - Locate image grid component that displays 4 character reference images
-  - Add placeholder skeleton/empty div for each image (fixed aspect ratio to prevent layout shift)
-  - Show loading spinner overlay while `imageLoadingStates[id] === 'loading'`
-  - Display image when `imageLoadingStates[id] === 'loaded'`
-  - Show error state when `imageLoadingStates[id] === 'error'`
+- [x] **Add loading states for images**
+  - Show spinner on placeholder cards while fetching
+  - Fixed aspect ratio placeholders (prevent layout shift)
+  - Individual loading state per image
 
-- [ ] **Implement error state UI for individual images**
-  - Display error icon/message on failed image card
-  - Style to make it clear which image failed
-  - No individual retry button (use existing "Regenerate All" button)
-  - Show error message: "Failed to load image"
+- [x] **Add error states for images**
+  - Show error icon/message if image fetch fails
+  - Individual error state per image
+  - No individual retry (use existing "Regenerate All" button)
 
-- [ ] **Remove blob URL cleanup logic**
-  - Remove any `URL.revokeObjectURL()` calls related to character images
-  - Remove blob creation logic
-  - Clean up unused variables and imports
-
-- [ ] **Update image URL usage**
-  - Change `<img>` elements to use fetched URLs directly
-  - Ensure URLs work with both cloud and local storage backends
-  - For cloud: use presigned URL from response
-  - For local: use direct `/api/mv/get_character_reference/{id}` URL
+- [x] **Update image display logic**
+  - Use fetched blob URLs or presigned URLs
+  - `<img src={imageUrl} />` for both modes
+  - Clean up blob URLs on unmount
 
 ### Testing Tasks
 
-- [ ] **Backend testing with SERVE_FROM_CLOUD=false**
-  - Generate character references in local mode
-  - Verify response payload is small (~1KB, no base64)
-  - Verify `/get_character_reference/{id}?redirect=false` returns file directly
-  - Verify all 4 images can be fetched successfully
-  - Check response headers (Content-Type, etc.)
+- [x] **Test with local storage**
+  - Generate images with `SERVE_FROM_CLOUD=false`
+  - Verify images fetch correctly
+  - Verify blob URL creation
 
-- [ ] **Backend testing with SERVE_FROM_CLOUD=true**
-  - Generate character references in cloud mode
-  - Verify response includes `cloud_url` field with presigned URL
-  - Verify `/get_character_reference/{id}?redirect=false` returns JSON with URL
-  - Verify presigned URLs are accessible and valid
-  - Check URL expiration time is sufficient
+- [x] **Test with cloud storage**
+  - Generate images with `SERVE_FROM_CLOUD=true`
+  - Verify presigned URLs work
+  - Verify images display correctly
 
-- [ ] **Frontend testing - Happy path**
-  - Click "Generate Character Images"
-  - Verify 4 placeholder cards appear immediately
-  - Verify loading spinners display on all 4 images
-  - Verify images load in parallel (network tab)
-  - Verify images display correctly when loaded
-  - Verify no layout shift when images load
-  - Verify image selection still works
+- [x] **Test parallel loading**
+  - Verify all 4 images load in parallel
+  - Test with network throttling
+  - Verify loading spinners appear
 
-- [ ] **Frontend testing - Error scenarios**
-  - Simulate network error during image fetch
-  - Verify error state displays on affected image(s)
-  - Verify other images continue loading/display
-  - Test with 1, 2, 3, or 4 images failing
-  - Verify "Regenerate All" button still works
-
-- [ ] **Frontend testing - Performance**
-  - Measure time from API response to all images displayed
-  - Compare with old base64 approach (if possible)
-  - Verify parallel loading (should be faster than sequential)
-  - Check network tab for efficient fetching
-  - Verify browser caching works for repeated loads
-
-- [ ] **Frontend testing - Storage backend switching**
-  - Test with `SERVE_FROM_CLOUD=false` on backend
-  - Verify images load from local backend
-  - Switch backend to `SERVE_FROM_CLOUD=true`
-  - Verify images load from S3 presigned URLs
-  - Ensure no code changes needed on frontend
-
-- [ ] **Cross-browser testing** (if applicable)
-  - Test on Chrome/Edge (Chromium)
-  - Test on Firefox
-  - Test on Safari (if available)
-  - Verify CORS and fetch API work consistently
+- [x] **Test error cases**
+  - Simulate image fetch failure
+  - Verify error state displays
+  - Verify other images still load
 
 ### Documentation Tasks
 
-- [ ] **Update impl-notes.md**
-  - Document removal of base64 image transfer
-  - Document new image fetching flow:
-    1. Generate images → receive image IDs
-    2. Fetch images in parallel via `/get_character_reference/{id}?redirect=false`
-    3. Display images using returned URLs
-  - Note that `redirect=false` is used to get JSON response (cloud) or direct file (local)
-  - Document performance improvements (payload size reduction)
-  - Note placeholder UI prevents layout shift during loading
+- [x] **Update impl-notes.md**
+  - Document v10 implementation
+  - Explain redirect=false usage
+  - Document payload size reduction
+  - Note performance benefits
 
-- [ ] **Update API documentation** (if separate from code)
+- [x] **Update API documentation**
   - Update `GenerateCharacterReferenceResponse` schema
   - Remove `base64` field from example responses
   - Add note about fetching images via `/get_character_reference` endpoint
   - Document recommended frontend flow
 
-- [ ] **Add code comments**
+- [x] **Add code comments**
   - Comment on why base64 was removed (performance, payload size)
   - Document image fetching pattern in frontend code
   - Note that `path` field will be removed in future iteration
+
+---
+
+## v11 - Character Reference UUID for Video Generation
+
+### Summary
+Refactor `/api/mv/generate_video` endpoint to accept character reference image UUID instead of base64-encoded image data. The backend will fetch the image from storage and provide it to the Replicate API as a file handle.
+
+### Backend Tasks
+
+#### 1. Update Request Model (`mv/video_generator.py`)
+
+- [ ] **Add new parameter to GenerateVideoRequest**
+  - Add `character_reference_id: Optional[str]` field
+  - Keep `reference_image_base64: Optional[str]` field for backward compatibility (deprecated)
+  - Add field description noting UUID format
+  - Mark `reference_image_base64` as deprecated in docstring
+
+- [ ] **Add validation logic**
+  - Validate UUID format if `character_reference_id` is provided
+  - Log warning if both `character_reference_id` and `reference_image_base64` are provided
+  - Prioritize `character_reference_id` over `reference_image_base64` if both present
+
+#### 2. Create Character Reference Fetcher Helper (`mv/video_generator.py` or new `mv/utils.py`)
+
+- [ ] **Implement get_character_reference_image() function**
+  - Accept `character_reference_id: str` parameter
+  - Build file path: `mv/outputs/character_reference/{character_reference_id}.{ext}`
+  - Check for common extensions: `.png`, `.jpg`, `.jpeg`, `.webp`
+  - Return tuple of `(file_path: Path | None, exists: bool)`
+  - Handle file not found case gracefully
+
+- [ ] **Add error logging**
+  - Log to stdout when UUID doesn't exist
+  - Log warning with UUID and attempted file paths
+  - Return None if file doesn't exist
+
+#### 3. Update generate_video() Function (`mv/video_generator.py`)
+
+- [ ] **Add character reference fetching logic**
+  - Call `get_character_reference_image()` if `character_reference_id` provided
+  - Handle file not found case
+  - Add warning to metadata if UUID not found: `{"character_reference_warning": "Image {uuid} not found"}`
+  - Pass file path to backend instead of base64 data
+
+- [ ] **Update backend calls**
+  - Pass `character_reference_path` parameter to backend functions
+  - Remove base64 passing when UUID is used
+  - Keep base64 path for backward compatibility
+
+- [ ] **Update debug logging**
+  - Log `character_reference_id` instead of `has_reference_image` boolean
+  - Add new debug function: `log_character_reference_fetch()`
+  - Include UUID and resolved file path in logs
+
+- [ ] **Update metadata building**
+  - Replace `has_reference_image` with `character_reference_id` in metadata
+  - Add `character_reference_warning` field if UUID not found
+  - Remove reference_image saving logic (already saved from generation)
+  - Update metadata.json structure to include UUID instead of base64 indicator
+
+#### 4. Update Replicate Backend (`mv/video_backends/replicate_backend.py`)
+
+- [ ] **Add new parameter: character_reference_path**
+  - Add `character_reference_path: Optional[str]` parameter
+  - Keep `reference_image_base64: Optional[str]` for backward compatibility
+  - Update function signature and docstring
+
+- [ ] **Refactor reference image handling**
+  - Check if `character_reference_path` is provided first
+  - If provided, open file directly (skip base64 decode and temp file creation)
+  - Pass open file handle to `input_params["reference_images"]`
+  - Fallback to base64 logic if `character_reference_path` not provided
+
+- [ ] **Simplify temp file logic**
+  - Only create temp file if using base64 path (backward compatibility)
+  - Use direct file handle if using character_reference_path
+  - Ensure file handle is properly closed in finally block
+
+- [ ] **Update error handling**
+  - Handle FileNotFoundError if character_reference_path doesn't exist
+  - Raise clear error message with UUID and file path
+  - Log error before raising
+
+#### 5. Update Gemini Backend (`mv/video_backends/gemini_backend.py`) (if applicable)
+
+- [ ] **Check if Gemini backend uses reference images**
+  - Review `generate_video_gemini()` function
+  - Determine if similar changes needed
+
+- [ ] **Apply same pattern if needed**
+  - Add `character_reference_path` parameter
+  - Update file handling logic
+  - Update error handling
+
+#### 6. Update Router Endpoint (`routers/mv.py`)
+
+- [ ] **Update endpoint handler for /api/mv/generate_video**
+  - Accept `character_reference_id` from request body
+  - Pass to `generate_video()` function
+  - Update OpenAPI documentation
+  - Add example request with UUID
+
+- [ ] **Update response model if needed**
+  - Add `character_reference_warning` field to response if UUID not found
+  - Document the warning field in response model
+  - Make warning field optional
+
+#### 7. Testing Tasks
+
+- [ ] **Unit tests for get_character_reference_image()**
+  - Test with valid UUID that exists
+  - Test with valid UUID that doesn't exist
+  - Test with invalid UUID format (should still check file)
+  - Test with multiple file extensions (.png, .jpg, .webp)
+
+- [ ] **Integration tests for generate_video**
+  - Test with valid `character_reference_id`
+  - Test with invalid/non-existent UUID (should warn but not fail)
+  - Test with both `character_reference_id` and `reference_image_base64` (UUID should take priority)
+  - Test with neither parameter (should work without reference image)
+
+- [ ] **Backend API tests**
+  - Test `/api/mv/generate_video` with `character_reference_id` in request
+  - Verify warning in response when UUID not found
+  - Verify successful generation with valid UUID
+  - Test backward compatibility with `reference_image_base64`
+
+- [ ] **Manual testing with actual Replicate API**
+  - Generate a character reference image (get UUID)
+  - Use that UUID in `generate_video` call
+  - Verify video generation works with character reference
+  - Verify character consistency in output video
+
+#### 8. Documentation Tasks
+
+- [ ] **Update API documentation**
+  - Document new `character_reference_id` parameter
+  - Mark `reference_image_base64` as deprecated
+  - Add migration guide for clients
+  - Document warning field in response
+
+- [ ] **Update impl-notes.md**
+  - Add v11 implementation section
+  - Document UUID-based character reference flow
+  - Explain file path resolution logic
+  - Note performance benefits (no base64 encoding/decoding)
+
+- [ ] **Update swagger/OpenAPI docs**
+  - Add `character_reference_id` to request schema
+  - Add examples with UUIDs
+  - Mark `reference_image_base64` as deprecated in schema
+
+### Frontend Tasks (Future - not part of v11)
+
+- [ ] **Update /quick-gen-page to send character reference UUID** (deferred to future version)
+  - Currently frontend doesn't send character reference to generate_video
+  - When implemented, send `character_reference_id` from sessionStorage
+  - Remove any base64 encoding logic if present
+
+### Implementation Notes
+
+- **Backward Compatibility**: Keep `reference_image_base64` parameter functional during transition period
+- **Priority**: If both UUID and base64 provided, UUID takes precedence with a warning log
+- **Error Handling**: UUID not found should log warning and add to metadata, but NOT fail video generation
+- **File Extensions**: Check for .png, .jpg, .jpeg, .webp extensions when resolving UUID to file path
+- **Performance**: Eliminates base64 encoding/decoding overhead, reduces request payload size
+- **Debugging**: Enhanced logging for character reference resolution path
+
+### Technical Details
+
+**File Path Resolution**:
+```
+UUID: "abc123-def456-..."
+Possible paths:
+- backend/mv/outputs/character_reference/abc123-def456-....png
+- backend/mv/outputs/character_reference/abc123-def456-....jpg
+- backend/mv/outputs/character_reference/abc123-def456-....jpeg
+- backend/mv/outputs/character_reference/abc123-def456-....webp
+```
+
+**Replicate API Integration**:
+- Accepts `reference_images` as list of open file handles
+- Example: `input_params["reference_images"] = [open("/path/to/image.png", "rb")]`
+- File handles must be closed after API call completes
+
+**Request Flow**:
+1. Frontend sends `character_reference_id` in request
+2. Backend resolves UUID to file path
+3. If found: Opens file, passes handle to Replicate
+4. If not found: Logs warning, adds to metadata, continues without reference
+5. Replicate generates video (with or without reference)
+6. Response includes warning field if UUID not found
 
 ---
