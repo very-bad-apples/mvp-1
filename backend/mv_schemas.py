@@ -48,10 +48,10 @@ class SceneResponse(BaseModel):
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")
-    prompt: str = Field(..., min_length=1, max_length=2000, description="Video concept description")
-    characterDescription: str = Field(..., min_length=1, max_length=1000, description="Character description")
+    prompt: str = Field(..., min_length=1, description="Video concept description")
+    characterDescription: str = Field(..., min_length=1, description="Character description")
     characterReferenceImageId: Optional[str] = Field(None, description="UUID of selected character image")
-    productDescription: Optional[str] = Field(None, max_length=1000, description="Product description (for ad-creative mode)")
+    productDescription: Optional[str] = Field(None, description="Product description (for ad-creative mode)")
 
     @field_validator('mode')
     @classmethod
@@ -144,35 +144,47 @@ class ProjectUpdateRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "status": "completed",
-                "finalOutputS3Key": "mv/projects/550e8400-e29b-41d4-a716-446655440000/final.mp4"
+                "finalOutputS3Key": "mv/projects/550e8400/final.mp4"
+            }
+        }
+
+
+class SceneUpdateRequest(BaseModel):
+    """Request model for updating scene data."""
+    status: Optional[str] = None
+    videoClipS3Key: Optional[str] = None
+    lipSyncedVideoClipS3Key: Optional[str] = None
+    errorMessage: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "completed",
+                "videoClipS3Key": "mv/projects/550e8400/scenes/001/video.mp4"
             }
         }
 
 
 class ComposeRequest(BaseModel):
-    """Request model for video composition."""
-    sceneIds: Optional[List[int]] = Field(None, description="Specific scene IDs to compose (default: all scenes)")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "sceneIds": [1, 2, 3, 4]
-            }
-        }
+    """Request model for final video composition."""
+    # No additional fields needed - uses project metadata
+    pass
 
 
 class ComposeResponse(BaseModel):
-    """Response model for composition request."""
+    """Response model for composition job."""
+    jobId: str
     projectId: str
-    message: str
     status: str
+    message: str
 
     class Config:
         json_schema_extra = {
             "example": {
+                "jobId": "compose_550e8400-e29b-41d4-a716-446655440000",
                 "projectId": "550e8400-e29b-41d4-a716-446655440000",
-                "message": "Composition job queued",
-                "status": "processing"
+                "status": "queued",
+                "message": "Video composition job queued"
             }
         }
 
@@ -191,4 +203,3 @@ class FinalVideoResponse(BaseModel):
                 "expiresInSeconds": 3600
             }
         }
-
