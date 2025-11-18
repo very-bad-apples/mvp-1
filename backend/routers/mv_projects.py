@@ -1,0 +1,371 @@
+"""
+Music Video Projects API Router.
+
+Implements CRUD endpoints for project management with DynamoDB.
+"""
+
+import uuid
+import structlog
+from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from typing import Optional, List
+
+from mv_schemas import (
+    ProjectCreateResponse,
+    ProjectResponse,
+    SceneResponse,
+)
+from mv_models import (
+    MVProjectItem,
+    create_project_metadata,
+)
+from services.s3_storage import (
+    get_s3_storage_service,
+    generate_s3_key,
+)
+from pynamodb.exceptions import PutError, DoesNotExist
+
+logger = structlog.get_logger()
+
+router = APIRouter(prefix="/api/mv", tags=["MV Projects"])
+
+
+@router.post(
+    "/projects",
+    response_model=ProjectCreateResponse,
+    status_code=201,
+    summary="Create New Project",
+    description="""
+Create a new Music Video or Ad Creative project.
+
+This endpoint:
+1. Accepts form data with metadata and file uploads
+2. Uploads files to S3 (character image, product image, audio)
+3. Creates project metadata in DynamoDB
+4. Returns project ID for subsequent operations
+
+**Files:**
+- `images[]`: Product images (ad-creative mode, required)
+- `audio`: Music file (music-video mode, required)
+
+**Form Data:**
+- `mode`: "ad-creative" or "music-video"
+- `prompt`: Video concept description
+- `characterDescription`: Character/style description
+- `characterReferenceImageId`: UUID of pre-generated character image (optional)
+- `productDescription`: Product details (optional)
+"""
+)
+async def create_project(
+    mode: str = Form(...),
+    prompt: str = Form(...),
+    characterDescription: str = Form(...),
+    characterReferenceImageId: Optional[str] = Form(None),
+    productDescription: Optional[str] = Form(None),
+    images: Optional[List[UploadFile]] = File(None),
+    audio: Optional[UploadFile] = File(None)
+):
+    """
+    Create a new project with file uploads.
+
+    Args:
+        mode: Generation mode (ad-creative or music-video)
+        prompt: Video concept description
+        characterDescription: Character description
+        characterReferenceImageId: Optional pre-generated character image UUID
+        productDescription: Optional product description
+        images: Optional list of product images
+        audio: Optional audio file
+
+    Returns:
+        ProjectCreateResponse with project ID
+    """
+    try:
+        logger.info(
+            "create_project_request",
+            mode=mode,
+            has_images=images is not None and len(images) > 0 if images else False,
+            has_audio=audio is not None,
+            has_character_ref=characterReferenceImageId is not None
+        )
+
+        # Validate mode
+        if mode not in ['ad-creative', 'music-video']:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid mode",
+                    "details": "mode must be 'ad-creative' or 'music-video'"
+                }
+            )
+
+        # Validate mode-specific requirements
+        if mode == 'ad-creative' and (not images or len(images) == 0):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Product images required for ad-creative mode",
+                    "details": "At least one product image must be provided"
+                }
+            )
+
+        if mode == 'music-video' and not audio:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Audio file required for music-video mode",
+                    "details": "Music file must be provided"
+                }
+            )
+
+        # Generate project ID
+        project_id = str(uuid.uuid4())
+        s3_service = get_s3_storage_service()
+
+        # Upload files to S3
+        character_image_s3_key = None
+        product_image_s3_key = None
+        audio_s3_key = None
+
+        # Handle character reference image
+        if characterReferenceImageId:
+            # Reference to existing character image in character_reference directory
+            # For now, store the reference path - actual copy can be done later if needed
+            character_image_s3_key = f"mv/outputs/character_reference/{characterReferenceImageId}.png"
+
+        # Upload product images
+        if images and len(images) > 0:
+            # For simplicity, use first image as primary
+            product_image = images[0]
+            product_image_s3_key = generate_s3_key(project_id, "product")
+
+            # Determine content type
+            content_type = product_image.content_type or "image/jpeg"
+
+            # Reset file pointer to beginning
+            await product_image.seek(0)
+            s3_service.upload_file(
+                product_image.file,
+                product_image_s3_key,
+                content_type=content_type
+            )
+
+            logger.info(
+                "product_image_uploaded",
+                project_id=project_id,
+                s3_key=product_image_s3_key
+            )
+
+        # Upload audio file
+        if audio:
+            audio_s3_key = generate_s3_key(project_id, "audio")
+            content_type = audio.content_type or "audio/mpeg"
+
+            # Reset file pointer to beginning
+            await audio.seek(0)
+            s3_service.upload_file(
+                audio.file,
+                audio_s3_key,
+                content_type=content_type
+            )
+
+            logger.info(
+                "audio_uploaded",
+                project_id=project_id,
+                s3_key=audio_s3_key
+            )
+
+        # Create project metadata in DynamoDB
+        project = create_project_metadata(
+            project_id=project_id,
+            concept_prompt=prompt,
+            character_description=characterDescription,
+            product_description=productDescription,
+            character_image_s3_key=character_image_s3_key,
+            product_image_s3_key=product_image_s3_key,
+            audio_backing_track_s3_key=audio_s3_key
+        )
+
+        try:
+            project.save()
+            logger.info("project_created", project_id=project_id)
+        except PutError as e:
+            logger.error("project_save_failed", project_id=project_id, error=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "DatabaseError",
+                    "message": "Failed to create project",
+                    "details": str(e)
+                }
+            )
+
+        return ProjectCreateResponse(
+            projectId=project_id,
+            status="pending",
+            message="Project created successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("create_project_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to create project",
+                "details": str(e)
+            }
+        )
+
+
+@router.get(
+    "/projects/{project_id}",
+    response_model=ProjectResponse,
+    summary="Get Project Details",
+    description="""
+Retrieve project metadata and all associated scenes.
+
+Returns:
+- Project metadata with presigned S3 URLs
+- All scenes ordered by sequence
+- Current status and progress
+"""
+)
+async def get_project(project_id: str):
+    """
+    Get project by ID with all scenes.
+
+    Args:
+        project_id: Project UUID
+
+    Returns:
+        ProjectResponse with metadata and scenes
+    """
+    try:
+        logger.info("get_project_request", project_id=project_id)
+
+        # Query project metadata
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            logger.warning("project_not_found", project_id=project_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Query all scenes for this project
+        scenes = []
+        scene_items = MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        )
+
+        s3_service = get_s3_storage_service()
+
+        for scene_item in scene_items:
+            # Generate presigned URLs for scene assets
+            reference_urls = []
+            if scene_item.referenceImageS3Keys:
+                for key in scene_item.referenceImageS3Keys:
+                    reference_urls.append(s3_service.generate_presigned_url(key))
+
+            audio_url = None
+            if scene_item.audioClipS3Key:
+                audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+            video_url = None
+            if scene_item.videoClipS3Key:
+                video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+
+            lipsynced_url = None
+            if scene_item.lipSyncedVideoClipS3Key:
+                lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+            scenes.append(SceneResponse(
+                sequence=scene_item.sequence,
+                status=scene_item.status,
+                prompt=scene_item.prompt,
+                negativePrompt=scene_item.negativePrompt,
+                duration=scene_item.duration,
+                referenceImageUrls=reference_urls,
+                audioClipUrl=audio_url,
+                videoClipUrl=video_url,
+                needsLipSync=scene_item.needsLipSync,
+                lipSyncedVideoClipUrl=lipsynced_url,
+                retryCount=scene_item.retryCount or 0,
+                errorMessage=scene_item.errorMessage,
+                createdAt=scene_item.createdAt,
+                updatedAt=scene_item.updatedAt
+            ))
+
+        # Sort scenes by sequence
+        scenes.sort(key=lambda s: s.sequence)
+
+        # Generate presigned URLs for project assets
+        character_url = None
+        if project_item.characterImageS3Key:
+            character_url = s3_service.generate_presigned_url(project_item.characterImageS3Key)
+
+        product_url = None
+        if project_item.productImageS3Key:
+            product_url = s3_service.generate_presigned_url(project_item.productImageS3Key)
+
+        audio_url = None
+        if project_item.audioBackingTrackS3Key:
+            audio_url = s3_service.generate_presigned_url(project_item.audioBackingTrackS3Key)
+
+        final_url = None
+        if project_item.finalOutputS3Key:
+            final_url = s3_service.generate_presigned_url(project_item.finalOutputS3Key)
+
+        response = ProjectResponse(
+            projectId=project_id,
+            status=project_item.status,
+            conceptPrompt=project_item.conceptPrompt,
+            characterDescription=project_item.characterDescription,
+            characterImageUrl=character_url,
+            productDescription=project_item.productDescription,
+            productImageUrl=product_url,
+            audioBackingTrackUrl=audio_url,
+            finalOutputUrl=final_url,
+            sceneCount=project_item.sceneCount or 0,
+            completedScenes=project_item.completedScenes or 0,
+            failedScenes=project_item.failedScenes or 0,
+            scenes=scenes,
+            createdAt=project_item.createdAt,
+            updatedAt=project_item.updatedAt
+        )
+
+        logger.info(
+            "get_project_success",
+            project_id=project_id,
+            scene_count=len(scenes)
+        )
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_project_error", project_id=project_id, error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to retrieve project",
+                "details": str(e)
+            }
+        )
+
