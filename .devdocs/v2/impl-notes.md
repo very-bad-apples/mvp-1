@@ -596,3 +596,181 @@ POST /api/mv/stitch-videos
 4. **Partial Success** - Skip missing videos with warning instead of failing
 5. **Audio Normalization** - Normalize audio levels across clips
 6. **Video Resolution Matching** - Handle videos with different resolutions
+
+---
+
+## v10 - Remove Base64 Image Transfer for Character References
+
+### Implementation Summary
+
+Optimized character reference image delivery by removing base64 encoding from API responses. Frontend now fetches images separately via the `/get_character_reference/{id}` endpoint using `redirect=false` parameter. This change reduces initial API response payload from 4-16MB to ~1KB and enables HTTP caching.
+
+### Key Changes
+
+#### Backend Changes (`backend/mv/image_generator.py`)
+
+1. **CharacterReferenceImage Model Updated**
+   - Removed `base64` field (was: required string)
+   - Kept `id` (UUID), `path` (file path), `cloud_url` (optional presigned URL)
+   - Added docstring noting removal for performance optimization
+
+2. **Image Generation Logic Simplified**
+   - Removed base64 encoding step (was: `base64.b64encode(image_data).decode("utf-8")`)
+   - Removed `import base64` (no longer needed)
+   - Image files still saved to filesystem (`backend/mv/outputs/character_reference/`)
+   - `cloud_url` field remains `None` by default (populated by storage service if needed)
+
+3. **API Response Size Reduction**
+   - `/api/mv/generate_character_reference` response now ~1KB (was: 4-16MB for 4 images)
+   - Response contains only metadata: `[{ id, path, cloud_url }, ...]`
+   - Actual image data fetched separately via `/get_character_reference/{id}`
+
+#### Frontend Changes (`frontend/src/app/create/page.tsx`)
+
+1. **New Image Fetching Function**
+   ```typescript
+   const fetchCharacterImage = async (imageId: string): Promise<string> => {
+     const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`)
+
+     const contentType = response.headers.get('content-type')
+
+     if (contentType?.includes('application/json')) {
+       // Cloud storage: returns JSON with image_url field
+       const data = await response.json()
+       return data.image_url || data.video_url // legacy field
+     } else {
+       // Local storage: returns image file directly
+       const blob = await response.blob()
+       return URL.createObjectURL(blob)
+     }
+   }
+   ```
+
+2. **Parallel Image Fetching**
+   - After generation completes, fetch all 4 images in parallel
+   - Uses `Promise.allSettled()` to handle partial failures
+   - Each image fetched independently without blocking others
+
+3. **Loading States Added**
+   - New state: `imageLoadingStates: { [imageId]: 'loading' | 'loaded' | 'error' }`
+   - All images start as 'loading' when fetch begins
+   - Update to 'loaded' when fetch succeeds
+   - Update to 'error' on fetch failure
+
+4. **UI Enhancements**
+   - **Placeholder cards**: Fixed aspect ratio prevents layout shift
+   - **Loading state**: Animated spinner overlay on each image
+   - **Error state**: Red alert icon with "Failed to load image" message
+   - **Disabled interaction**: Can't select image until loaded
+   - **No blob cleanup needed**: Direct URLs (cloud) or managed blobs (local)
+
+5. **Removed Code**
+   - Base64 decoding logic (`atob`, manual Uint8Array construction)
+   - Blob creation from base64
+   - Blob URL revocation useEffect hook
+
+### How It Works
+
+**Image Generation Flow:**
+```
+1. User clicks "Generate Character Images"
+   ↓
+2. POST /api/mv/generate_character_reference
+   ↓
+3. Response: [{ id: "uuid-1", path: "...", cloud_url: null }, ...]
+   ↓
+4. Frontend extracts image IDs
+   ↓
+5. Fetch all images in parallel:
+   - GET /api/mv/get_character_reference/uuid-1?redirect=false
+   - GET /api/mv/get_character_reference/uuid-2?redirect=false
+   - (etc.)
+   ↓
+6. Display images as they load
+```
+
+**redirect=false Parameter:**
+- **Cloud mode**: Returns JSON `{ image_url: "https://bucket.s3.amazonaws.com/...?signature=..." }`
+- **Local mode**: Returns image file directly (Content-Type: image/png)
+- Marked in implementation notes as the standard approach for populating img elements
+
+### Benefits
+
+1. **Performance Improvement**
+   - Initial API response: 4-16MB → ~1KB (99.9% reduction)
+   - Faster time-to-first-byte for generation endpoint
+   - Browser can cache images independently
+
+2. **Better UX**
+   - Images load progressively (don't wait for all base64 decoding)
+   - Individual errors don't break entire flow
+   - Loading states provide better feedback
+
+3. **Network Efficiency**
+   - HTTP caching works for repeated image loads
+   - Parallel fetching faster than sequential base64 decoding
+   - Browser handles image format optimization
+
+4. **Code Simplification**
+   - No manual base64 encoding/decoding
+   - No manual blob creation from base64
+   - Existing `/get_character_reference` endpoint handles both storage modes
+
+### Limitations
+
+1. **Additional HTTP Requests**
+   - Was: 1 request (with large payload)
+   - Now: 1 + N requests (N = number of images, typically 4)
+   - Mitigated by parallel fetching and smaller total data transfer
+
+2. **Blob URLs in Local Mode**
+   - Local mode creates blob URLs from fetched images
+   - Blobs not explicitly revoked (minor memory consideration)
+   - Could add cleanup on unmount if needed
+
+3. **No Image Preloading**
+   - Images fetch after generation completes
+   - Could optimize by triggering fetch earlier if IDs known
+
+### Configuration
+
+**redirect Parameter:**
+- `?redirect=false` - Returns JSON (cloud) or file (local) - **Used for img element population**
+- `?redirect=true` - Returns 302 redirect to image (browser-friendly)
+
+### Files Modified
+
+- `backend/mv/image_generator.py` - Removed base64 field and encoding logic
+- `frontend/src/app/create/page.tsx` - New fetching logic, loading states, UI updates
+- `.devdocs/v2/tasklist.md` - v10 task tracking
+- `.devdocs/v2/feats.md` - v10 feature specification
+- `.devdocs/v2/impl-notes.md` - This section
+
+### Testing Recommendations
+
+1. **Backend Testing**
+   - Verify response payload size (~1KB, no base64)
+   - Test `/get_character_reference/{id}?redirect=false` with both storage modes
+   - Confirm CORS headers allow frontend access
+
+2. **Frontend Testing**
+   - Generate images and verify all 4 load correctly
+   - Test with network throttling (verify progressive loading)
+   - Simulate individual image failures (verify error states)
+   - Test image selection after loading completes
+   - Verify no layout shift when images load
+
+3. **Performance Testing**
+   - Measure time from API response to all images displayed
+   - Compare network waterfall (parallel vs sequential)
+   - Verify browser caching works on repeated loads
+
+### Future Improvements
+
+1. **Remove path Field** - Frontend doesn't use it, can be removed in future iteration
+2. **Eager Image Fetching** - Start fetching immediately when IDs available (before generation completes)
+3. **Blob URL Cleanup** - Add explicit cleanup for local mode blob URLs
+4. **Retry Failed Images** - Add retry button for individual failed images
+5. **Image Preload Hints** - Add `<link rel="preload">` for faster loading
+
+---

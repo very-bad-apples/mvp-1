@@ -941,3 +941,160 @@ Major UX overhaul of `/quick-gen-page` to combine scene prompts and video clips 
   - Note auto-collapse and auto-scroll behaviors
 
 ---
+
+## v10 - Remove Base64 Image Transfer for Character References
+
+### Summary
+Optimize character reference image delivery by removing base64 encoding from API responses. Instead, have the frontend fetch images via the existing `/get_character_reference/{image_id}` endpoint. This reduces initial response payload size (from 4-16MB to ~1KB), improves performance, and better utilizes HTTP caching.
+
+### Backend Tasks
+
+- [ ] **Update CharacterReferenceImage model**
+  - Remove `base64` field from `CharacterReferenceImage` model in `backend/mv/image_generator.py`
+  - Keep `id`, `path`, and `cloud_url` fields
+  - Update model docstring to reflect that base64 is no longer included
+  - Note: `path` field will be removed in future, keeping for now
+
+- [ ] **Update generate_character_reference_image function**
+  - Locate the function that populates `CharacterReferenceImage` objects
+  - Remove logic that reads image file and converts to base64
+  - Ensure `cloud_url` is still populated when `SERVE_FROM_CLOUD=true`
+  - Ensure `path` is still populated for all modes
+  - Ensure `id` (UUID) is still generated and assigned
+
+- [ ] **Update API endpoint response**
+  - Verify `/api/mv/generate_character_reference` endpoint in `backend/routers/mv.py`
+  - Confirm response no longer includes base64 data
+  - Verify response model validation passes without base64 field
+  - Test response payload size (should be ~1KB instead of 4-16MB)
+
+- [ ] **Verify get_character_reference endpoint compatibility**
+  - Confirm `/api/mv/get_character_reference/{image_id}` endpoint works correctly
+  - Test with `redirect=false` (should return JSON with image URL for cloud, serve file for local)
+  - Test with both `SERVE_FROM_CLOUD=true` and `SERVE_FROM_CLOUD=false`
+  - Verify CORS headers allow frontend to fetch images
+  - Verify presigned URLs work correctly for cloud storage
+
+### Frontend Tasks
+
+- [ ] **Update character image fetching logic**
+  - Locate image generation handler in `src/app/create/page.tsx` (around line 232-254)
+  - Remove base64 → Blob → Object URL conversion logic
+  - After receiving response from `/generate_character_reference`:
+    - Extract image IDs from `data.images`
+    - Store image IDs in state
+    - Trigger parallel image fetches for all 4 images
+
+- [ ] **Implement parallel image fetching**
+  - Create function `fetchCharacterImage(imageId: string): Promise<string>`
+  - Fetch from `/api/mv/get_character_reference/{imageId}?redirect=false`
+  - Parse JSON response to get image URL
+  - Handle both cloud (presigned URL) and local (direct file) responses
+  - Return image URL for use in `<img src>`
+
+- [ ] **Add loading states for individual images**
+  - Add state: `imageLoadingStates: { [imageId: string]: 'loading' | 'loaded' | 'error' }`
+  - Initialize all images as 'loading' when fetch starts
+  - Update to 'loaded' when image successfully fetches
+  - Update to 'error' if fetch fails
+
+- [ ] **Update image display grid**
+  - Locate image grid component that displays 4 character reference images
+  - Add placeholder skeleton/empty div for each image (fixed aspect ratio to prevent layout shift)
+  - Show loading spinner overlay while `imageLoadingStates[id] === 'loading'`
+  - Display image when `imageLoadingStates[id] === 'loaded'`
+  - Show error state when `imageLoadingStates[id] === 'error'`
+
+- [ ] **Implement error state UI for individual images**
+  - Display error icon/message on failed image card
+  - Style to make it clear which image failed
+  - No individual retry button (use existing "Regenerate All" button)
+  - Show error message: "Failed to load image"
+
+- [ ] **Remove blob URL cleanup logic**
+  - Remove any `URL.revokeObjectURL()` calls related to character images
+  - Remove blob creation logic
+  - Clean up unused variables and imports
+
+- [ ] **Update image URL usage**
+  - Change `<img>` elements to use fetched URLs directly
+  - Ensure URLs work with both cloud and local storage backends
+  - For cloud: use presigned URL from response
+  - For local: use direct `/api/mv/get_character_reference/{id}` URL
+
+### Testing Tasks
+
+- [ ] **Backend testing with SERVE_FROM_CLOUD=false**
+  - Generate character references in local mode
+  - Verify response payload is small (~1KB, no base64)
+  - Verify `/get_character_reference/{id}?redirect=false` returns file directly
+  - Verify all 4 images can be fetched successfully
+  - Check response headers (Content-Type, etc.)
+
+- [ ] **Backend testing with SERVE_FROM_CLOUD=true**
+  - Generate character references in cloud mode
+  - Verify response includes `cloud_url` field with presigned URL
+  - Verify `/get_character_reference/{id}?redirect=false` returns JSON with URL
+  - Verify presigned URLs are accessible and valid
+  - Check URL expiration time is sufficient
+
+- [ ] **Frontend testing - Happy path**
+  - Click "Generate Character Images"
+  - Verify 4 placeholder cards appear immediately
+  - Verify loading spinners display on all 4 images
+  - Verify images load in parallel (network tab)
+  - Verify images display correctly when loaded
+  - Verify no layout shift when images load
+  - Verify image selection still works
+
+- [ ] **Frontend testing - Error scenarios**
+  - Simulate network error during image fetch
+  - Verify error state displays on affected image(s)
+  - Verify other images continue loading/display
+  - Test with 1, 2, 3, or 4 images failing
+  - Verify "Regenerate All" button still works
+
+- [ ] **Frontend testing - Performance**
+  - Measure time from API response to all images displayed
+  - Compare with old base64 approach (if possible)
+  - Verify parallel loading (should be faster than sequential)
+  - Check network tab for efficient fetching
+  - Verify browser caching works for repeated loads
+
+- [ ] **Frontend testing - Storage backend switching**
+  - Test with `SERVE_FROM_CLOUD=false` on backend
+  - Verify images load from local backend
+  - Switch backend to `SERVE_FROM_CLOUD=true`
+  - Verify images load from S3 presigned URLs
+  - Ensure no code changes needed on frontend
+
+- [ ] **Cross-browser testing** (if applicable)
+  - Test on Chrome/Edge (Chromium)
+  - Test on Firefox
+  - Test on Safari (if available)
+  - Verify CORS and fetch API work consistently
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document removal of base64 image transfer
+  - Document new image fetching flow:
+    1. Generate images → receive image IDs
+    2. Fetch images in parallel via `/get_character_reference/{id}?redirect=false`
+    3. Display images using returned URLs
+  - Note that `redirect=false` is used to get JSON response (cloud) or direct file (local)
+  - Document performance improvements (payload size reduction)
+  - Note placeholder UI prevents layout shift during loading
+
+- [ ] **Update API documentation** (if separate from code)
+  - Update `GenerateCharacterReferenceResponse` schema
+  - Remove `base64` field from example responses
+  - Add note about fetching images via `/get_character_reference` endpoint
+  - Document recommended frontend flow
+
+- [ ] **Add code comments**
+  - Comment on why base64 was removed (performance, payload size)
+  - Document image fetching pattern in frontend code
+  - Note that `path` field will be removed in future iteration
+
+---

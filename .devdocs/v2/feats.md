@@ -100,3 +100,21 @@ on the frontend /quick-gen-page make a large refactor of the page display:
 - **Input Data Collapse**: Auto-collapses when scene generation completes, manually toggleable
 - **Auto-scroll**: Automatically scrolls to Full Video section when stitching completes
 - **Responsive**: Uses Tailwind `flex-col md:flex-row` for responsive behavior
+
+## v10
+
+- update the generate_character_reference endpoint and the frontend elements that utilize it to no longer send back base64 encoded image, but instead get the frontend to download the image /get_character_reference endpoint.
+
+### Implementation Details (Clarified):
+- **Backend Model Changes**: Remove `base64` field from `CharacterReferenceImage`, keep `id`, `path`, and `cloud_url`
+- **Image Fetching**: Frontend uses `/api/mv/get_character_reference/{id}?redirect=false` to fetch images
+  - `redirect=false` returns JSON with presigned URL (cloud) or serves file directly (local)
+  - Mark in `v2/impl-notes.md` that we use `redirect=false` for img element population
+- **Frontend Flow**:
+  1. Call `/generate_character_reference` → receive image IDs only (no base64)
+  2. Fetch all 4 images in parallel via `/get_character_reference/{id}`
+  3. Show loading spinners on placeholder cards during fetch
+  4. Display images when loaded, show error state on individual failures
+- **UI/UX**: Fixed aspect ratio placeholders prevent layout shift, parallel loading with individual loading states
+- **Error Handling**: Show error icon/message on failed images, use existing "Regenerate All" button (no individual retry)
+- **Performance**: Reduces response payload from 4-16MB to ~1KB, enables HTTP caching, parallel image loading
