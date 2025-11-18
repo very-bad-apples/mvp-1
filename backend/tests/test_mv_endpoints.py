@@ -213,6 +213,98 @@ def test_create_project_validation():
     print("✓ Missing required fields correctly rejected")
 
 
+def test_create_scenes_without_project_id():
+    """Test scene creation without project_id (backward compatible)."""
+    print_section("Testing Create Scenes (without project_id)")
+
+    data = {
+        "idea": "Test video concept",
+        "character_description": "Test character",
+        "number_of_scenes": 2
+    }
+
+    response = requests.post(
+        f"{API_URL}/create_scenes",
+        json=data
+    )
+
+    print(f"Status: {response.status_code}")
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Scenes generated: {len(result.get('scenes', []))}")
+        assert "scenes" in result
+        assert "output_files" in result
+        assert "metadata" in result
+        assert "project_id" not in result["metadata"]  # Should not have project_id
+        print("✓ Scene creation without project_id works (backward compatible)")
+        return result
+    else:
+        print(f"Response: {json.dumps(response.json(), indent=2)}")
+        # May fail if Gemini API key not configured - that's OK for this test
+        print("⚠ Scene creation failed (may need GEMINI_API_KEY)")
+        return None
+
+
+def test_create_scenes_with_project_id(project_id: str):
+    """Test scene creation with project_id (database integration)."""
+    print_section(f"Testing Create Scenes (with project_id: {project_id})")
+
+    data = {
+        "idea": "A robot exploring Austin, Texas",
+        "character_description": "Silver metallic humanoid robot with red shield",
+        "number_of_scenes": 2,
+        "project_id": project_id
+    }
+
+    response = requests.post(
+        f"{API_URL}/create_scenes",
+        json=data
+    )
+
+    print(f"Status: {response.status_code}")
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Scenes generated: {len(result.get('scenes', []))}")
+        assert "scenes" in result
+        assert "metadata" in result
+        assert result["metadata"].get("project_id") == project_id
+        assert "scenes_created_in_db" in result["metadata"]
+        assert "db_integration" in result["metadata"]
+        print(f"✓ Scenes created in DB: {result['metadata'].get('scenes_created_in_db')}")
+        print(f"✓ DB Integration status: {result['metadata'].get('db_integration')}")
+        return result
+    elif response.status_code == 404:
+        print("⚠ Project not found (may need to create project first)")
+        return None
+    else:
+        print(f"Response: {json.dumps(response.json(), indent=2)}")
+        # May fail if Gemini API key not configured - that's OK for this test
+        print("⚠ Scene creation failed (may need GEMINI_API_KEY)")
+        return None
+
+
+def test_create_scenes_invalid_project_id():
+    """Test scene creation with invalid project_id format."""
+    print_section("Testing Create Scenes (invalid project_id)")
+
+    data = {
+        "idea": "Test video concept",
+        "character_description": "Test character",
+        "project_id": "invalid-uuid-format"
+    }
+
+    response = requests.post(
+        f"{API_URL}/create_scenes",
+        json=data
+    )
+
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 400  # Should return validation error
+    result = response.json()
+    assert "error" in result.get("detail", {})
+    print("✓ Invalid project_id format correctly rejected")
+
+
 def main():
     """Run all tests."""
     print("\n" + "=" * 60)
@@ -225,6 +317,12 @@ def main():
 
         # Test validation
         test_create_project_validation()
+
+        # Test scene creation without project_id (backward compatibility)
+        test_create_scenes_without_project_id()
+
+        # Test invalid project_id format
+        test_create_scenes_invalid_project_id()
 
         # Test project creation (will fail without files, but tests validation)
         project_id = test_create_project()
@@ -247,6 +345,10 @@ def main():
 
             # Test final video (should return 404)
             test_get_final_video(project_id)
+
+            # Test scene creation with project_id (database integration)
+            # Note: This may fail if GEMINI_API_KEY is not configured
+            test_create_scenes_with_project_id(project_id)
 
         print("\n" + "=" * 60)
         print(" ALL TESTS COMPLETED")

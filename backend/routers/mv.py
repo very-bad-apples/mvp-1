@@ -5,6 +5,7 @@ Handles scene generation and related music video pipeline operations.
 """
 
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,6 +39,8 @@ from mv.video_stitcher import (
     stitch_videos,
 )
 from config import settings
+from mv_models import MVProjectItem, create_scene_item
+from pynamodb.exceptions import DoesNotExist, PutError
 
 logger = structlog.get_logger()
 
@@ -77,15 +80,20 @@ This endpoint uses Google's Gemini model to generate structured scene prompts
 that can be used for video generation. Each scene includes a description and
 negative prompts for what to exclude.
 
+**Database Integration:**
+- If `project_id` is provided, scenes will be saved to DynamoDB and associated with the project
+- If `project_id` is not provided, scenes are saved to filesystem only (backward compatible)
+
 **Limitations:**
 - Synchronous processing (may take 10-30+ seconds)
-- File-based storage (scenes saved to filesystem)
+- File-based storage always occurs (for backward compatibility)
 
 **Required Fields:**
 - idea: The core concept or topic of the video
 - character_description: Visual description of the main character
 
 **Optional Fields (defaults from config):**
+- project_id: UUID of existing project to associate scenes with (saves to DynamoDB)
 - character_characteristics: Personality traits
 - number_of_scenes: Number of scenes to generate (default: 4)
 - video_type: Type of video (default: "video")
@@ -99,12 +107,14 @@ async def create_scenes(request: CreateScenesRequest):
 
     This endpoint:
     1. Validates the request parameters
-    2. Applies defaults from YAML config for optional fields
-    3. Generates scene prompts using Gemini 2.5 Pro
-    4. Saves scenes to files (JSON and Markdown)
-    5. Returns the generated scenes and file paths
+    2. Validates project_id format if provided (must be valid UUID)
+    3. Applies defaults from YAML config for optional fields
+    4. Generates scene prompts using Gemini 2.5 Pro
+    5. Saves scenes to files (JSON and Markdown) - always occurs
+    6. If project_id provided: Creates scene records in DynamoDB and updates project
+    7. Returns the generated scenes and file paths
 
-    **Example Request:**
+    **Example Request (without project_id - backward compatible):**
     ```json
     {
         "idea": "Tourist exploring Austin, Texas",
@@ -112,7 +122,16 @@ async def create_scenes(request: CreateScenesRequest):
     }
     ```
 
-    **Example Response:**
+    **Example Request (with project_id - database integration):**
+    ```json
+    {
+        "idea": "Tourist exploring Austin, Texas",
+        "character_description": "Silver metallic humanoid robot with a red shield",
+        "project_id": "550e8400-e29b-41d4-a716-446655440000"
+    }
+    ```
+
+    **Example Response (with project_id):**
     ```json
     {
         "scenes": [
@@ -128,6 +147,9 @@ async def create_scenes(request: CreateScenesRequest):
         "metadata": {
             "idea": "Tourist exploring Austin, Texas",
             "number_of_scenes": 4,
+            "project_id": "550e8400-e29b-41d4-a716-446655440000",
+            "scenes_created_in_db": 4,
+            "db_integration": "success",
             "parameters_used": {...}
         }
     }
@@ -162,6 +184,23 @@ async def create_scenes(request: CreateScenesRequest):
                 }
             )
 
+        # Validate project_id format if provided
+        project_id = None
+        if request.project_id:
+            try:
+                # Validate UUID format
+                uuid.UUID(request.project_id)
+                project_id = request.project_id
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Invalid project_id format",
+                        "details": "project_id must be a valid UUID"
+                    }
+                )
+
         # Generate scenes
         scenes, output_files = generate_scenes(
             idea=request.idea.strip(),
@@ -172,6 +211,101 @@ async def create_scenes(request: CreateScenesRequest):
             video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
             camera_angle=request.camera_angle.strip() if request.camera_angle else None,
         )
+
+        # If project_id provided, create scene records in DynamoDB
+        scenes_created_in_db = 0
+        if project_id:
+            try:
+                logger.info(
+                    "create_scenes_with_project",
+                    project_id=project_id,
+                    scene_count=len(scenes)
+                )
+
+                # Retrieve project from DynamoDB
+                pk = f"PROJECT#{project_id}"
+                try:
+                    project_item = MVProjectItem.get(pk, "METADATA")
+                except DoesNotExist:
+                    logger.warning("create_scenes_project_not_found", project_id=project_id)
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Project {project_id} not found",
+                            "details": "The specified project does not exist in the database"
+                        }
+                    )
+
+                # Log warning if character description doesn't match (but proceed)
+                if project_item.characterDescription and project_item.characterDescription.strip() != request.character_description.strip():
+                    logger.warning(
+                        "create_scenes_character_mismatch",
+                        project_id=project_id,
+                        project_character=project_item.characterDescription[:100],
+                        request_character=request.character_description[:100]
+                    )
+
+                # Create scene items in DynamoDB
+                reference_image_s3_keys = []
+                if project_item.characterImageS3Key:
+                    reference_image_s3_keys = [project_item.characterImageS3Key]
+
+                for i, scene_data in enumerate(scenes, start=1):
+                    scene_item = create_scene_item(
+                        project_id=project_id,
+                        sequence=i,
+                        prompt=scene_data.description,
+                        negative_prompt=scene_data.negative_description,
+                        duration=8.0,  # Default duration
+                        needs_lipsync=True,  # TODO: Determine based on mode
+                        reference_image_s3_keys=reference_image_s3_keys
+                    )
+
+                    try:
+                        scene_item.save()
+                        scenes_created_in_db += 1
+                        logger.info(
+                            "scene_created_in_db",
+                            project_id=project_id,
+                            sequence=i
+                        )
+                    except PutError as e:
+                        logger.error(
+                            "scene_save_failed",
+                            project_id=project_id,
+                            sequence=i,
+                            error=str(e)
+                        )
+                        # Continue with other scenes even if one fails
+                        # Partial success is acceptable
+
+                # Update project with scene count
+                project_item.sceneCount = len(scenes)
+                project_item.status = "pending"
+                project_item.GSI1PK = "pending"
+                project_item.updatedAt = datetime.now(timezone.utc)
+                project_item.save()
+
+                logger.info(
+                    "create_scenes_db_integration_complete",
+                    project_id=project_id,
+                    scenes_created=scenes_created_in_db,
+                    total_scenes=len(scenes)
+                )
+
+            except HTTPException:
+                # Re-raise HTTP exceptions (like 404)
+                raise
+            except Exception as e:
+                # Log error but don't fail the request - scenes were generated successfully
+                logger.error(
+                    "create_scenes_db_integration_error",
+                    project_id=project_id,
+                    error=str(e),
+                    exc_info=True
+                )
+                # Continue - file-based storage still works
 
         # Build metadata
         metadata = {
@@ -184,6 +318,12 @@ async def create_scenes(request: CreateScenesRequest):
                 "camera_angle": request.camera_angle or "default from config",
             }
         }
+
+        # Add database integration info to metadata if project_id was provided
+        if project_id:
+            metadata["project_id"] = project_id
+            metadata["scenes_created_in_db"] = scenes_created_in_db
+            metadata["db_integration"] = "success" if scenes_created_in_db == len(scenes) else "partial"
 
         response = CreateScenesResponse(
             scenes=scenes,

@@ -54,6 +54,10 @@ class CreateScenesRequest(BaseModel):
     video_type: Optional[str] = Field(None, description="Type of video")
     video_characteristics: Optional[str] = Field(None, description="Visual style of the video")
     camera_angle: Optional[str] = Field(None, description="Camera perspective")
+    project_id: Optional[str] = Field(
+        None, 
+        description="Optional project ID to associate scenes with a DynamoDB project. When provided, scenes will be saved to DynamoDB."
+    )
 
 
 class CreateScenesResponse(BaseModel):
