@@ -23,22 +23,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 export default function CreatePage() {
   const router = useRouter()
   const { toast } = useToast()
-  const [mode, setMode] = useState<Mode>('ad-creative')
+  const [mode, setMode] = useState<Mode>('music-video')
   const [prompt, setPrompt] = useState('')
   const [characterDescription, setCharacterDescription] = useState('')
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
   const [downloadedAudioId, setDownloadedAudioId] = useState<string>('')
   const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
-  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
+  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('youtube')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [useAICharacter, setUseAICharacter] = useState(false)
+  const [useAICharacter, setUseAICharacter] = useState(true)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
   const [generatedImageIds, setGeneratedImageIds] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
   const [generationAttempts, setGenerationAttempts] = useState(0)
+
+  // Update useAICharacter default when mode changes
+  useEffect(() => {
+    if (mode === 'music-video') {
+      setUseAICharacter(true)
+    } else if (mode === 'ad-creative') {
+      setUseAICharacter(false)
+    }
+  }, [mode])
 
   // Cleanup blob URLs on unmount to prevent memory leaks
   useEffect(() => {
@@ -63,8 +72,8 @@ export default function CreatePage() {
       if (audioSource === 'youtube' && !downloadedAudioId) return false
     }
 
-    // Check AI character requirements
-    if (useAICharacter && selectedImageIndex === null) return false
+    // Check AI character requirements - only required for ad-creative mode
+    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) return false
 
     return true
   }
@@ -110,7 +119,8 @@ export default function CreatePage() {
       }
     }
 
-    if (useAICharacter && selectedImageIndex === null) {
+    // Character image selection only required for ad-creative mode
+    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) {
       toast({
         title: "Error",
         description: "Please generate and select a character image",
@@ -324,14 +334,14 @@ export default function CreatePage() {
               </div>
 
               {/* Mode-Specific Upload Zone */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-1">
-                  <Label className="text-sm font-medium text-white">
-                    {mode === 'ad-creative' ? 'Product Images' : 'Music Source'}
-                  </Label>
-                  <span className="text-red-400 text-sm">*</span>
-                </div>
-                {mode === 'ad-creative' ? (
+              {mode === 'ad-creative' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm font-medium text-white">
+                      Product Images
+                    </Label>
+                    <span className="text-red-400 text-sm">*</span>
+                  </div>
                   <div>
                     <ImageUploadZone
                       onFilesChange={setUploadedImages}
@@ -343,68 +353,8 @@ export default function CreatePage() {
                       </p>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Audio Source Tabs */}
-                    <Tabs
-                      value={audioSource}
-                      onValueChange={(value) => {
-                        setAudioSource(value as 'upload' | 'youtube')
-                        // Clear the other source when switching
-                        if (value === 'upload') {
-                          setDownloadedAudioId('')
-                          setDownloadedAudioUrl('')
-                        } else {
-                          setUploadedAudio(null)
-                        }
-                      }}
-                      className="w-full"
-                    >
-                      <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
-                        <TabsTrigger
-                          value="upload"
-                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                        >
-                          Upload File
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="youtube"
-                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                        >
-                          YouTube URL
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-
-                    {/* Audio Upload Zone */}
-                    {audioSource === 'upload' && (
-                      <div>
-                        <AudioUploadZone
-                          onFileChange={setUploadedAudio}
-                          file={uploadedAudio}
-                        />
-                        {!uploadedAudio && (
-                          <p className="text-xs text-red-400 mt-2">
-                            Music file is required
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* YouTube Downloader */}
-                    {audioSource === 'youtube' && (
-                      <div>
-                        <YouTubeAudioDownloader
-                          onAudioDownloaded={(audioId, audioUrl) => {
-                            setDownloadedAudioId(audioId)
-                            setDownloadedAudioUrl(audioUrl)
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* User Prompt */}
               <div className="space-y-3">
@@ -435,7 +385,7 @@ export default function CreatePage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="character" className="text-sm font-medium text-white">
-                    Character & Style
+                    Character & Style{mode === 'music-video' ? ' (Optional)' : ''}
                   </Label>
                   <div className="flex items-center gap-2">
                     <Label htmlFor="ai-toggle" className="text-sm text-gray-400 cursor-pointer">
@@ -450,7 +400,7 @@ export default function CreatePage() {
                   </div>
                 </div>
 
-                {useAICharacter && (
+                {(useAICharacter || mode === 'music-video') && (
                   <div className="space-y-4">
                     {/* Character Description Input */}
                     <Textarea
@@ -583,12 +533,83 @@ export default function CreatePage() {
                   </div>
                 )}
 
-                {!useAICharacter && (
+                {!useAICharacter && mode === 'ad-creative' && (
                   <p className="text-xs text-gray-400">
                     Enable &quot;Use AI Generation&quot; to add character and style details
                   </p>
                 )}
               </div>
+
+              {/* Music Source for Music Video Mode */}
+              {mode === 'music-video' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm font-medium text-white">
+                      Music Source
+                    </Label>
+                    <span className="text-red-400 text-sm">*</span>
+                  </div>
+                  <div className="space-y-4">
+                    {/* Audio Source Tabs */}
+                    <Tabs
+                      value={audioSource}
+                      onValueChange={(value) => {
+                        setAudioSource(value as 'upload' | 'youtube')
+                        // Clear the other source when switching
+                        if (value === 'upload') {
+                          setDownloadedAudioId('')
+                          setDownloadedAudioUrl('')
+                        } else {
+                          setUploadedAudio(null)
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
+                        <TabsTrigger
+                          value="upload"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          Upload File
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="youtube"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          YouTube URL
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {/* Audio Upload Zone */}
+                    {audioSource === 'upload' && (
+                      <div>
+                        <AudioUploadZone
+                          onFileChange={setUploadedAudio}
+                          file={uploadedAudio}
+                        />
+                        {!uploadedAudio && (
+                          <p className="text-xs text-red-400 mt-2">
+                            Music file is required
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* YouTube Downloader */}
+                    {audioSource === 'youtube' && (
+                      <div>
+                        <YouTubeAudioDownloader
+                          onAudioDownloaded={(audioId, audioUrl) => {
+                            setDownloadedAudioId(audioId)
+                            setDownloadedAudioUrl(audioUrl)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className="space-y-2">
@@ -649,12 +670,12 @@ export default function CreatePage() {
                         )}
                       </>
                     )}
-                    {useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
+                    {mode === 'ad-creative' && useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
                       <p className="text-xs text-yellow-400 text-center">
                         Please select a character image to continue
                       </p>
                     )}
-                    {useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
+                    {mode === 'ad-creative' && useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
                       <p className="text-xs text-yellow-400 text-center">
                         Please generate and select a character image to continue
                       </p>

@@ -76,13 +76,31 @@ class TestSimulateDelay:
     @patch("mv.mock_video_generator.settings")
     @patch("mv.mock_video_generator.time.sleep")
     def test_simulate_delay_range(self, mock_sleep, mock_settings):
-        """Test that delay is within 5-10 second range."""
+        """Test that delay is within configured range."""
         mock_settings.MV_DEBUG_MODE = False
+        mock_settings.MOCK_VIDEO_DELAY_MIN = 5.0
+        mock_settings.MOCK_VIDEO_DELAY_MAX = 10.0
 
         # Run multiple times to check range
         for _ in range(10):
             delay = simulate_processing_delay()
             assert 5.0 <= delay <= 10.0
+
+        # Verify sleep was called
+        assert mock_sleep.call_count == 10
+
+    @patch("mv.mock_video_generator.settings")
+    @patch("mv.mock_video_generator.time.sleep")
+    def test_simulate_delay_custom_range(self, mock_sleep, mock_settings):
+        """Test that delay respects custom configured range."""
+        mock_settings.MV_DEBUG_MODE = False
+        mock_settings.MOCK_VIDEO_DELAY_MIN = 2.0
+        mock_settings.MOCK_VIDEO_DELAY_MAX = 4.0
+
+        # Run multiple times to check custom range
+        for _ in range(10):
+            delay = simulate_processing_delay()
+            assert 2.0 <= delay <= 4.0
 
         # Verify sleep was called
         assert mock_sleep.call_count == 10
@@ -93,6 +111,8 @@ class TestSimulateDelay:
     def test_simulate_delay_with_debug_logging(self, mock_sleep, mock_settings, mock_log):
         """Test delay simulation with debug mode enabled."""
         mock_settings.MV_DEBUG_MODE = True
+        mock_settings.MOCK_VIDEO_DELAY_MIN = 5.0
+        mock_settings.MOCK_VIDEO_DELAY_MAX = 10.0
 
         delay = simulate_processing_delay()
         mock_log.assert_called_once()
