@@ -518,3 +518,96 @@ Automatically trigger video stitching when all individual scene clips finish gen
   - Document error handling and retry mechanism
   - Note edge case handling (partial failures, single video, etc.)
   - Document Full Video card placement and styling
+
+---
+
+## v8 - Music Video Mode UX Improvements
+
+### Summary
+Improve the /create page UX for music video mode by defaulting to "music video" mode, hiding product image upload for music videos, making Character & Style section always visible, and defaulting "use AI generation" to ON while making character generation optional.
+
+### Frontend Tasks
+
+- [ ] **Change default generation mode**
+  - Update initial state of `mode` from 'ad-creative' to 'music-video'
+  - This makes music video the default selected mode on page load
+
+- [ ] **Make Character & Style section always visible in music-video mode**
+  - Remove conditional rendering based on `useAICharacter` for music-video mode
+  - Character & Style section should always be visible when mode === 'music-video'
+  - Keep toggle behavior (user can still toggle AI generation on/off)
+  - For ad-creative mode, keep existing behavior (only show when toggle is on)
+
+- [ ] **Set "use AI generation" default based on mode**
+  - When mode changes to 'music-video', set `useAICharacter` to true
+  - When mode changes to 'ad-creative', set `useAICharacter` to false (existing default)
+  - Allow user to toggle on/off regardless of mode
+
+- [ ] **Hide product image upload in music-video mode**
+  - Product image upload section should not render when mode === 'music-video'
+  - Only show music source (audio upload/YouTube) in music-video mode
+  - Keep product image upload visible in ad-creative mode
+
+- [ ] **Update validation logic for music-video mode**
+  - Remove character image selection requirement from validation for music-video mode
+  - Character generation/selection remains optional in music-video mode
+  - Keep character image selection required for ad-creative mode (if AI toggle is on)
+  - Update `isFormValid()` function to handle mode-specific requirements
+
+- [ ] **Update validation messages**
+  - Remove "Please generate and select a character image" messages for music-video mode
+  - Keep character image selection messages for ad-creative mode
+  - Ensure validation messages accurately reflect optional vs required fields per mode
+
+- [ ] **Update character section label/description**
+  - Consider updating label or adding description to clarify:
+    - In music-video mode: "Character & Style (Optional)"
+    - In ad-creative mode: Keep current behavior
+
+- [ ] **Handle mode switching edge cases**
+  - When switching from ad-creative to music-video:
+    - Set `useAICharacter` to true
+    - Keep existing character description/images if present
+  - When switching from music-video to ad-creative:
+    - Set `useAICharacter` to false
+    - Keep existing character description/images if present (user can toggle back on)
+
+### Testing Tasks
+
+- [ ] **Test default mode selection**
+  - Verify page loads with "music video" mode selected
+  - Verify Character & Style section is visible by default
+  - Verify "use AI generation" toggle is ON by default
+
+- [ ] **Test music-video mode behavior**
+  - Verify product image upload is NOT visible
+  - Verify music source (upload/YouTube) IS visible
+  - Verify Character & Style section is always visible (regardless of toggle)
+  - Verify form can be submitted without character images
+  - Verify form can be submitted with character images (if user generates them)
+
+- [ ] **Test ad-creative mode behavior**
+  - Switch to ad-creative mode
+  - Verify product image upload IS visible
+  - Verify Character & Style section is hidden by default
+  - Verify toggling "use AI generation" shows/hides Character & Style section
+  - Verify character image selection IS required when toggle is on
+
+- [ ] **Test mode switching**
+  - Test switching from music-video to ad-creative
+  - Test switching from ad-creative to music-video
+  - Verify toggle states update correctly
+  - Verify validation messages update correctly
+  - Verify form validity updates correctly
+
+- [ ] **Test Quick Job button**
+  - Verify Quick Job works without character images in music-video mode
+  - Verify Quick Job works with character images in music-video mode
+  - Verify existing ad-creative Quick Job behavior still works
+
+### Documentation Tasks
+
+- [ ] **Update impl-notes.md**
+  - Document music-video mode as default
+  - Document optional vs required character generation per mode
+  - Note UX improvements for music video workflow
