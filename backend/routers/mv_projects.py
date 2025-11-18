@@ -13,6 +13,7 @@ from typing import Optional, List
 from mv_schemas import (
     ProjectCreateResponse,
     ProjectResponse,
+    ProjectUpdateRequest,
     SceneResponse,
 )
 from mv_models import (
@@ -365,6 +366,85 @@ async def get_project(project_id: str):
             detail={
                 "error": "InternalError",
                 "message": "Failed to retrieve project",
+                "details": str(e)
+            }
+        )
+
+
+@router.patch(
+    "/projects/{project_id}",
+    response_model=ProjectResponse,
+    summary="Update Project Metadata",
+    description="""
+Update project metadata and status.
+
+Typical updates:
+- Change status as processing progresses
+- Set final output S3 key when composition completes
+- Update counters (completed/failed scenes)
+"""
+)
+async def update_project(project_id: str, update_data: ProjectUpdateRequest):
+    """
+    Update project metadata.
+
+    Args:
+        project_id: Project UUID
+        update_data: Fields to update
+
+    Returns:
+        Updated ProjectResponse
+    """
+    try:
+        logger.info(
+            "update_project_request",
+            project_id=project_id,
+            updates=update_data.model_dump(exclude_none=True)
+        )
+
+        # Retrieve existing project
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found"
+                }
+            )
+
+        # Update fields
+        updated = False
+
+        if update_data.status:
+            project_item.status = update_data.status
+            project_item.GSI1PK = update_data.status
+            updated = True
+
+        if update_data.finalOutputS3Key:
+            project_item.finalOutputS3Key = update_data.finalOutputS3Key
+            updated = True
+
+        if updated:
+            project_item.updatedAt = datetime.now(timezone.utc)
+            project_item.save()
+            logger.info("project_updated", project_id=project_id)
+
+        # Return updated project (reuse get_project logic)
+        return await get_project(project_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("update_project_error", project_id=project_id, error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to update project",
                 "details": str(e)
             }
         )
