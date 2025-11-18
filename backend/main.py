@@ -26,6 +26,9 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
+# Import settings
+from config import settings
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,16 +69,67 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
+# Get allowed origins from environment variable
+cors_origins = settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS else [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-    ],  # Frontend origins
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# API Authentication middleware - applies to all /api/ routes
+@app.middleware("http")
+async def api_authentication_middleware(request: Request, call_next):
+    """Authenticate all /api/ routes with API key"""
+    # Skip authentication for non-API routes
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    
+    # Skip authentication for health check and docs
+    if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+        return await call_next(request)
+    
+    # Import here to avoid circular imports
+    # Import the verification function (not the FastAPI dependency)
+    import auth
+    
+    # Get API key from header or query parameter
+    api_key_header = request.headers.get("X-API-Key")
+    api_key_query = request.query_params.get("api_key")
+    api_key = api_key_header or api_key_query
+    
+    if not api_key:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "Unauthorized",
+                "message": "API key missing. Provide X-API-Key header or ?api_key=YOUR_KEY",
+                "detail": "Authentication required for /api/ endpoints"
+            },
+            headers={"WWW-Authenticate": "ApiKey"}
+        )
+    
+    # Verify API key using the auth module's verification function
+    if not auth.check_api_key(api_key):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "Unauthorized",
+                "message": "Invalid API key",
+                "detail": "The provided API key is not valid"
+            },
+            headers={"WWW-Authenticate": "ApiKey"}
+        )
+    
+    # Continue to the endpoint
+    return await call_next(request)
 
 
 # Request logging middleware

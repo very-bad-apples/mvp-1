@@ -193,3 +193,226 @@ variable "use_graviton" {
   default     = true
 }
 
+variable "redirect_http_to_https" {
+  description = "Redirect HTTP traffic to HTTPS (only applies when enable_https is true)"
+  type        = bool
+  default     = true
+}
+
+# =============================================================================
+# WAF (Web Application Firewall) Configuration
+# =============================================================================
+
+variable "enable_waf" {
+  description = "Enable AWS WAF for ALB protection"
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = "Rate limit per IP (requests per 5 minutes). Set to 0 to disable. Recommended: 2000"
+  type        = number
+  default     = 0
+  
+  validation {
+    condition     = var.waf_rate_limit >= 0 && var.waf_rate_limit <= 100000
+    error_message = "Rate limit must be between 0 and 100000."
+  }
+}
+
+variable "waf_allowed_ips" {
+  description = "List of IP addresses/CIDR blocks to whitelist (e.g., [\"1.2.3.4/32\", \"5.6.7.0/24\"])"
+  type        = list(string)
+  default     = []
+}
+
+variable "waf_blocked_ips" {
+  description = "List of IP addresses/CIDR blocks to blacklist"
+  type        = list(string)
+  default     = []
+}
+
+# =============================================================================
+# ALB Authentication Configuration
+# =============================================================================
+
+variable "enable_alb_auth" {
+  description = "Enable authentication on ALB (Cognito or OIDC)"
+  type        = bool
+  default     = false
+}
+
+variable "alb_auth_type" {
+  description = "Type of authentication: 'cognito' or 'oidc'"
+  type        = string
+  default     = "cognito"
+  
+  validation {
+    condition     = contains(["cognito", "oidc"], var.alb_auth_type)
+    error_message = "Auth type must be 'cognito' or 'oidc'."
+  }
+}
+
+variable "alb_auth_priority" {
+  description = "Priority for authentication listener rule (lower = higher priority)"
+  type        = number
+  default     = 100
+}
+
+variable "alb_auth_paths" {
+  description = "List of paths to protect with authentication (empty = all paths). Example: ['/admin/*', '/api/secure/*']"
+  type        = list(string)
+  default     = []  # Empty = protect all paths
+}
+
+# =============================================================================
+# Cognito Configuration
+# =============================================================================
+
+variable "cognito_user_pool_name" {
+  description = "Name of the Cognito User Pool"
+  type        = string
+  default     = "bad-apples-users"
+}
+
+variable "cognito_user_pool_domain" {
+  description = "Domain name for Cognito User Pool (must be globally unique)"
+  type        = string
+  default     = "bad-apples-auth"
+}
+
+variable "cognito_callback_urls" {
+  description = "Allowed callback URLs for Cognito OAuth"
+  type        = list(string)
+  default     = ["https://*"]  # Allow all HTTPS URLs
+}
+
+variable "cognito_logout_urls" {
+  description = "Allowed logout URLs for Cognito OAuth"
+  type        = list(string)
+  default     = ["https://*"]
+}
+
+variable "cognito_scope" {
+  description = "OAuth scopes for Cognito authentication"
+  type        = string
+  default     = "openid email profile"
+}
+
+variable "cognito_session_cookie_name" {
+  description = "Name of the session cookie"
+  type        = string
+  default     = "AWSELBAuthSessionCookie"
+}
+
+variable "cognito_session_timeout" {
+  description = "Session timeout in seconds (default: 7 days)"
+  type        = number
+  default     = 604800
+}
+
+variable "cognito_access_token_validity" {
+  description = "Access token validity in minutes"
+  type        = number
+  default     = 60
+}
+
+variable "cognito_id_token_validity" {
+  description = "ID token validity in minutes"
+  type        = number
+  default     = 60
+}
+
+variable "cognito_refresh_token_validity" {
+  description = "Refresh token validity in days"
+  type        = number
+  default     = 30
+}
+
+variable "cognito_enable_mfa" {
+  description = "Enable Multi-Factor Authentication for Cognito"
+  type        = bool
+  default     = false
+}
+
+# =============================================================================
+# OIDC Configuration
+# =============================================================================
+
+variable "oidc_issuer" {
+  description = "OIDC issuer URL (e.g., https://accounts.google.com)"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_authorization_endpoint" {
+  description = "OIDC authorization endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_token_endpoint" {
+  description = "OIDC token endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_user_info_endpoint" {
+  description = "OIDC user info endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_client_id" {
+  description = "OIDC client ID"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oidc_client_secret" {
+  description = "OIDC client secret"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "oidc_scope" {
+  description = "OIDC scopes (e.g., 'openid email profile')"
+  type        = string
+  default     = "openid email profile"
+}
+
+variable "oidc_session_cookie_name" {
+  description = "Name of the OIDC session cookie"
+  type        = string
+  default     = "AWSELBAuthSessionCookie"
+}
+
+variable "oidc_session_timeout" {
+  description = "OIDC session timeout in seconds"
+  type        = number
+  default     = 604800
+}
+
+# =============================================================================
+# CORS Configuration (defined in main variables.tf but documented here)
+# =============================================================================
+# 
+# CORS (Cross-Origin Resource Sharing) settings are configured via the
+# cors_allowed_origins variable in terraform/variables.tf
+# 
+# To add production URLs:
+# 1. Edit terraform/terraform.tfvars
+# 2. Add your frontend URLs to cors_allowed_origins list
+# 3. Run: terraform apply
+# 
+# Example:
+#   cors_allowed_origins = [
+#     "http://localhost:3000",
+#     "https://yourdomain.com",
+#     "https://www.yourdomain.com"
+#   ]
+# 
+# =============================================================================
+

@@ -77,8 +77,9 @@ alb_idle_timeout           = 60    # ALB timeout in seconds
 enable_deletion_protection = false # Protect ALB from accidental deletion (enable for prod)
 
 # HTTPS Configuration (optional)
-enable_https    = false # Set to true if you have an ACM certificate
-certificate_arn = ""    # ARN of your ACM certificate (if enable_https = true)
+enable_https             = false # Set to true if you have an ACM certificate
+certificate_arn          = ""    # ARN of your ACM certificate (if enable_https = true)
+redirect_http_to_https   = true  # Automatically redirect HTTP to HTTPS (when enable_https = true)
 
 # =============================================================================
 # Application Secrets (Optional)

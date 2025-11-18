@@ -1,93 +1,146 @@
-# Example Terraform Variables
-# Copy this file to terraform.tfvars and customize for your environment
+# =============================================================================
+# Terraform Variables - Example Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to Git!
+# =============================================================================
 
-# AWS Region
-aws_region = "us-east-1"
+# =============================================================================
+# AWS Configuration
+# =============================================================================
 
-# S3 Bucket Name (MUST BE GLOBALLY UNIQUE!)
-# Suggestion: use your-name-video-generator or company-name-video-gen
-bucket_name = "video-generator-storage"
+aws_region      = "us-east-1"
+environment     = "dev"  # Options: dev, staging, prod
+bucket_name     = "bad-apples-video-storage"  # Must be globally unique!
 
-# Environment
-environment = "dev"  # Options: dev, staging, prod
+# =============================================================================
+# API Keys (All Optional - Leave empty "" if not using)
+# =============================================================================
 
-# IAM User Name
-iam_user_name = "video-generator-app"
+# Anthropic Claude - For AI text generation and scene creation
+# Get from: https://console.anthropic.com/settings/keys
+anthropic_api_key = ""
 
-# CORS Allowed Origins (for web access)
-cors_allowed_origins = [
-  "http://localhost:3000",  # Frontend dev
-  "http://localhost:8000",  # Backend dev
-  # "https://yourdomain.com",  # Production domain
-]
+# OpenAI - Alternative AI provider
+# Get from: https://platform.openai.com/api-keys
+openai_api_key = ""
 
-# Asset Retention (days before deletion, 0 = never delete)
-asset_retention_days = 0  # Keep videos forever
+# Replicate - For video generation models
+# Get from: https://replicate.com/account/api-tokens
+replicate_api_key = ""
 
-# Enable CloudWatch Monitoring
-enable_monitoring = false
+# ElevenLabs - For voice/audio generation
+# Get from: https://elevenlabs.io/app/settings/api-keys
+elevenlabs_api_key = ""
 
-# Bucket Size Alarm Threshold (GB)
-bucket_size_alarm_threshold_gb = 100
+# Google Gemini - Optional AI provider
+# Get from: https://makersuite.google.com/app/apikey
+gemini_api_key = ""
 
-# ===== App Runner Configuration =====
+# AWS Credentials (for S3 access)
+# Note: ECS tasks can also use IAM roles instead of access keys
+aws_access_key_id     = ""
+aws_secret_access_key = ""
 
-# App Runner Service Name
-app_runner_service_name = "video-generator-api"
-
-# ECR Repository Names
-app_runner_ecr_repo_name = "video-generator-app"
-worker_ecr_repo_name     = "video-generator-worker"
-
-# App Runner Instance Configuration
-app_runner_cpu    = "1024"  # 1 vCPU - Options: 256, 512, 1024, 2048, 4096
-app_runner_memory = "2048"  # 2 GB - Options: 512-12288 MB (see variables.tf for full list)
-
-# Auto Scaling Configuration
-app_runner_min_instances   = 1
-app_runner_max_instances   = 5
-app_runner_max_concurrency = 100  # Max concurrent requests per instance
-
-# Auto Deploy (enable automatic deployments on new image push)
-app_runner_auto_deploy = false
-
-# CORS Origins for App Runner
-app_runner_cors_origins = [
-  "http://localhost:3000",
-  # "https://yourdomain.com",  # Add your production domain
-]
-
-# Mock Video Generation (useful for testing without API costs)
-mock_video_generation = false
-
-# ===== Secrets Configuration =====
-# IMPORTANT: It's recommended to NOT store these in terraform.tfvars
-# Instead, pass them via environment variables or update AWS Secrets Manager manually
-# Example: export TF_VAR_anthropic_api_key="your-key-here"
-
-# anthropic_api_key  = ""  # Set via TF_VAR_anthropic_api_key
-# openai_api_key     = ""  # Set via TF_VAR_openai_api_key
-# replicate_api_key  = ""  # Set via TF_VAR_replicate_api_key
-# elevenlabs_api_key = ""  # Set via TF_VAR_elevenlabs_api_key
-# gemini_api_key     = ""  # Set via TF_VAR_gemini_api_key
-
-# Database URL (use RDS or managed database in production)
-# database_url = "postgresql://user:pass@host:5432/dbname"
+# Database URL
 database_url = "sqlite:///./video_generator.db"
 
-# Redis URL (use ElastiCache in production)
-# redis_url = "redis://your-redis-host:6379/0"
-redis_url = ""
+# =============================================================================
+# CORS Configuration
+# =============================================================================
 
-# ===== VPC Configuration (Optional) =====
-# Uncomment and configure if you need VPC connectivity (e.g., for private Redis/RDS)
+cors_allowed_origins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  # Add your production frontend URLs here:
+  # "https://yourdomain.com",
+  # "https://www.yourdomain.com",
+  # "https://app.yourdomain.com"
+]
 
-# enable_vpc_connector = true
-# private_subnet_ids   = ["subnet-xxxxx", "subnet-yyyyy"]
-# security_group_ids   = ["sg-xxxxx"]
+# =============================================================================
+# ECS Configuration
+# =============================================================================
 
-# ===== Custom Domain (Optional) =====
-# Requires ACM certificate in the same region
+ecs_cluster_name     = "bad-apples-cluster"
+ecs_service_name     = "bad-apples-backend-service"
+ecs_task_family      = "bad-apples-backend-task"
+ecr_repository_name  = "bad-apples-backend"
+container_name       = "bad-apples-backend"
+container_port       = 8000
 
-# custom_domain = "api.yourdomain.com"
+# Task Resources
+ecs_task_cpu    = 1024  # 1 vCPU (Options: 256, 512, 1024, 2048, 4096)
+ecs_task_memory = 2048  # 2 GB (Must be compatible with CPU)
 
+# Auto-scaling
+ecs_desired_count = 1  # Number of tasks to run
+ecs_min_capacity  = 1  # Minimum tasks for auto-scaling
+ecs_max_capacity  = 4  # Maximum tasks for auto-scaling
+
+autoscaling_target_cpu    = 70  # Scale out at 70% CPU
+autoscaling_target_memory = 80  # Scale out at 80% memory
+
+# =============================================================================
+# Networking
+# =============================================================================
+
+create_vpc = true
+vpc_cidr   = "10.0.0.0/16"
+
+# =============================================================================
+# Health Checks
+# =============================================================================
+
+health_check_path                = "/health"
+health_check_interval            = 30
+health_check_timeout             = 5
+health_check_healthy_threshold   = 2
+health_check_unhealthy_threshold = 3
+
+# =============================================================================
+# Monitoring & Logging
+# =============================================================================
+
+log_retention_days = 7      # CloudWatch log retention (1, 3, 5, 7, 14, 30...)
+enable_ecs_exec    = false  # Enable for debugging (allows shell access)
+enable_monitoring  = false  # Enable CloudWatch detailed monitoring
+
+# =============================================================================
+# Advanced Options
+# =============================================================================
+
+# Use AWS Graviton (ARM64) processors - 20% cost savings
+use_graviton = true
+
+# HTTPS Configuration (requires ACM certificate)
+enable_https            = false
+certificate_arn         = ""
+redirect_http_to_https  = true
+
+# ALB Configuration
+alb_idle_timeout           = 60
+enable_deletion_protection = false
+
+# =============================================================================
+# SETUP INSTRUCTIONS
+# =============================================================================
+# 
+# 1. Copy this file:
+#    cp terraform.tfvars.example terraform.tfvars
+# 
+# 2. Edit terraform.tfvars and fill in your API keys
+# 
+# 3. Make sure terraform.tfvars is in .gitignore:
+#    echo "terraform/terraform.tfvars" >> .gitignore
+# 
+# 4. Initialize and apply:
+#    cd terraform
+#    terraform init
+#    terraform apply
+# 
+# 5. Get outputs:
+#    terraform output
+#    terraform output -raw alb_url
+# 
+# =============================================================================
