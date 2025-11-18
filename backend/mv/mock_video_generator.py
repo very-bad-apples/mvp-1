@@ -67,10 +67,14 @@ def simulate_processing_delay() -> float:
     """
     Simulate video generation processing time.
 
+    The delay range is controlled by environment variables:
+    - MOCK_VIDEO_DELAY_MIN: Minimum delay in seconds (default: 5.0)
+    - MOCK_VIDEO_DELAY_MAX: Maximum delay in seconds (default: 10.0)
+
     Returns:
-        The actual delay time in seconds (between 5-10 seconds).
+        The actual delay time in seconds.
     """
-    delay = random.uniform(5.0, 10.0)
+    delay = random.uniform(settings.MOCK_VIDEO_DELAY_MIN, settings.MOCK_VIDEO_DELAY_MAX)
 
     if settings.MV_DEBUG_MODE:
         from mv.debug import log_mock_delay

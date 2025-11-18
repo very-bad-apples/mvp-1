@@ -64,3 +64,12 @@ also utilize the MV_DEBUG_MODE logic to print out debugging data when that setti
 ## v7
 
 Integrate the /api/stitch-videos endpoint with quick-gen-page frontend page: when the all the individual scene clips finish generating call the stitch-video endpoint with each clips, then when that's finished processing, return the fully stitched-video and display below all the individual clips.
+
+## v8
+
+on the fronend /create page make the following modifications:
+- on generation mode toggle button default to "music video"
+- for music video selection:
+    - don't display the product image upload, and don't require for validation for "generate video" button
+    - display character & style input box by default with "use ai generation" toggled on by default
+
