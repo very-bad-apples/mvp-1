@@ -14,6 +14,9 @@ from mv_schemas import (
     ProjectCreateResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    ComposeRequest,
+    ComposeResponse,
+    FinalVideoResponse,
     SceneResponse,
 )
 from mv_models import (
@@ -24,7 +27,9 @@ from services.s3_storage import (
     get_s3_storage_service,
     generate_s3_key,
 )
+from config import settings
 from pynamodb.exceptions import PutError, DoesNotExist
+import json
 
 logger = structlog.get_logger()
 
@@ -445,6 +450,202 @@ async def update_project(project_id: str, update_data: ProjectUpdateRequest):
             detail={
                 "error": "InternalError",
                 "message": "Failed to update project",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/projects/{project_id}/compose",
+    response_model=ComposeResponse,
+    summary="Compose Final Video",
+    description="""
+Queue final video composition job.
+
+This endpoint:
+1. Validates all scenes are completed
+2. Queues composition job to Redis
+3. Returns job ID for tracking
+
+The worker process will:
+1. Download scene videos from S3
+2. Stitch them with moviepy
+3. Add audio backing track
+4. Upload final video to S3
+5. Update project with final output S3 key
+"""
+)
+async def compose_video(project_id: str, request: ComposeRequest):
+    """
+    Queue final video composition.
+
+    Args:
+        project_id: Project UUID
+        request: Composition request (currently no additional params)
+
+    Returns:
+        ComposeResponse with job ID
+    """
+    try:
+        logger.info("compose_request", project_id=project_id)
+
+        # Retrieve project
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found"
+                }
+            )
+
+        # Validate all scenes are completed
+        if (project_item.completedScenes or 0) < (project_item.sceneCount or 0):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Cannot compose video: not all scenes are completed",
+                    "details": f"Completed: {project_item.completedScenes or 0}/{project_item.sceneCount or 0}"
+                }
+            )
+
+        # Check for failed scenes
+        if (project_item.failedScenes or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Cannot compose video: some scenes failed",
+                    "details": f"Failed scenes: {project_item.failedScenes or 0}"
+                }
+            )
+
+        # Queue composition job to Redis
+        from redis_client import redis_client
+
+        job_id = f"compose_{project_id}"
+
+        job_data = {
+            "job_id": job_id,
+            "project_id": project_id,
+            "type": "compose",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+
+        # Push to Redis queue using direct client access
+        redis_conn = redis_client.get_client()
+        redis_conn.lpush("video_composition_queue", json.dumps(job_data))
+        logger.info("composition_job_queued", job_id=job_id, project_id=project_id)
+
+        # Update project status
+        project_item.status = "composing"
+        project_item.GSI1PK = "composing"
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+
+        return ComposeResponse(
+            jobId=job_id,
+            projectId=project_id,
+            status="queued",
+            message="Video composition job queued"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("compose_error", project_id=project_id, error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to queue composition job",
+                "details": str(e)
+            }
+        )
+
+
+@router.get(
+    "/projects/{project_id}/final-video",
+    response_model=FinalVideoResponse,
+    summary="Get Final Video URL",
+    description="""
+Retrieve presigned URL for final composed video.
+
+Returns:
+- Presigned S3 URL valid for configured duration (default 1 hour)
+- URL expires after specified time
+
+Returns 404 if video is not yet composed.
+"""
+)
+async def get_final_video(project_id: str):
+    """
+    Get presigned URL for final video.
+
+    Args:
+        project_id: Project UUID
+
+    Returns:
+        FinalVideoResponse with presigned URL
+    """
+    try:
+        logger.info("get_final_video_request", project_id=project_id)
+
+        # Retrieve project
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found"
+                }
+            )
+
+        # Check if final output exists
+        if not project_item.finalOutputS3Key:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": "Final video not yet available",
+                    "details": f"Project status: {project_item.status}"
+                }
+            )
+
+        # Generate presigned URL
+        s3_service = get_s3_storage_service()
+        video_url = s3_service.generate_presigned_url(project_item.finalOutputS3Key)
+
+        logger.info(
+            "final_video_url_generated",
+            project_id=project_id,
+            s3_key=project_item.finalOutputS3Key
+        )
+
+        return FinalVideoResponse(
+            projectId=project_id,
+            videoUrl=video_url,
+            expiresInSeconds=settings.PRESIGNED_URL_EXPIRY
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_final_video_error", project_id=project_id, error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to retrieve final video",
                 "details": str(e)
             }
         )
