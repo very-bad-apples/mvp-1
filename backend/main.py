@@ -229,7 +229,7 @@ async def health_check():
 
 # Include routers
 from routers import generate, jobs, websocket, models, mv, audio
-from routers import mv_projects
+from routers import projects
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
@@ -237,8 +237,8 @@ app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
 app.include_router(audio.router)
-app.include_router(mv_projects.router)
-logger.info("router_loaded", router="mv_projects")
+app.include_router(projects.router)
+logger.info("router_loaded", router="projects")
 
 
 # Root endpoint
