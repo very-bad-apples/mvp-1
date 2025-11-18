@@ -24,7 +24,7 @@ resource "aws_s3_bucket" "video_storage" {
     Name        = "AI Video Generator Storage"
     Environment = var.environment
     ManagedBy   = "Terraform"
-    Project     = "gauntlet-mvp"
+    Project     = "bad-apples-mvp"
   }
 }
 
@@ -203,5 +203,121 @@ resource "aws_cloudwatch_metric_alarm" "bucket_size" {
     BucketName  = aws_s3_bucket.video_storage.id
     StorageType = "StandardStorage"
   }
+}
+
+# =============================================================================
+# IAM User and Policy for GitHub Actions CI/CD
+# =============================================================================
+
+# IAM User for GitHub Actions
+resource "aws_iam_user" "github_actions" {
+  name = "${var.ecs_cluster_name}-github-actions"
+
+  tags = {
+    Name        = "GitHub Actions CI/CD User"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    Purpose     = "ECR and ECS deployment"
+  }
+}
+
+# IAM Policy for GitHub Actions - ECR Push Access
+resource "aws_iam_policy" "github_actions_ecr" {
+  name        = "${var.ecs_cluster_name}-github-actions-ecr"
+  description = "Policy for GitHub Actions to push images to ECR"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRAuthToken"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRPushPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload"
+        ]
+        Resource = aws_ecr_repository.backend.arn
+      }
+    ]
+  })
+}
+
+# IAM Policy for GitHub Actions - ECS Deployment Access
+resource "aws_iam_policy" "github_actions_ecs" {
+  name        = "${var.ecs_cluster_name}-github-actions-ecs"
+  description = "Policy for GitHub Actions to deploy to ECS"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECSDescribe"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:DescribeServices",
+          "ecs:DescribeClusters"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECSRegisterTaskDefinition"
+        Effect = "Allow"
+        Action = [
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECSUpdateService"
+        Effect = "Allow"
+        Action = [
+          "ecs:UpdateService"
+        ]
+        Resource = aws_ecs_service.main[0].id
+      },
+      {
+        Sid    = "PassRole"
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          aws_iam_role.ecs_task_execution.arn,
+          aws_iam_role.ecs_task.arn
+        ]
+      }
+    ]
+  })
+}
+
+# Attach ECR policy to GitHub Actions user
+resource "aws_iam_user_policy_attachment" "github_actions_ecr" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_ecr.arn
+}
+
+# Attach ECS policy to GitHub Actions user
+resource "aws_iam_user_policy_attachment" "github_actions_ecs" {
+  user       = aws_iam_user.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_ecs.arn
+}
+
+# Create Access Key for GitHub Actions
+resource "aws_iam_access_key" "github_actions" {
+  user = aws_iam_user.github_actions.name
 }
 
