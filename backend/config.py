@@ -44,6 +44,10 @@ class Settings:
     MV_DEBUG_MODE: bool = os.getenv("MV_DEBUG_MODE", "false").lower() == "true"
     MOCK_VID_GENS: bool = os.getenv("MOCK_VID_GENS", "false").lower() == "true"
 
+    # Mock video generation delay configuration (in seconds)
+    MOCK_VIDEO_DELAY_MIN: float = float(os.getenv("MOCK_VIDEO_DELAY_MIN", "5.0"))
+    MOCK_VIDEO_DELAY_MAX: float = float(os.getenv("MOCK_VIDEO_DELAY_MAX", "10.0"))
+
     # ElevenLabs settings
     # Default voice: Sarah - Clear, professional, neutral tone
     # Alternative voices available through ElevenLabs API
