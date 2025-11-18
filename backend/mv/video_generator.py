@@ -60,6 +60,12 @@ class GenerateVideoRequest(BaseModel):
     backend: Optional[str] = Field(
         "replicate", description="Backend to use: 'replicate' or 'gemini'"
     )
+    project_id: Optional[str] = Field(
+        None, description="Project UUID for DynamoDB integration (requires sequence)"
+    )
+    sequence: Optional[int] = Field(
+        None, ge=1, description="Scene sequence number for DynamoDB integration (requires project_id)"
+    )
 
 
 class GenerateVideoResponse(BaseModel):

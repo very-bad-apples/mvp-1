@@ -39,7 +39,16 @@ from mv.video_stitcher import (
     stitch_videos,
 )
 from config import settings
-from mv_models import MVProjectItem, create_scene_item
+from mv_models import (
+    MVProjectItem,
+    create_scene_item,
+    increment_completed_scene,
+    increment_failed_scene,
+)
+from services.s3_storage import (
+    get_s3_storage_service,
+    generate_scene_s3_key,
+)
 from pynamodb.exceptions import DoesNotExist, PutError
 
 logger = structlog.get_logger()
@@ -838,6 +847,17 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                 }
             )
 
+        # Validate project_id and sequence are provided together
+        if (request.project_id and not request.sequence) or (request.sequence and not request.project_id):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "project_id and sequence must be provided together",
+                    "details": "Both project_id and sequence are required for DynamoDB integration"
+                }
+            )
+
         # Generate video
         video_id, video_path, video_url, metadata, character_reference_warning = generate_video(
             prompt=request.prompt.strip(),
@@ -851,6 +871,94 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
         )
+
+        # DynamoDB integration: Update scene record if project_id and sequence provided
+        if request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "updating_scene_with_video",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    video_id=video_id
+                )
+
+                # Retrieve scene record
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_video_update",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                    # Don't fail the request, just log warning
+                else:
+                    # Upload video to S3 if storage is configured
+                    video_s3_key = None
+                    if settings.STORAGE_BUCKET:
+                        try:
+                            s3_service = get_s3_storage_service()
+                            video_s3_key = generate_scene_s3_key(
+                                request.project_id,
+                                request.sequence,
+                                "video"
+                            )
+                            s3_service.upload_file_from_path(
+                                video_path,
+                                video_s3_key,
+                                content_type="video/mp4"
+                            )
+                            logger.info(
+                                "video_uploaded_to_s3",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                s3_key=video_s3_key
+                            )
+                        except Exception as e:
+                            logger.error(
+                                "s3_upload_failed_for_scene",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                error=str(e),
+                                exc_info=True
+                            )
+                            # Continue without S3 key - will use local path
+
+                    # Update scene record
+                    scene_item.videoClipS3Key = video_s3_key
+                    scene_item.videoGenerationJobId = video_id
+                    scene_item.status = "completed"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+
+                    # Update project counters
+                    try:
+                        increment_completed_scene(request.project_id)
+                    except DoesNotExist:
+                        logger.warning(
+                            "project_not_found_for_counter_update",
+                            project_id=request.project_id
+                        )
+
+                    logger.info(
+                        "scene_updated_with_video",
+                        project_id=request.project_id,
+                        sequence=request.sequence,
+                        video_s3_key=video_s3_key
+                    )
+
+            except Exception as e:
+                # Log error but don't fail the request
+                logger.error(
+                    "dynamodb_update_failed_for_video",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
 
         response = GenerateVideoResponse(
             video_id=video_id,
@@ -867,6 +975,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             processing_time_seconds=metadata.get("processing_time_seconds"),
             backend_used=metadata.get("backend_used"),
             character_reference_warning=character_reference_warning
+            has_project_id=request.project_id is not None
         )
 
         return response
@@ -899,6 +1008,41 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
 
     except Exception as e:
         logger.error("generate_video_unexpected_error", error=str(e), exc_info=True)
+
+        # Update scene status to failed if project_id and sequence provided
+        if request.project_id and request.sequence:
+            try:
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+                scene_item = MVProjectItem.get(pk, sk)
+                scene_item.status = "failed"
+                scene_item.errorMessage = str(e)[:500]  # Limit error message length
+                scene_item.updatedAt = datetime.now(timezone.utc)
+                scene_item.save()
+
+                # Update project counters
+                try:
+                    increment_failed_scene(request.project_id)
+                except DoesNotExist:
+                    logger.warning(
+                        "project_not_found_for_failed_counter",
+                        project_id=request.project_id
+                    )
+
+                logger.info(
+                    "scene_marked_as_failed",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+            except Exception as db_error:
+                # Log but don't fail on DB update errors
+                logger.error(
+                    "failed_to_update_scene_status_on_error",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(db_error),
+                    exc_info=True
+                )
 
         # Try to provide structured error information
         error_code = "UNKNOWN_ERROR"
@@ -1378,6 +1522,17 @@ async def lipsync_video(request: LipsyncRequest):
                 }
             )
 
+        # Validate project_id and sequence are provided together
+        if (request.project_id and not request.sequence) or (request.sequence and not request.project_id):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "project_id and sequence must be provided together",
+                    "details": "Both project_id and sequence are required for DynamoDB integration"
+                }
+            )
+
         # Generate lipsync video
         video_id, video_path, video_url, metadata = generate_lipsync(
             video_url=request.video_url.strip(),
@@ -1386,6 +1541,87 @@ async def lipsync_video(request: LipsyncRequest):
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection,
         )
+
+        # DynamoDB integration: Update scene record if project_id and sequence provided
+        if request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "updating_scene_with_lipsync",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    video_id=video_id
+                )
+
+                # Retrieve scene record
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_lipsync_update",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                    # Don't fail the request, just log warning
+                else:
+                    # Upload lipsynced video to S3 if storage is configured
+                    lipsync_s3_key = None
+                    if settings.STORAGE_BUCKET:
+                        try:
+                            s3_service = get_s3_storage_service()
+                            lipsync_s3_key = generate_scene_s3_key(
+                                request.project_id,
+                                request.sequence,
+                                "lipsynced"
+                            )
+                            s3_service.upload_file_from_path(
+                                video_path,
+                                lipsync_s3_key,
+                                content_type="video/mp4"
+                            )
+                            logger.info(
+                                "lipsync_video_uploaded_to_s3",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                s3_key=lipsync_s3_key
+                            )
+                        except Exception as e:
+                            logger.error(
+                                "s3_upload_failed_for_lipsync",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                error=str(e),
+                                exc_info=True
+                            )
+                            # Continue without S3 key - will use local path
+
+                    # Update scene record
+                    scene_item.lipSyncedVideoClipS3Key = lipsync_s3_key
+                    scene_item.lipsyncJobId = video_id
+                    # Keep status as "completed" if already completed, otherwise set to completed
+                    if scene_item.status != "completed":
+                        scene_item.status = "completed"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+
+                    logger.info(
+                        "scene_updated_with_lipsync",
+                        project_id=request.project_id,
+                        sequence=request.sequence,
+                        lipsync_s3_key=lipsync_s3_key
+                    )
+
+            except Exception as e:
+                # Log error but don't fail the request
+                logger.error(
+                    "dynamodb_update_failed_for_lipsync",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
 
         response = LipsyncResponse(
             video_id=video_id,
@@ -1399,7 +1635,8 @@ async def lipsync_video(request: LipsyncRequest):
             video_id=video_id,
             video_path=video_path,
             processing_time_seconds=metadata.get("processing_time_seconds"),
-            file_size_bytes=metadata.get("file_size_bytes")
+            file_size_bytes=metadata.get("file_size_bytes"),
+            has_project_id=request.project_id is not None
         )
 
         return response

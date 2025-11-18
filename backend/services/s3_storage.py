@@ -263,6 +263,39 @@ def generate_s3_key(project_id: str, file_type: str, filename: str = None) -> st
     return f"{base_path}/{file_type}"
 
 
+def generate_scene_s3_key(project_id: str, sequence: int, asset_type: str) -> str:
+    """
+    Generate S3 key for scene assets.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-indexed)
+        asset_type: Type of asset (audio, video, lipsynced)
+
+    Returns:
+        S3 key string
+
+    Examples:
+        >>> generate_scene_s3_key("123", 1, "video")
+        "mv/projects/123/scenes/001/video.mp4"
+        >>> generate_scene_s3_key("123", 2, "lipsynced")
+        "mv/projects/123/scenes/002/lipsynced.mp4"
+    """
+    base_path = f"mv/projects/{project_id}/scenes/{sequence:03d}"
+
+    type_extensions = {
+        "audio": "mp3",
+        "video": "mp4",
+        "lipsynced": "mp4"
+    }
+
+    ext = type_extensions.get(asset_type)
+    if not ext:
+        raise ValueError(f"Unknown scene asset type: {asset_type}. Supported types: {list(type_extensions.keys())}")
+
+    return f"{base_path}/{asset_type}.{ext}"
+
+
 # Singleton instance
 _s3_storage_service: Optional[S3StorageService] = None
 

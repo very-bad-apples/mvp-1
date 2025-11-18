@@ -17,6 +17,7 @@ from pynamodb.attributes import (
     ListAttribute,
 )
 from pynamodb.indexes import GlobalSecondaryIndex, AllProjection
+from pynamodb.exceptions import DoesNotExist
 from config import settings
 from dynamodb_config import BaseDynamoModel
 import structlog
@@ -271,4 +272,94 @@ def create_scene_item(
     item.GSI1SK = None
 
     return item
+
+
+def increment_completed_scene(project_id: str) -> None:
+    """
+    Atomically increment the completedScenes counter for a project.
+    
+    Args:
+        project_id: Project UUID
+        
+    Raises:
+        DoesNotExist: If project not found
+    """
+    pk = f"PROJECT#{project_id}"
+    try:
+        project_item = MVProjectItem.get(pk, "METADATA")
+        if project_item.completedScenes is None:
+            project_item.completedScenes = 0
+        project_item.completedScenes += 1
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+        logger.info(
+            "project_completed_scene_incremented",
+            project_id=project_id,
+            completed_scenes=project_item.completedScenes
+        )
+    except DoesNotExist:
+        logger.error("project_not_found_for_counter", project_id=project_id)
+        raise
+
+
+def increment_failed_scene(project_id: str) -> None:
+    """
+    Atomically increment the failedScenes counter for a project.
+    
+    Args:
+        project_id: Project UUID
+        
+    Raises:
+        DoesNotExist: If project not found
+    """
+    pk = f"PROJECT#{project_id}"
+    try:
+        project_item = MVProjectItem.get(pk, "METADATA")
+        if project_item.failedScenes is None:
+            project_item.failedScenes = 0
+        project_item.failedScenes += 1
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+        logger.info(
+            "project_failed_scene_incremented",
+            project_id=project_id,
+            failed_scenes=project_item.failedScenes
+        )
+    except DoesNotExist:
+        logger.error("project_not_found_for_counter", project_id=project_id)
+        raise
+
+
+def decrement_completed_scene(project_id: str) -> None:
+    """
+    Atomically decrement the completedScenes counter for a project.
+    Used when a scene transitions from completed to failed.
+    
+    Args:
+        project_id: Project UUID
+        
+    Raises:
+        DoesNotExist: If project not found
+    """
+    pk = f"PROJECT#{project_id}"
+    try:
+        project_item = MVProjectItem.get(pk, "METADATA")
+        if project_item.completedScenes is None or project_item.completedScenes <= 0:
+            logger.warning(
+                "project_completed_scene_decrement_below_zero",
+                project_id=project_id,
+                current_count=project_item.completedScenes
+            )
+            return
+        project_item.completedScenes -= 1
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+        logger.info(
+            "project_completed_scene_decremented",
+            project_id=project_id,
+            completed_scenes=project_item.completedScenes
+        )
+    except DoesNotExist:
+        logger.error("project_not_found_for_counter", project_id=project_id)
+        raise
 
