@@ -21,6 +21,14 @@ Usage:
 """
 
 import sys
+import os
+from pathlib import Path
+
+# Add parent directory to Python path so we can import backend modules
+script_dir = Path(__file__).parent
+backend_dir = script_dir.parent
+sys.path.insert(0, str(backend_dir))
+
 import argparse
 import json
 from datetime import datetime
