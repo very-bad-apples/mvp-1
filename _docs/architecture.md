@@ -76,7 +76,7 @@ The AI Video Pipeline is a full-stack application that generates AI-powered vide
 
 ### Core Components
 
-1. **Frontend (Next.js 15)**
+1. **Frontend (Next.js 14.2.18)**
    - User interface for project creation and viewing
    - Direct backend API communication (no Next.js API routes)
    - Type-safe API client (`lib/api/client.ts`)
@@ -128,7 +128,7 @@ The AI Video Pipeline is a full-stack application that generates AI-powered vide
 
 ### Frontend
 ```yaml
-Framework: Next.js 15 (App Router)
+Framework: Next.js 14.2.18 (App Router)
 Language: TypeScript
 UI Components: shadcn/ui
 Styling: Tailwind CSS
@@ -141,7 +141,8 @@ Dev Server: localhost:3000
 ```
 
 **Key Architecture Decisions**:
-- **Direct Backend Communication**: Removed Next.js API route layer for simpler, more maintainable architecture
+- **Direct Backend Communication**: Frontend communicates directly with FastAPI backend (no Next.js API routes for MV pipeline)
+  - **Note**: Audio download endpoints (`/api/audio/*`) exist as FastAPI routes, not Next.js routes
 - **Type-Safe API Client**: Centralized `lib/api/client.ts` with TypeScript interfaces
 - **Smart Polling**: `useProjectPolling` hook with dynamic intervals based on project status
 - **Component Organization**: Dedicated project detail page (`/project/[id]`) with modular components
