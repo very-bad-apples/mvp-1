@@ -245,21 +245,48 @@ except ValueError as e:
 
 ## Status Values
 
-### Project Status
+### Project Status State Machine
 
+**Valid Status Values:**
 - `pending`: Project created, awaiting scene generation
-- `generating_scenes`: Scene prompts being generated
+- `generating_scenes`: Scene prompts being generated (worker processing)
 - `processing`: Scenes are being generated/composed
 - `composing`: Final video composition in progress
+- `queued`: Job queued for processing (internal worker state)
 - `completed`: All scenes complete, final video ready
 - `failed`: Project failed (check error messages)
 
-### Scene Status
+**Status Transitions:**
+```
+pending → generating_scenes → processing → composing → completed
+  ↓           ↓                  ↓            ↓
+failed      failed            failed       failed
+```
 
+**Notes:**
+- `queued` is an internal status used when jobs are enqueued to Redis
+- `generating_scenes` is set by scene worker when processing scene generation
+- `composing` is set when composition job is queued
+- All statuses can transition to `failed` on error
+
+### Scene Status State Machine
+
+**Valid Status Values:**
 - `pending`: Scene created, awaiting video generation
-- `processing`: Video generation in progress
+- `processing`: Video generation or lipsync in progress
 - `completed`: Video generated successfully
 - `failed`: Video generation failed (check errorMessage)
+
+**Status Transitions:**
+```
+pending → processing → completed
+  ↓           ↓
+failed      failed
+```
+
+**Notes:**
+- Scene status is set to `processing` before video generation and before lipsync
+- Scene status updates are non-blocking (errors don't break request flow)
 
 ## Design Rationale
 
