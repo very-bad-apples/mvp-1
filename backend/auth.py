@@ -64,26 +64,31 @@ async def verify_api_key_header(
 ) -> str:
     """
     Verify API key from header
-    
+
     Usage:
         @app.get("/protected")
         async def protected_route(api_key: str = Depends(verify_api_key_header)):
             return {"message": "Authenticated"}
     """
+    # If no API key is configured, skip authentication (development mode)
+    configured_key = get_api_key_from_env()
+    if not configured_key:
+        return ""
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key missing. Provide X-API-Key header.",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     if not check_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     return api_key
 
 
@@ -92,26 +97,31 @@ async def verify_api_key_query(
 ) -> str:
     """
     Verify API key from query parameter
-    
+
     Usage:
         @app.get("/protected")
         async def protected_route(api_key: str = Depends(verify_api_key_query)):
             return {"message": "Authenticated"}
     """
+    # If no API key is configured, skip authentication (development mode)
+    configured_key = get_api_key_from_env()
+    if not configured_key:
+        return ""
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key missing. Provide ?api_key=YOUR_KEY",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     if not check_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     return api_key
 
 
@@ -143,27 +153,32 @@ async def verify_api_key(
 ) -> str:
     """
     Verify API key from either header or query parameter
-    
+
     Usage:
         @app.get("/protected")
         async def protected_route(api_key: str = Depends(verify_api_key)):
             return {"message": "Authenticated"}
     """
+    # If no API key is configured, skip authentication (development mode)
+    configured_key = get_api_key_from_env()
+    if not configured_key:
+        return ""
+
     api_key = api_key_header or api_key_query
-    
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key missing. Provide X-API-Key header or ?api_key=YOUR_KEY",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     if not check_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "ApiKey"},
         )
-    
+
     return api_key
 
