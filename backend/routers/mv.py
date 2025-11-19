@@ -1604,33 +1604,49 @@ async def lipsync_video(request: LipsyncRequest):
     try:
         logger.info(
             "lipsync_request_received",
-            video_url=request.video_url[:100] + "..." if len(request.video_url) > 100 else request.video_url,
-            audio_url=request.audio_url[:100] + "..." if len(request.audio_url) > 100 else request.audio_url,
+            video_url=request.video_url[:100] + "..." if request.video_url and len(request.video_url) > 100 else request.video_url,
+            audio_url=request.audio_url[:100] + "..." if request.audio_url and len(request.audio_url) > 100 else request.audio_url,
+            video_id=request.video_id,
+            audio_id=request.audio_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection
         )
 
-        # Validate required fields
-        if not request.video_url or not request.video_url.strip():
+        # Validate required fields - either URL or ID must be provided
+        if not request.video_url and not request.video_id:
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "ValidationError",
-                    "message": "Video URL is required",
-                    "details": "The 'video_url' field cannot be empty"
+                    "message": "Either video_url or video_id is required",
+                    "details": "Provide either 'video_url' or 'video_id' parameter"
                 }
             )
 
-        if not request.audio_url or not request.audio_url.strip():
+        if not request.audio_url and not request.audio_id:
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error": "ValidationError",
-                    "message": "Audio URL is required",
-                    "details": "The 'audio_url' field cannot be empty"
+                    "message": "Either audio_url or audio_id is required",
+                    "details": "Provide either 'audio_url' or 'audio_id' parameter"
                 }
             )
+
+        # Validate time parameters if provided
+        if request.start_time is not None and request.end_time is not None:
+            if request.end_time <= request.start_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "end_time must be greater than start_time",
+                        "details": f"start_time={request.start_time}, end_time={request.end_time}"
+                    }
+                )
 
         # Validate project_id and sequence are provided together
         if (request.project_id and not request.sequence) or (request.sequence and not request.project_id):
@@ -1685,8 +1701,12 @@ async def lipsync_video(request: LipsyncRequest):
 
         # Generate lipsync video
         video_id, video_path, video_url, metadata = generate_lipsync(
-            video_url=request.video_url.strip(),
-            audio_url=request.audio_url.strip(),
+            video_url=request.video_url.strip() if request.video_url else None,
+            audio_url=request.audio_url.strip() if request.audio_url else None,
+            video_id=request.video_id,
+            audio_id=request.audio_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection,
