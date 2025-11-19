@@ -11,6 +11,7 @@ tests/
 ├── test_endpoints.py        # General API endpoint tests
 ├── test_mv_endpoints.py     # Music Video API endpoint tests
 ├── test_e2e_workflow.py     # End-to-end workflow tests
+├── test_video_generation_db_integration.py  # Video generation DynamoDB integration tests
 ├── test_worker.py           # Worker process tests
 ├── mv/                      # MV module tests
 │   ├── __init__.py
@@ -114,6 +115,9 @@ from ..mv_models import MVProjectItem
 
 ### End-to-End Tests
 - `test_e2e_workflow.py` - Complete workflow test (create project → generate scenes → verify DB → test compose)
+
+### Integration Tests (DynamoDB)
+- `test_video_generation_db_integration.py` - Video generation endpoints DynamoDB integration tests
 
 ## Notes
 

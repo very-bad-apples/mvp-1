@@ -759,6 +759,15 @@ Generate a single video clip from a text prompt using Replicate or Gemini backen
 This endpoint generates individual scene clips. Call it multiple times to create
 separate clips for a multi-scene music video.
 
+**Database Integration:**
+- If `project_id` and `sequence` are provided together, the endpoint will:
+  - Mark the scene as "processing" before generation starts
+  - Update the scene record with video S3 key and job ID on success
+  - Mark the scene as "completed" when video is ready
+  - Mark the scene as "failed" if generation fails
+  - Update project counters (completedScenes, failedScenes)
+  - Upload video to S3 if storage is configured
+
 **Limitations:**
 - Synchronous processing (20-400s response times)
 - No progress tracking (client waits for completion)
@@ -778,6 +787,8 @@ separate clips for a multi-scene music video.
 - reference_image_base64: Base64 encoded reference image for character consistency
 - video_rules_template: Custom rules to append to prompt
 - backend: Backend to use - "replicate" (default) or "gemini"
+- project_id: Project UUID for DynamoDB integration (requires sequence)
+- sequence: Scene sequence number for DynamoDB integration (requires project_id)
 """
 )
 async def generate_video_endpoint(request: GenerateVideoRequest):
@@ -858,6 +869,46 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                     "details": "Both project_id and sequence are required for DynamoDB integration"
                 }
             )
+
+        # DynamoDB integration: Mark scene as "processing" before generation starts
+        if request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "marking_scene_as_processing",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                    scene_item.status = "processing"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+
+                    logger.info(
+                        "scene_marked_as_processing",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_processing_status",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                    # Don't fail the request, just log warning
+            except Exception as e:
+                # Log error but don't fail the request
+                logger.error(
+                    "failed_to_mark_scene_as_processing",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
 
         # Generate video
         video_id, video_path, video_url, metadata, character_reference_warning = generate_video(
@@ -1434,6 +1485,14 @@ Generate a lip-synced video by syncing audio to a video scene using Sync Labs' L
 This endpoint takes a video URL (scene) and an audio URL, then generates a lip-synced version
 where the video's lip movements match the provided audio track.
 
+**Database Integration:**
+- If `project_id` and `sequence` are provided together, the endpoint will:
+  - Mark the scene as "processing" before lipsync starts
+  - Update the scene record with lipsynced video S3 key and job ID on success
+  - Mark the scene as "completed" when lipsynced video is ready
+  - Mark the scene as "failed" if lipsync fails
+  - Upload lipsynced video to S3 if storage is configured
+
 **Limitations:**
 - Synchronous processing (20-300s response times)
 - No progress tracking (client waits for completion)
@@ -1448,6 +1507,8 @@ where the video's lip movements match the provided audio track.
 - temperature: Control expressiveness of lip movements (0.0 = subtle, 1.0 = exaggerated)
 - occlusion_detection_enabled: Enable for complex scenes with obstructions (may slow processing)
 - active_speaker_detection: Auto-detect active speaker in multi-person videos
+- project_id: Project UUID for DynamoDB integration (requires sequence)
+- sequence: Scene sequence number for DynamoDB integration (requires project_id)
 
 **Best Practices:**
 - Ensure input video shows the speaker actively talking for natural speaking motion
@@ -1537,6 +1598,46 @@ async def lipsync_video(request: LipsyncRequest):
                     "details": "Both project_id and sequence are required for DynamoDB integration"
                 }
             )
+
+        # DynamoDB integration: Mark scene as "processing" before lipsync starts
+        if request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "marking_scene_as_processing_for_lipsync",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                    scene_item.status = "processing"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+
+                    logger.info(
+                        "scene_marked_as_processing_for_lipsync",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_lipsync_processing_status",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+                    # Don't fail the request, just log warning
+            except Exception as e:
+                # Log error but don't fail the request
+                logger.error(
+                    "failed_to_mark_scene_as_processing_for_lipsync",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
 
         # Generate lipsync video
         video_id, video_path, video_url, metadata = generate_lipsync(
@@ -1678,6 +1779,41 @@ async def lipsync_video(request: LipsyncRequest):
 
     except Exception as e:
         logger.error("lipsync_unexpected_error", error=str(e), exc_info=True)
+
+        # Update scene status to failed if project_id and sequence provided
+        if request.project_id and request.sequence:
+            try:
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+                scene_item = MVProjectItem.get(pk, sk)
+                scene_item.status = "failed"
+                scene_item.errorMessage = str(e)[:500]  # Limit error message length
+                scene_item.updatedAt = datetime.now(timezone.utc)
+                scene_item.save()
+
+                # Update project counters
+                try:
+                    increment_failed_scene(request.project_id)
+                except DoesNotExist:
+                    logger.warning(
+                        "project_not_found_for_failed_counter_lipsync",
+                        project_id=request.project_id
+                    )
+
+                logger.info(
+                    "scene_marked_as_failed_lipsync",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+            except Exception as db_error:
+                # Log but don't fail on DB update errors
+                logger.error(
+                    "failed_to_update_scene_status_on_lipsync_error",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(db_error),
+                    exc_info=True
+                )
 
         # Try to provide structured error information
         error_code = "UNKNOWN_ERROR"
