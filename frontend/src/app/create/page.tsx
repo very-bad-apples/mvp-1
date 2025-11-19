@@ -17,11 +17,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
-import { createProject } from '@/lib/api/client'
+import { createProject, getConfigFlavors, generateCharacterReference } from '@/lib/api/client'
 
 type Mode = 'ad-creative' | 'music-video'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export default function CreatePage() {
   const router = useRouter()
@@ -54,12 +52,9 @@ export default function CreatePage() {
     const fetchConfigFlavors = async () => {
       setIsFetchingFlavors(true)
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.flavors && Array.isArray(data.flavors)) {
-            setAvailableFlavors(data.flavors)
-          }
+        const data = await getConfigFlavors()
+        if (data.flavors && Array.isArray(data.flavors)) {
+          setAvailableFlavors(data.flavors)
         }
       } catch (error) {
         console.error('Failed to fetch config flavors:', error)
@@ -225,23 +220,10 @@ export default function CreatePage() {
     setGeneratedImageIds([])
 
     try {
-      const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          character_description: characterDescription.trim(),
-          num_images: 4, // Request 4 images for selection
-        }),
+      const data = await generateCharacterReference({
+        character_description: characterDescription.trim(),
+        num_images: 4, // Request 4 images for selection
       })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character images')
-      }
-
-      const data = await response.json()
 
       // Convert each base64 image to blob URL for better performance
       const blobUrls: string[] = []
