@@ -1,14 +1,23 @@
 # API Endpoints Documentation
 
-This document describes the three core API endpoints implemented for the Bad Apple Video Generator.
+> **Note**: This document describes the **legacy ad-creative endpoints**. For the current Music Video (MV) pipeline endpoints, see the main API documentation or `/docs` (Swagger UI).
+
+This document describes the three core API endpoints implemented for legacy video generation jobs.
 
 ## Overview
 
-The backend provides three main endpoints for video generation:
+The backend provides three main endpoints for legacy ad-creative video generation:
 
-1. **POST /api/generate** - Create a new video generation job
-2. **GET /api/jobs/{job_id}** - Get job status and progress
+1. **POST /api/generate** - Create a new video generation job (legacy)
+2. **GET /api/jobs/{job_id}** - Get job status and progress (legacy)
 3. **WebSocket /ws/jobs/{job_id}** - Real-time progress updates
+
+**Current System Endpoints:**
+- `/api/mv/projects/*` - MV Project CRUD (DynamoDB)
+- `/api/mv/*` - Music Video pipeline endpoints
+- `/api/audio/*` - Audio download endpoints
+- `/api/models/*` - Model configuration endpoints
+- See `/docs` for complete OpenAPI documentation
 
 ## Architecture
 
@@ -19,14 +28,22 @@ The backend provides three main endpoints for video generation:
 └─────────────┘      └──────────────┘      └───────────┘      └──────────┘
       │                     │                     │
       │                     │                     │
-      │              ┌──────▼──────┐              │
-      │              │  PostgreSQL │              │
-      │              │  Database   │              │
-      │              └─────────────┘              │
+      │         ┌───────────┼───────────┐         │
+      │         ▼           ▼           ▼         │
+      │    ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+      │    │DynamoDB │ │ SQLite   │ │   S3     │ │
+      │    │(MV Proj)│ │(Legacy   │ │ (Assets) │ │
+      │    │         │ │  Jobs)   │ │          │ │
+      │    └──────────┘ └──────────┘ └──────────┘ │
       │                                           │
       └──────────── WebSocket ◀───────────────────┘
                      (Real-time)
 ```
+
+**Database Architecture:**
+- **DynamoDB**: Primary database for Music Video (MV) projects and scenes (single-table design)
+- **SQLite**: Legacy database for ad-creative job tracking (SQLAlchemy models)
+- **S3**: Cloud storage for all assets (videos, images, audio) with presigned URLs
 
 ## 1. Video Generation Endpoint
 
@@ -198,7 +215,7 @@ curl "http://localhost:8000/api/jobs/550e8400-e29b-41d4-a716-446655440000"
 **Task 9 Subtasks:**
 
 1. **Integrate Redis for Job Status Retrieval (9.1)** ✓
-   - Fetches job from PostgreSQL database
+   - Fetches job from SQLite database (legacy jobs) or DynamoDB (MV projects)
    - Optionally checks Redis for additional status
    - Handles Redis connection failures gracefully
 
@@ -483,10 +500,133 @@ Error responses follow a consistent format:
 
 ## Performance
 
-- **Connection Pooling:** Redis and PostgreSQL use connection pools
+- **Connection Pooling:** Redis uses connection pooling; DynamoDB uses boto3 connection management
 - **Async Operations:** All I/O operations are async
 - **Efficient WebSocket:** One Redis subscription per job (not per client)
 - **Resource Cleanup:** Automatic cleanup of temporary files and connections
+
+---
+
+## Music Video (MV) Pipeline Endpoints
+
+The MV pipeline provides a separate set of endpoints for the music video generation system with configuration flavor support.
+
+### Configuration Flavors
+
+All MV endpoints support the `config_flavor` query parameter to select different preset configurations:
+
+```bash
+# Use default configuration
+POST /api/mv/scenes
+
+# Use example configuration
+POST /api/mv/scenes?config_flavor=example
+```
+
+### Available Endpoints
+
+#### GET /api/mv/get_config_flavors
+
+List all available configuration flavors.
+
+**Response:**
+```json
+{
+  "flavors": ["default", "example"],
+  "default_flavor": "default"
+}
+```
+
+#### POST /api/mv/scenes
+
+Generate scene prompts using the scene generator.
+
+**Query Parameters:**
+- `config_flavor` (string, optional) - Configuration flavor to use (default: "default")
+
+**Request Body:**
+```json
+{
+  "concept_prompt": "Robot exploring Austin, Texas",
+  "num_scenes": 4
+}
+```
+
+**Response:**
+```json
+{
+  "scenes": [
+    {
+      "sequence": 1,
+      "prompt": "Silver metallic robot walking through downtown Austin...",
+      "duration": 8.0
+    }
+  ]
+}
+```
+
+#### POST /api/mv/character-reference
+
+Generate a character reference image.
+
+**Query Parameters:**
+- `config_flavor` (string, optional) - Configuration flavor to use
+
+**Request Body:**
+```json
+{
+  "character_description": "Silver metallic humanoid robot"
+}
+```
+
+**Response:**
+```json
+{
+  "image_url": "https://...",
+  "s3_key": "mv/outputs/character_reference/abc123.png"
+}
+```
+
+#### POST /api/mv/video
+
+Generate a video clip for a scene.
+
+**Query Parameters:**
+- `config_flavor` (string, optional) - Configuration flavor to use
+
+**Request Body:**
+```json
+{
+  "prompt": "Robot walking through downtown",
+  "duration": 8.0,
+  "reference_image_s3_keys": ["mv/outputs/character_reference/abc123.png"]
+}
+```
+
+**Response:**
+```json
+{
+  "video_url": "https://...",
+  "s3_key": "mv/projects/proj123/scenes/scene_001.mp4"
+}
+```
+
+### Configuration Flavor Structure
+
+Each flavor is a directory in `backend/mv/configs/{flavor_name}/` containing:
+
+- **image_params.yaml** - Image generation model parameters
+- **image_prompts.yaml** - Character/product image prompts
+- **scene_prompts.yaml** - Video scene generation prompts
+- **parameters.yaml** - Pipeline parameters
+
+**Example flavor usage:**
+1. Create new directory: `backend/mv/configs/my_custom_flavor/`
+2. Add required YAML files (copy from `default/` as template)
+3. Restart backend to discover new flavor
+4. Use via `?config_flavor=my_custom_flavor` query parameter
+
+---
 
 ## Future Enhancements
 
