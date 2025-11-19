@@ -16,7 +16,7 @@ import { YouTubeAudioDownloader } from '@/components/YouTubeAudioDownloader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/useToast'
 import { createProject } from '@/lib/api/client'
 
 type Mode = 'ad-creative' | 'music-video'
@@ -154,38 +154,22 @@ export default function CreatePage() {
     setIsSubmitting(true)
 
     try {
-      // Generate a unique project ID
-      const projectId = `project_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-
       // Get character reference image ID if using AI character
-      const characterRefImage = useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
+      const characterReferenceImageId = useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
         ? generatedImageIds[selectedImageIndex]
         : null
 
-      // Create initial scene from the prompt
-      const initialScene = {
-        sequence: 1,
-        prompt: prompt.trim(),
-        negativePrompt: '', // Can be enhanced later
-      }
-
       // Call the createProject API
       const response = await createProject({
-        projectId,
         mode,
-        idea: prompt.trim(),
-        characterDescription: characterDescription.trim() || undefined,
-        characterRefImage,
-        scenes: [initialScene],
+        prompt: prompt.trim(),
+        characterDescription: characterDescription.trim(),
+        characterReferenceImageId,
       })
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to create project')
-      }
 
       toast({
         title: "Project created successfully!",
-        description: `Project ID: ${response.projectId}`,
+        description: response.message,
       })
 
       // Navigate to the project page

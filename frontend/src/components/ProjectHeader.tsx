@@ -53,32 +53,20 @@ const statusConfig: Record<
   ProjectStatus,
   { label: string; className: string; variant?: 'default' | 'secondary' | 'destructive' | 'outline' }
 > = {
-  'creating-scenes': {
-    label: 'Creating Scenes',
+  pending: {
+    label: 'Pending',
     className: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   },
-  'generating-images': {
-    label: 'Generating Images',
+  processing: {
+    label: 'Processing',
     className: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  },
-  'generating-videos': {
-    label: 'Generating Videos',
-    className: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  },
-  'generating-lipsync': {
-    label: 'Generating Lip-Sync',
-    className: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
-  },
-  composing: {
-    label: 'Composing',
-    className: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   },
   completed: {
     label: 'Completed',
     className: 'bg-green-500/10 text-green-400 border-green-500/20',
   },
-  error: {
-    label: 'Error',
+  failed: {
+    label: 'Failed',
     className: 'bg-red-500/10 text-red-400 border-red-500/20',
     variant: 'destructive',
   },
@@ -121,8 +109,8 @@ export function ProjectHeader({
 }: ProjectHeaderProps) {
   const config = statusConfig[status]
   const isCompleted = status === 'completed'
-  const isError = status === 'error'
-  const isProcessing = !isCompleted && !isError
+  const isFailed = status === 'failed'
+  const isProcessing = !isCompleted && !isFailed
 
   // Format date
   const formattedDate = createdAt.toLocaleDateString('en-US', {
@@ -208,7 +196,7 @@ export function ProjectHeader({
             <Button
               onClick={onStartGeneration}
               className="bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={isError}
+              disabled={isFailed}
             >
               <Play className="w-4 h-4" />
               Start Generation

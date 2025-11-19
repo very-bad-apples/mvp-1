@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getProject } from '@/lib/api/client'
-import { Project } from '@/types/project'
+import { Project, ProjectStatus } from '@/types/project'
 import { APIError } from '@/lib/api/client'
 
 /**
@@ -69,7 +69,7 @@ interface UseProjectPollingReturn extends UseProjectPollingState {
  * Check if a project status is terminal (should stop polling)
  */
 function isTerminalStatus(status: Project['status'] | undefined): boolean {
-  return status === 'completed' || status === 'error'
+  return status === 'completed' || status === 'failed'
 }
 
 /**
@@ -80,11 +80,9 @@ function shouldPollStatus(status: Project['status'] | undefined): boolean {
   if (!status) return false
 
   // Only poll for active processing states
+  // Backend uses 'processing' for all active work
   const activeStates: Project['status'][] = [
-    'generating-images',
-    'generating-videos',
-    'generating-lipsync',
-    'composing'
+    'processing'
   ]
 
   return activeStates.includes(status)
@@ -160,24 +158,32 @@ export function useProjectPolling(
       // Only update state if component is still mounted
       if (!isMountedRef.current) return
 
-      if (response.success && response.project) {
+      // Response is the project data directly (not wrapped)
+      if (response.projectId) {
         // Reset error counters on successful fetch
         consecutiveErrorsRef.current = 0
         backoffDelayRef.current = pollingConfig.initialBackoffMs
 
+        // Add calculated progress field to backend response
+        const project: Project = {
+          ...response,
+          mode: 'music-video', // Frontend-only field, default value
+          progress: Math.round((response.completedScenes / Math.max(response.sceneCount, 1)) * 100),
+        }
+
         setState({
-          project: response.project,
+          project,
           loading: false,
           error: null,
         })
 
         // Check if we should start or stop polling based on status
-        const needsPolling = shouldPollStatus(response.project.status)
+        const needsPolling = shouldPollStatus(response.status as ProjectStatus)
 
         if (!needsPolling) {
           // Status doesn't require polling - make sure polling is stopped
           console.log(
-            `[useProjectPolling] Project status '${response.project.status}' doesn't require polling`
+            `[useProjectPolling] Project status '${response.status}' doesn't require polling`
           )
           if (isPollingRef.current || intervalRef.current) {
             console.log('[useProjectPolling] Stopping polling')
@@ -192,21 +198,20 @@ export function useProjectPolling(
         } else if (!isPollingRef.current && !intervalRef.current) {
           // Status requires polling but we're not polling yet - start it
           console.log(
-            `[useProjectPolling] Project status '${response.project.status}' requires polling, starting`
+            `[useProjectPolling] Project status '${response.status}' requires polling, starting`
           )
           startPolling()
         }
       } else {
         // Project not found or error - stop polling
         console.warn(
-          `[useProjectPolling] Project ${projectId} not found or error occurred, stopping polling:`,
-          response.error
+          `[useProjectPolling] Project ${projectId} not found or error occurred, stopping polling`
         )
 
         setState(prev => ({
           ...prev,
           loading: false,
-          error: response.error || 'Failed to fetch project',
+          error: 'Failed to fetch project',
         }))
 
         // Stop polling on project not found
