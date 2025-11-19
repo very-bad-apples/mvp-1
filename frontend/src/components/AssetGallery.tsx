@@ -23,7 +23,7 @@ import { Asset, AssetFilter, AssetGalleryProps } from '@/types/asset'
  */
 export function AssetGallery({
   scenes = [],
-  characterRefImage,
+  characterReferenceImageId,
   isLoading = false,
   error = null,
   className = '',
@@ -37,13 +37,13 @@ export function AssetGallery({
     const assetList: Asset[] = []
 
     // Add character reference image
-    if (characterRefImage) {
-      const imageUrl = characterRefImage.startsWith('http')
-        ? characterRefImage
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/mv/get_character_reference/${characterRefImage}`
+    if (characterReferenceImageId) {
+      const imageUrl = characterReferenceImageId.startsWith('http')
+        ? characterReferenceImageId
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/mv/get_character_reference/${characterReferenceImageId}`
 
       assetList.push({
-        id: `character-${characterRefImage}`,
+        id: `character-${characterReferenceImageId}`,
         type: 'character',
         url: imageUrl,
         description: 'Character Reference',
@@ -52,14 +52,14 @@ export function AssetGallery({
 
     // Add scene videos
     scenes.forEach((scene) => {
-      if (scene.videoUrl && scene.status === 'completed') {
+      if (scene.videoClipUrl && scene.status === 'completed') {
         // Check if this is a lip-synced video (simple heuristic)
-        const isLipSynced = scene.videoUrl.includes('lipsync') || scene.videoUrl.includes('lip-sync')
+        const isLipSynced = scene.videoClipUrl.includes('lipsync') || scene.videoClipUrl.includes('lip-sync')
 
         assetList.push({
           id: `scene-${scene.sequence}`,
           type: isLipSynced ? 'lipsync' : 'video',
-          url: scene.videoUrl,
+          url: scene.videoClipUrl,
           description: scene.prompt,
           sceneSequence: scene.sequence,
           metadata: {
@@ -70,7 +70,7 @@ export function AssetGallery({
     })
 
     return assetList
-  }, [scenes, characterRefImage])
+  }, [scenes, characterReferenceImageId])
 
   // Filter assets based on selected filter
   const filteredAssets = useMemo(() => {

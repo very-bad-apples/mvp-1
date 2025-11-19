@@ -37,7 +37,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/useToast"
 import { FinalVideoPlayerProps, VideoControlState } from "@/types/video-player"
 
 export default function FinalVideoPlayer({

@@ -17,20 +17,17 @@ import { Video, ChevronLeft, CheckCircle2, Circle, Film, Play } from 'lucide-rea
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/useToast'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { ProjectStatus, ProjectScene } from '@/types/project'
 import { AssetGallery } from '@/components/AssetGallery'
 import FinalVideoPlayer from '@/components/FinalVideoPlayer'
 
 const statusConfig: Record<ProjectStatus, { color: string; label: string }> = {
-  'creating-scenes': { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', label: 'Creating Scenes' },
-  'generating-images': { color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', label: 'Generating Images' },
-  'generating-videos': { color: 'bg-purple-500/10 text-purple-500 border-purple-500/20', label: 'Generating Videos' },
-  'generating-lipsync': { color: 'bg-pink-500/10 text-pink-500 border-pink-500/20', label: 'Generating Lip-sync' },
-  'composing': { color: 'bg-orange-500/10 text-orange-500 border-orange-500/20', label: 'Composing' },
+  'pending': { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', label: 'Pending' },
+  'processing': { color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', label: 'Processing' },
   'completed': { color: 'bg-green-500/10 text-green-500 border-green-500/20', label: 'Completed' },
-  'error': { color: 'bg-red-500/10 text-red-500 border-red-500/20', label: 'Error' },
+  'failed': { color: 'bg-red-500/10 text-red-500 border-red-500/20', label: 'Failed' },
 }
 
 interface Phase {
@@ -40,6 +37,8 @@ interface Phase {
 }
 
 function getPhases(status: ProjectStatus): Phase[] {
+  // Simplified phase tracking based on new status model
+  // Backend uses 'pending', 'processing', 'completed', 'failed'
   const phases: Phase[] = [
     { id: 'scenes', label: 'Scenes', completed: false },
     { id: 'images', label: 'Images', completed: false },
@@ -48,23 +47,7 @@ function getPhases(status: ProjectStatus): Phase[] {
     { id: 'compose', label: 'Compose', completed: false },
   ]
 
-  const statusOrder: ProjectStatus[] = [
-    'creating-scenes',
-    'generating-images',
-    'generating-videos',
-    'generating-lipsync',
-    'composing',
-    'completed',
-  ]
-
-  const currentIndex = statusOrder.indexOf(status === 'error' ? 'completed' : status)
-
-  phases.forEach((phase, index) => {
-    if (index < currentIndex || status === 'completed') {
-      phase.completed = true
-    }
-  })
-
+  // Mark all phases as completed if project is completed
   if (status === 'completed') {
     phases.forEach(p => p.completed = true)
   }
@@ -85,8 +68,8 @@ function ProjectHeader({
   onStartGeneration?: () => void
   isGenerating?: boolean
 }) {
-  const statusStyle = statusConfig[status]
-  const canStartGeneration = status === 'creating-scenes' && onStartGeneration
+  const statusStyle = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+  const canStartGeneration = status === 'pending' && onStartGeneration
 
   return (
     <div className="space-y-4" role="region" aria-label="Project header">
@@ -193,7 +176,7 @@ function SceneCard({
   onRegenerateVideo?: (sceneId: number) => void
   onRegenerateLipsync?: (sceneId: number) => void
 }) {
-  const hasVideo = scene.videoUrl && scene.status === 'completed'
+  const hasVideo = scene.videoClipUrl && scene.status === 'completed'
   const thumbnail = '/placeholder.svg'
 
   const sceneStatusConfig = {
@@ -204,7 +187,7 @@ function SceneCard({
   }
 
   const sceneStatus = scene.status || 'pending'
-  const statusStyle = sceneStatusConfig[sceneStatus]
+  const statusStyle = sceneStatusConfig[sceneStatus as keyof typeof sceneStatusConfig] || sceneStatusConfig.pending
 
   return (
     <Card
@@ -213,9 +196,9 @@ function SceneCard({
       aria-label={`Scene ${scene.sequence}: ${scene.prompt}`}
     >
       <div className="relative aspect-video overflow-hidden bg-gray-900/50">
-        {hasVideo && scene.videoUrl ? (
+        {hasVideo && scene.videoClipUrl ? (
           <video
-            src={scene.videoUrl}
+            src={scene.videoClipUrl}
             className="object-cover w-full h-full"
             muted
             loop
@@ -249,14 +232,14 @@ function SceneCard({
         <p className="text-gray-400 text-xs mb-3 line-clamp-2">{scene.negativePrompt || 'No negative prompt'}</p>
 
         {/* Regeneration controls - only show for completed or failed scenes */}
-        {(scene.status === 'completed' || scene.status === 'failed') && scene.id && (
+        {(scene.status === 'completed' || scene.status === 'failed') && scene.sequence && (
           <div className="flex gap-2 mt-2" role="group" aria-label="Regeneration controls">
             {onRegenerateImage && (
               <Button
                 size="sm"
                 variant="outline"
                 className="text-xs border-gray-600 hover:bg-gray-700"
-                onClick={() => onRegenerateImage(scene.id!)}
+                onClick={() => onRegenerateImage(scene.sequence!)}
                 aria-label={`Regenerate image for scene ${scene.sequence}`}
               >
                 Regen Image
@@ -267,7 +250,7 @@ function SceneCard({
                 size="sm"
                 variant="outline"
                 className="text-xs border-gray-600 hover:bg-gray-700"
-                onClick={() => onRegenerateVideo(scene.id!)}
+                onClick={() => onRegenerateVideo(scene.sequence!)}
                 aria-label={`Regenerate video for scene ${scene.sequence}`}
               >
                 Regen Video
@@ -278,7 +261,7 @@ function SceneCard({
                 size="sm"
                 variant="outline"
                 className="text-xs border-gray-600 hover:bg-gray-700"
-                onClick={() => onRegenerateLipsync(scene.id!)}
+                onClick={() => onRegenerateLipsync(scene.sequence!)}
                 aria-label={`Regenerate lipsync for scene ${scene.sequence}`}
               >
                 Regen Lipsync
@@ -354,7 +337,7 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
   // Project title
   const projectTitle = useMemo(() => {
     if (!project) return ''
-    return project.idea.slice(0, 60) + (project.idea.length > 60 ? '...' : '')
+    return project.conceptPrompt.slice(0, 60) + (project.conceptPrompt.length > 60 ? '...' : '')
   }, [project])
 
   // Handle start generation
@@ -536,10 +519,10 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
   }
 
   // Determine what to show based on status
-  const showPhaseTracker = project.status !== 'creating-scenes' && project.status !== 'completed'
+  const showPhaseTracker = project.status === 'processing'
   const showScenes = project.scenes && project.scenes.length > 0
-  const showAssets = project.scenes && project.scenes.some(s => s.videoUrl || s.status === 'completed')
-  const showFinalVideo = project.status === 'completed' || project.finalVideoUrl
+  const showAssets = project.scenes && project.scenes.some(s => s.videoClipUrl || s.status === 'completed')
+  const showFinalVideo = project.status === 'completed' || project.finalOutputUrl
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -625,17 +608,17 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         {showAssets && (
           <AssetGallery
             scenes={project.scenes}
-            characterRefImage={project.characterRefImage}
+            characterReferenceImageId={project.characterImageUrl}
           />
         )}
 
         {/* Final Video - Show when project is complete or video is available */}
         {showFinalVideo && (
           <VideoPlayerSection
-            videoUrl={project.finalVideoUrl || undefined}
+            videoUrl={project.finalOutputUrl || undefined}
             projectTitle={projectTitle}
             projectId={project.projectId}
-            metadata={project.finalVideoMetadata}
+            metadata={undefined}
           />
         )}
       </main>

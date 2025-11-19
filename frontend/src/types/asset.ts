@@ -69,12 +69,12 @@ export interface AssetGalleryProps {
   scenes?: Array<{
     sequence: number
     prompt: string
-    videoUrl?: string | null
-    status?: 'pending' | 'generating' | 'completed' | 'failed'
+    videoClipUrl?: string | null
+    status?: string
   }>
 
-  /** Character reference image */
-  characterRefImage?: string | null
+  /** Character reference image ID */
+  characterReferenceImageId?: string | null
 
   /** Loading state */
   isLoading?: boolean

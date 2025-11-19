@@ -4,15 +4,13 @@
 
 /**
  * Project status during the overall workflow
+ * Note: These values match the backend status enum
  */
 export type ProjectStatus =
-  | 'creating-scenes'
-  | 'generating-images'
-  | 'generating-videos'
-  | 'generating-lipsync'
-  | 'composing'
+  | 'pending'
+  | 'processing'
   | 'completed'
-  | 'error'
+  | 'failed'
 
 /**
  * Media clip with URL and duration
@@ -53,11 +51,9 @@ export interface Scene {
 
 /**
  * Scene within a project
+ * Note: Field names match backend SceneResponse for consistency
  */
 export interface ProjectScene {
-  /** Scene ID */
-  id?: number
-
   /** Scene sequence number */
   sequence: number
 
@@ -65,42 +61,79 @@ export interface ProjectScene {
   prompt: string
 
   /** Negative prompt */
-  negativePrompt: string
+  negativePrompt: string | null
+
+  /** Scene duration in seconds */
+  duration?: number
 
   /** Scene status */
-  status?: 'pending' | 'generating' | 'completed' | 'failed'
+  status: string
 
-  /** Generated video ID */
-  videoId?: string | null
+  /** Reference image URLs (presigned S3 URLs) */
+  referenceImageUrls?: string[]
 
-  /** Generated video URL */
-  videoUrl?: string | null
+  /** Audio clip URL (presigned S3 URL) */
+  audioClipUrl?: string | null
+
+  /** Generated video clip URL (presigned S3 URL) */
+  videoClipUrl?: string | null
+
+  /** Whether this scene needs lip sync */
+  needsLipSync?: boolean
+
+  /** Lip-synced video clip URL (presigned S3 URL) */
+  lipSyncedVideoClipUrl?: string | null
 
   /** Retry count for failed generations */
-  retryCount?: number
+  retryCount: number
+
+  /** Error message if failed */
+  errorMessage?: string | null
+
+  /** Creation timestamp */
+  createdAt?: string
+
+  /** Last update timestamp */
+  updatedAt?: string
 }
 
 /**
  * Music video project containing multiple scenes
+ * Note: Field names match backend ProjectResponse for consistency
  */
 export interface Project {
   /** Unique project identifier */
   projectId: string
 
-  /** Project mode: ad-creative or music-video */
-  mode: 'ad-creative' | 'music-video'
+  /** Project mode: ad-creative or music-video (frontend-only field) */
+  mode?: 'ad-creative' | 'music-video'
 
-  /** User's original concept/idea prompt */
-  idea: string
+  /** User's original concept/idea prompt (backend: conceptPrompt) */
+  conceptPrompt: string
 
   /** Character description used for scene generation */
   characterDescription: string
 
-  /** Character reference image ID (optional) */
-  characterRefImage: string | null
+  /** Character reference image ID - used when creating/updating project */
+  characterReferenceImageId?: string | null
+
+  /** Character reference image URL - presigned S3 URL from backend */
+  characterImageUrl: string | null
+
+  /** Product description (for ad-creative mode) */
+  productDescription?: string | null
+
+  /** Product image URL - presigned S3 URL from backend */
+  productImageUrl?: string | null
+
+  /** Audio backing track URL - presigned S3 URL from backend */
+  audioBackingTrackUrl?: string | null
 
   /** Array of scenes in this project */
   scenes: ProjectScene[]
+
+  /** Total number of scenes */
+  sceneCount: number
 
   /** Creation timestamp */
   createdAt: string
@@ -111,8 +144,8 @@ export interface Project {
   /** Current project status */
   status: ProjectStatus
 
-  /** Overall progress percentage (0-100) */
-  progress: number
+  /** Overall progress percentage (0-100) - calculated frontend field */
+  progress?: number
 
   /** Number of completed scenes */
   completedScenes: number
@@ -120,16 +153,8 @@ export interface Project {
   /** Number of failed scenes */
   failedScenes: number
 
-  /** Final composed video URL (available when status is 'completed') */
-  finalVideoUrl?: string | null
-
-  /** Final video metadata */
-  finalVideoMetadata?: {
-    duration: number
-    fileSize: number
-    resolution: string
-    format: string
-  }
+  /** Final composed video URL (backend: finalOutputUrl) */
+  finalOutputUrl?: string | null
 }
 
 /**
@@ -138,40 +163,39 @@ export interface Project {
 
 /**
  * Request to create a new project
+ * Note: This matches the backend's multipart/form-data structure
  */
 export interface CreateProjectRequest {
-  /** Unique project identifier */
-  projectId: string
-
   /** Project mode */
   mode: 'ad-creative' | 'music-video'
 
   /** User's concept/idea */
-  idea: string
+  prompt: string
 
   /** Character description */
-  characterDescription?: string
+  characterDescription: string
 
   /** Character reference image ID */
-  characterRefImage?: string | null
+  characterReferenceImageId?: string | null
 
-  /** Initial scenes */
-  scenes: Array<{
-    id?: number
-    sequence: number
-    prompt: string
-    negativePrompt: string
-  }>
+  /** Product description (for ad-creative mode) */
+  productDescription?: string | null
+
+  /** Product images (for ad-creative mode) */
+  images?: File[]
+
+  /** Audio file (for music-video mode) */
+  audio?: File
 }
 
 /**
  * Response from creating a project
+ * Note: Backend returns minimal response, not full project object
  */
 export interface CreateProjectResponse {
-  success: boolean
   projectId: string
-  project: Project
-  error?: string
+  status: string
+  message: string
 }
 
 /**
@@ -183,24 +207,18 @@ export interface UpdateProjectRequest {
   scenes?: ProjectScene[]
   completedScenes?: number
   failedScenes?: number
-  characterRefImage?: string | null
+  characterReferenceImageId?: string | null
 }
 
 /**
  * Response from updating a project
+ * Note: Backend returns full ProjectResponse - same structure as Project interface
  */
-export interface UpdateProjectResponse {
-  success: boolean
-  project: Project
-  error?: string
-}
+export type UpdateProjectResponse = GetProjectResponse
 
 /**
  * Response from getting a project
+ * Note: Backend returns ProjectResponse directly - same structure as Project interface
  */
-export interface GetProjectResponse {
-  success: boolean
-  project: Project | null
-  error?: string
-}
+export type GetProjectResponse = Omit<Project, 'mode' | 'progress'>
 

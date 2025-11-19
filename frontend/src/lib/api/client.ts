@@ -133,6 +133,13 @@ function isRetryableError(error: unknown, config: RetryConfig): boolean {
 }
 
 /**
+ * Get API key from environment
+ */
+function getAPIKey(): string | undefined {
+  return process.env.NEXT_PUBLIC_API_KEY
+}
+
+/**
  * Base fetch wrapper with error handling
  */
 async function apiFetch<T>(
@@ -145,12 +152,21 @@ async function apiFetch<T>(
 
   for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
     try {
+      // Build headers with API key for backend requests
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string> || {}),
+      }
+
+      // Add API key header if available and URL is for backend (not Next.js routes)
+      const apiKey = getAPIKey()
+      if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
+        headers['X-API-Key'] = apiKey
+      }
+
       const response = await fetch(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
       })
 
       // Handle non-OK responses
@@ -282,26 +298,72 @@ function getAPIUrl(): string {
 export async function createProject(
   data: CreateProjectRequest
 ): Promise<CreateProjectResponse> {
-  // TODO: Backend endpoint not ready yet - using frontend API for now
-  console.log('[createProject] Would send to backend:', JSON.stringify(data, null, 2))
-  console.log('[createProject] Using frontend API as fallback')
+  const url = `${getAPIUrl()}/api/mv/projects`
 
-  // Call the frontend Next.js API route instead
-  const url = `/api/projects`
-  const response = await apiFetch<CreateProjectResponse>(url, {
+  // Build FormData for multipart/form-data request
+  const formData = new FormData()
+  formData.append('mode', data.mode)
+  formData.append('prompt', data.prompt)
+  formData.append('characterDescription', data.characterDescription)
+
+  if (data.characterReferenceImageId) {
+    formData.append('characterReferenceImageId', data.characterReferenceImageId)
+  }
+
+  if (data.productDescription) {
+    formData.append('productDescription', data.productDescription)
+  }
+
+  // Add product images if provided (for ad-creative mode)
+  if (data.images && data.images.length > 0) {
+    data.images.forEach((image) => {
+      formData.append('images', image)
+    })
+  }
+
+  // Add audio file if provided (for music-video mode)
+  if (data.audio) {
+    formData.append('audio', data.audio)
+  }
+
+  // Get API key
+  const apiKey = getAPIKey()
+  const headers: Record<string, string> = {}
+  if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
+    headers['X-API-Key'] = apiKey
+  }
+
+  // Use fetch directly (not apiFetch) because FormData sets its own Content-Type with boundary
+  const response = await fetch(url, {
     method: 'POST',
-    body: JSON.stringify(data),
+    headers,
+    body: formData,
   })
 
-  console.log('[createProject] Frontend API response:', response)
-  return response
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type')
+    let errorDetail = null
 
-  // TODO: Uncomment when backend is ready (and remove frontend API call above)
-  // const url = `${getAPIUrl()}/api/projects`
-  // return apiFetch<CreateProjectResponse>(url, {
-  //   method: 'POST',
-  //   body: JSON.stringify(data),
-  // })
+    if (contentType?.includes('application/json')) {
+      try {
+        errorDetail = await response.json()
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    const message = errorDetail?.message || `HTTP ${response.status}: ${response.statusText}`
+    const details = errorDetail?.details || 'No additional details'
+
+    throw new APIError(
+      message,
+      response.status,
+      errorDetail?.error_code,
+      details
+    )
+  }
+
+  return await response.json()
 }
 
 /**
@@ -312,17 +374,10 @@ export async function createProject(
 export async function getProject(
   projectId: string
 ): Promise<GetProjectResponse> {
-  // TODO: Backend endpoint not ready yet - using frontend API for now
-  const url = `/api/projects/${projectId}`
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}`
   return apiFetch<GetProjectResponse>(url, {
     method: 'GET',
   })
-
-  // TODO: Uncomment when backend is ready (and remove frontend API call above)
-  // const url = `${getAPIUrl()}/api/projects/${projectId}`
-  // return apiFetch<GetProjectResponse>(url, {
-  //   method: 'GET',
-  // })
 }
 
 /**
@@ -335,7 +390,7 @@ export async function updateProject(
   projectId: string,
   data: UpdateProjectRequest
 ): Promise<UpdateProjectResponse> {
-  const url = `${getAPIUrl()}/api/projects/${projectId}`
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}`
   return apiFetch<UpdateProjectResponse>(url, {
     method: 'PATCH',
     body: JSON.stringify(data),

@@ -27,7 +27,7 @@ import type {
   GenerateVideoRequest,
   LipsyncRequest,
 } from '@/types/api'
-import type { Project, Scene } from '@/types/project'
+import type { Project, ProjectStatus, Scene } from '@/types/project'
 
 /**
  * Orchestration phase types
@@ -181,24 +181,24 @@ export async function startFullGeneration(
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
-    if (!projectResponse.success || !projectResponse.project) {
+    if (!projectResponse.projectId) {
       throw new Error('Failed to fetch project')
     }
 
-    let project = projectResponse.project
+    let project = projectResponse
 
     // Phase 1: Generate all scenes (parallel)
     opts.onProgress('scenes', 0, project.scenes.length, 'Starting scene generation...')
-    await updateProject(projectId, { status: 'creating-scenes' })
+    await updateProject(projectId, { status: 'processing' })
 
     // Assuming scenes are already generated from the initial project creation
     // If we need to regenerate scenes, we can add that logic here
 
     // Phase 2: Generate all character reference images (parallel)
     opts.onProgress('images', 0, project.scenes.length, 'Starting image generation...')
-    await updateProject(projectId, { status: 'generating-images' })
+    await updateProject(projectId, { status: 'processing' })
 
-    if (project.characterDescription && !project.characterRefImage) {
+    if (project.characterDescription && !project.characterReferenceImageId) {
       const imageRequest: GenerateCharacterReferenceRequest = {
         character_description: project.characterDescription,
         num_images: 1,
@@ -214,7 +214,7 @@ export async function startFullGeneration(
 
       if (imageResponse.images.length > 0) {
         project = await updateAndRefetch(projectId, {
-          characterRefImage: imageResponse.images[0].id,
+          characterReferenceImageId: imageResponse.images[0].id,
         })
       }
     }
@@ -223,7 +223,7 @@ export async function startFullGeneration(
 
     // Phase 3: Generate all videos (parallel)
     opts.onProgress('videos', 0, project.scenes.length, 'Starting video generation...')
-    await updateProject(projectId, { status: 'generating-videos' })
+    await updateProject(projectId, { status: 'processing' })
 
     const videoPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
@@ -232,8 +232,8 @@ export async function startFullGeneration(
 
           const videoRequest: GenerateVideoRequest = {
             prompt: scene.prompt,
-            negative_prompt: scene.negativePrompt,
-            reference_image_base64: project.characterRefImage || undefined,
+            negative_prompt: scene.negativePrompt || undefined,
+            reference_image_base64: project.characterReferenceImageId || undefined,
           }
 
           const videoResponse = await generateVideo(videoRequest)
@@ -242,8 +242,7 @@ export async function startFullGeneration(
           const updatedScenes = [...project.scenes]
           updatedScenes[index] = {
             ...scene,
-            videoId: videoResponse.video_id,
-            videoUrl: videoResponse.video_url,
+            videoClipUrl: videoResponse.video_url,
             status: 'completed',
           }
 
@@ -263,14 +262,14 @@ export async function startFullGeneration(
 
     // Phase 4: Generate all lip-syncs (parallel)
     opts.onProgress('lipsync', 0, project.scenes.length, 'Starting lip-sync generation...')
-    await updateProject(projectId, { status: 'generating-lipsync' })
+    await updateProject(projectId, { status: 'processing' })
 
     const lipsyncPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
         async () => {
           opts.onProgress('lipsync', index + 1, project.scenes.length, `Generating lip-sync ${index + 1}/${project.scenes.length}`)
 
-          if (!scene.videoUrl) {
+          if (!scene.videoClipUrl) {
             console.warn(`Scene ${index + 1} missing video, skipping lip-sync`)
             return null
           }
@@ -281,7 +280,7 @@ export async function startFullGeneration(
           return null
 
           // const lipsyncRequest: LipsyncRequest = {
-          //   video_url: scene.videoUrl,
+          //   video_url: scene.videoClipUrl,
           //   audio_url: '', // TODO: Add audio URL to scene
           // }
 
@@ -310,7 +309,7 @@ export async function startFullGeneration(
 
     // Phase 5: Compose final video (sequential)
     opts.onProgress('compose', 0, 1, 'Starting final composition...')
-    await updateProject(projectId, { status: 'composing' })
+    await updateProject(projectId, { status: 'processing' })
 
     // TODO: Implement video composition endpoint
     // For now, mark as completed
@@ -319,15 +318,15 @@ export async function startFullGeneration(
 
     // Fetch final project state
     const finalProject = await getProject(projectId)
-    if (!finalProject.success || !finalProject.project) {
+    if (!finalProject.projectId) {
       throw new Error('Failed to fetch final project state')
     }
 
-    return finalProject.project
+    return finalProject
   } catch (error) {
-    // Update project status to error
-    await updateProject(projectId, { status: 'error' }).catch(() => {
-      // Ignore errors when updating error status
+    // Update project status to failed
+    await updateProject(projectId, { status: 'failed' }).catch(() => {
+      // Ignore errors when updating failed status
     })
 
     throw error
@@ -343,10 +342,10 @@ async function updateAndRefetch(
 ): Promise<Project> {
   await updateProject(projectId, updates)
   const response = await getProject(projectId)
-  if (!response.success || !response.project) {
+  if (!response.projectId) {
     throw new Error('Failed to refetch project after update')
   }
-  return response.project
+  return response
 }
 
 /**
@@ -367,11 +366,11 @@ export async function regenerateScene(
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
-    if (!projectResponse.success || !projectResponse.project) {
+    if (!projectResponse.projectId) {
       throw new Error('Failed to fetch project')
     }
 
-    const project = projectResponse.project
+    const project = projectResponse
 
     if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
       throw new Error(`Invalid scene index: ${sceneIndex}`)
@@ -386,11 +385,11 @@ export async function regenerateScene(
 
     // Fetch and return updated project
     const finalProject = await getProject(projectId)
-    if (!finalProject.success || !finalProject.project) {
+    if (!finalProject.projectId) {
       throw new Error('Failed to fetch project after regeneration')
     }
 
-    return finalProject.project
+    return finalProject
   } catch (error) {
     opts.onError('scenes', sceneIndex, error instanceof Error ? error : new Error(String(error)))
     throw error
@@ -415,11 +414,11 @@ export async function regenerateImage(
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
-    if (!projectResponse.success || !projectResponse.project) {
+    if (!projectResponse.projectId) {
       throw new Error('Failed to fetch project')
     }
 
-    const project = projectResponse.project
+    const project = projectResponse
 
     if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
       throw new Error(`Invalid scene index: ${sceneIndex}`)
@@ -444,7 +443,7 @@ export async function regenerateImage(
 
       if (imageResponse.images.length > 0) {
         await updateProject(projectId, {
-          characterRefImage: imageResponse.images[0].id,
+          characterReferenceImageId: imageResponse.images[0].id,
         })
       }
     }
@@ -453,11 +452,11 @@ export async function regenerateImage(
 
     // Fetch and return updated project
     const finalProject = await getProject(projectId)
-    if (!finalProject.success || !finalProject.project) {
+    if (!finalProject.projectId) {
       throw new Error('Failed to fetch project after regeneration')
     }
 
-    return finalProject.project
+    return finalProject
   } catch (error) {
     opts.onError('images', sceneIndex, error instanceof Error ? error : new Error(String(error)))
     throw error
@@ -482,11 +481,11 @@ export async function regenerateVideo(
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
-    if (!projectResponse.success || !projectResponse.project) {
+    if (!projectResponse.projectId) {
       throw new Error('Failed to fetch project')
     }
 
-    let project = projectResponse.project
+    let project = projectResponse
 
     if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
       throw new Error(`Invalid scene index: ${sceneIndex}`)
@@ -500,8 +499,8 @@ export async function regenerateVideo(
       async () => {
         const videoRequest: GenerateVideoRequest = {
           prompt: scene.prompt,
-          negative_prompt: scene.negativePrompt,
-          reference_image_base64: project.characterRefImage || undefined,
+          negative_prompt: scene.negativePrompt || undefined,
+          reference_image_base64: project.characterReferenceImageId || undefined,
         }
 
         const videoResponse = await generateVideo(videoRequest)
@@ -510,8 +509,7 @@ export async function regenerateVideo(
         const updatedScenes = [...project.scenes]
         updatedScenes[sceneIndex] = {
           ...scene,
-          videoId: videoResponse.video_id,
-          videoUrl: videoResponse.video_url,
+          videoClipUrl: videoResponse.video_url,
           status: 'completed',
         }
 
@@ -552,11 +550,11 @@ export async function regenerateLipSync(
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
-    if (!projectResponse.success || !projectResponse.project) {
+    if (!projectResponse.projectId) {
       throw new Error('Failed to fetch project')
     }
 
-    let project = projectResponse.project
+    let project = projectResponse
 
     if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
       throw new Error(`Invalid scene index: ${sceneIndex}`)
@@ -564,7 +562,7 @@ export async function regenerateLipSync(
 
     const scene = project.scenes[sceneIndex]
 
-    if (!scene.videoUrl) {
+    if (!scene.videoClipUrl) {
       throw new Error(`Scene ${sceneIndex + 1} missing video for lip-sync`)
     }
 
@@ -579,7 +577,7 @@ export async function regenerateLipSync(
     // await retryWithBackoff(
     //   async () => {
     //     const lipsyncRequest: LipsyncRequest = {
-    //       video_url: scene.videoUrl,
+    //       video_url: scene.videoClipUrl,
     //       audio_url: '', // TODO: Add audio URL to scene
     //     }
 

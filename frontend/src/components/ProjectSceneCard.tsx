@@ -21,7 +21,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import type { Scene } from "@/types/project"
+import type { ProjectScene } from "@/types/project"
 
 /**
  * Scene generation status
@@ -49,7 +49,7 @@ export interface GenerationStep {
 /**
  * Extended scene data with generation status
  */
-export interface SceneWithStatus extends Partial<Scene> {
+export interface SceneWithStatus extends Partial<ProjectScene> {
   /** Scene sequence number */
   sequence: number
   /** Scene prompt/description */
@@ -266,7 +266,7 @@ export default function ProjectSceneCard({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onRegenerate('video')}
-                  disabled={!scene.videoUrl}
+                  disabled={!scene.videoClipUrl}
                   className="text-white hover:bg-slate-700 focus:bg-slate-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -371,19 +371,19 @@ export default function ProjectSceneCard({
               Video
             </div>
             <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700">
-              {!scene.videoUrl && (scene.status === 'pending' || scene.status === 'generating-image') && (
+              {!scene.videoClipUrl && (scene.status === 'pending' || scene.status === 'generating-image') && (
                 <Skeleton className="w-full h-full" />
               )}
-              {!scene.videoUrl && (scene.status === 'generating-video' || scene.status === 'generating-lipsync') && (
+              {!scene.videoClipUrl && (scene.status === 'generating-video' || scene.status === 'generating-lipsync') && (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                   <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
                 </div>
               )}
-              {scene.videoUrl && (
+              {scene.videoClipUrl && (
                 <div className="relative w-full h-full group">
                   <video
                     ref={videoRef}
-                    src={scene.videoUrl}
+                    src={scene.videoClipUrl}
                     className="w-full h-full object-cover"
                     loop
                     muted
