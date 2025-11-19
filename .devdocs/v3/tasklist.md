@@ -688,3 +688,148 @@ Integrate lipsync capability with the quick-gen-page, allowing users to regenera
 - [ ] Feature works end-to-end in production environment
 - [ ] Lipsync checkbox only appears on video regenerate, not scene regenerate
 - [ ] UI clearly distinguishes between original and lipsynced videos (optional enhancement)
+
+---
+
+# v3.1: S3 Upload for Lipsynced Videos
+
+## Overview
+Add S3 cloud storage upload for lipsynced videos to match the pattern used in video_generator.py, ensuring videos are accessible via presigned URLs with graceful fallback to local storage.
+
+## Task List
+
+### Backend Implementation
+
+#### Task 1: Add Required Imports
+**File**: `backend/mv/lipsync.py`
+
+- [ ] 1.1: Add `import asyncio` at top of file
+- [ ] 1.2: Add `import concurrent.futures` at top of file
+- [ ] 1.3: Verify `get_storage_backend` import already exists (should be present)
+
+**Notes**:
+- These imports are needed for async S3 upload from sync context
+- `get_storage_backend` was already added in v3 implementation
+
+#### Task 2: Implement S3 Upload Logic
+**File**: `backend/mv/lipsync.py` (in `generate_lipsync()` function, after video is saved locally)
+
+- [ ] 2.1: Initialize `cloud_urls = {}` before upload attempt
+- [ ] 2.2: Add conditional check: `if settings.STORAGE_BUCKET:`
+- [ ] 2.3: Define nested async function `upload_job_to_cloud()`:
+  - Initialize storage backend
+  - Upload video to `f"mv/jobs/{output_video_id}/video.mp4"`
+  - Return dict with "video" key containing presigned URL
+- [ ] 2.4: Implement ThreadPoolExecutor pattern:
+  - Define `run_upload()` function that calls `asyncio.run(upload_job_to_cloud())`
+  - Create ThreadPoolExecutor context
+  - Submit upload job with 300-second timeout
+  - Capture result in `cloud_urls`
+- [ ] 2.5: Add try-except wrapper around upload block
+- [ ] 2.6: Log success with `logger.info()`
+- [ ] 2.7: Catch exceptions and log with `logger.warning()` (non-fatal)
+- [ ] 2.8: Add comment: `# Continue without cloud upload - local files are still available`
+
+**Notes**:
+- Follow exact pattern from video_generator.py lines 394-453
+- Upload failures should not crash lipsync operation
+- Local files remain available as fallback
+
+#### Task 3: Enhance Metadata and Return Values
+**File**: `backend/mv/lipsync.py` (in `generate_lipsync()` function, before return statement)
+
+- [ ] 3.1: Add `metadata["cloud_urls"] = cloud_urls` if upload succeeded
+- [ ] 3.2: Add `metadata["cloud_url"] = cloud_urls.get("video")` for backward compatibility
+- [ ] 3.3: Add `metadata["local_video_url"] = f"/api/mv/get_video/{output_video_id}"` always
+- [ ] 3.4: Update `video_url_path` conditional:
+  - Use `cloud_urls.get("video")` if cloud upload succeeded
+  - Otherwise use `f"/api/mv/get_video/{output_video_id}"`
+
+**Notes**:
+- Maintains backward compatibility with existing API consumers
+- Cloud URL is preferred but local URL is always available
+
+### Testing Tasks
+
+#### Task 4: Integration Testing
+
+- [ ] 4.1: Test lipsync with cloud storage configured (STORAGE_BUCKET set)
+- [ ] 4.2: Verify video uploads to S3 at correct path `mv/jobs/{id}/video.mp4`
+- [ ] 4.3: Verify presigned URL is returned in response
+- [ ] 4.4: Verify metadata includes all URL fields (cloud_urls, cloud_url, local_video_url)
+- [ ] 4.5: Test lipsync without cloud storage configured (STORAGE_BUCKET empty)
+- [ ] 4.6: Verify local file path is returned as fallback
+- [ ] 4.7: Test S3 upload failure scenario (invalid credentials)
+- [ ] 4.8: Verify operation continues successfully with local fallback
+- [ ] 4.9: Verify warning is logged on upload failure (not error)
+- [ ] 4.10: Verify `/api/mv/get_video/{id}` serves S3 URL for lipsynced videos
+
+## Dependencies
+
+- Task 2 depends on Task 1 (imports must be added first)
+- Task 3 depends on Task 2 (upload logic must exist)
+- Task 4 depends on Tasks 1-3 (all implementation complete)
+
+## Technical Notes
+
+### S3 Path Pattern
+```
+mv/jobs/{video_id}/video.mp4
+```
+Example: `mv/jobs/177adfe0-88fa-41d5-b18f-ba9a4455862f/video.mp4`
+
+### Upload Pattern (from video_generator.py)
+```python
+cloud_urls = {}
+try:
+    if settings.STORAGE_BUCKET:
+        from services.storage_backend import get_storage_backend
+
+        async def upload_job_to_cloud():
+            storage = get_storage_backend()
+            urls = {}
+            urls["video"] = await storage.upload_file(
+                str(video_path),
+                f"mv/jobs/{video_id}/video.mp4"
+            )
+            return urls
+
+        def run_upload():
+            return asyncio.run(upload_job_to_cloud())
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_upload)
+            cloud_urls = future.result(timeout=300)
+
+        logger.info(f"Uploaded lipsync job {video_id} to cloud storage")
+except Exception as e:
+    logger.warning(f"Failed to upload lipsync job {video_id} to cloud storage: {e}")
+    # Continue without cloud upload - local files are still available
+```
+
+### Metadata Enhancement
+```python
+# If upload succeeded:
+metadata["cloud_urls"] = {"video": "https://presigned-url..."}
+metadata["cloud_url"] = "https://presigned-url..."  # Backward compat
+metadata["local_video_url"] = "/api/mv/get_video/123..."  # Always present
+
+# Set return URL:
+video_url_path = cloud_urls.get("video") if cloud_urls else f"/api/mv/get_video/{output_video_id}"
+```
+
+### Error Handling Strategy
+- **Non-fatal failures**: Upload errors are logged as warnings
+- **Graceful degradation**: Operation continues with local files
+- **No retries**: Single upload attempt (as specified)
+- **No cleanup**: Local files kept even after successful upload
+
+## Success Criteria
+
+- [ ] Lipsynced videos upload to S3 path: `mv/jobs/{video_id}/video.mp4`
+- [ ] Metadata includes `cloud_urls`, `cloud_url`, and `local_video_url` fields
+- [ ] Upload failures gracefully handled with local fallback
+- [ ] Logging matches video_generator pattern (info on success, warning on failure)
+- [ ] No breaking changes to API response structure
+- [ ] `/api/mv/get_video/{id}` endpoint serves S3 URLs for lipsynced videos
+- [ ] Feature works in both cloud-enabled and local-only configurations

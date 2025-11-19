@@ -700,7 +700,7 @@ export default function QuickGenPage() {
     if (videoIds.length === 0) return
 
     try {
-      const response = await fetch(`${API_URL}/api/mv/stitch_video`, {
+      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
