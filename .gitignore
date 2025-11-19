@@ -21,6 +21,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.db
+*.db-shm
+*.db-wal
 
 # Backend generated outputs (preserve directory structure with .gitkeep)
 backend/mv/outputs/*
