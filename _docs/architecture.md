@@ -1361,11 +1361,11 @@ Infrastructure:
   Docker: docker-compose.yml
 
 Documentation:
-  Task List: DATABASE_IMPLEMENTATION_TASKS.md
-  Architecture: _docs_NR/architecture.md (this file)
+  Architecture: _docs/architecture.md (this file)
   API Docs: backend/_docs/API_ENDPOINTS.md
   Worker Docs: backend/_docs/WORKER.md
-  DynamoDB Schema: _docs_NR/database-layer/DYNAMODB_SCHEMA.md
+  DynamoDB Schema: _docs/database/DYNAMODB_SCHEMA.md
+  Database Deployment: _docs/database/DEPLOYMENT_CHECKLIST.md
 ```
 
 ---

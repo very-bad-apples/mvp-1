@@ -180,6 +180,9 @@ backend/
 ├── .env                   # Environment variables
 ├── venv/                  # Virtual environment
 ├── video_generator.db     # SQLite database
+├── _docs/                 # Documentation
+│   ├── API_ENDPOINTS.md  # API reference
+│   └── WORKER.md         # Worker system docs
 └── README.md             # This file
 ```
 
@@ -314,16 +317,15 @@ Response: {"message": "AI Video Generator API", "version": "1.0.0", "docs": "/do
 - **sqlalchemy**: ORM for database
 - **aiofiles**: Async file operations
 
-## Next Steps (Phase 2)
+## Additional Documentation
 
-### Ready to implement:
-- **Task 8**: Develop Video Generation Endpoint
-- **Task 9**: Implement Job Status Endpoint
-- **Task 10**: Set Up WebSocket for Progress Updates
-- **Task 11**: Develop File Upload Handling Service
-- **Task 21**: Develop Queue Worker
-
-These tasks all depend on Task 7 (FastAPI initialization) which is now complete.
+For detailed information about specific components:
+- **API Endpoints**: See [_docs/API_ENDPOINTS.md](_docs/API_ENDPOINTS.md)
+- **Worker System**: See [_docs/WORKER.md](_docs/WORKER.md)
+- **System Architecture**: See [../_docs/architecture.md](../_docs/architecture.md)
+- **Database Schema**: See [../_docs/database/DYNAMODB_SCHEMA.md](../_docs/database/DYNAMODB_SCHEMA.md)
+- **Key Insights**: See [../_docs/key-insights.md](../_docs/key-insights.md)
+- **Best Practices**: See [../_docs/best-practices.md](../_docs/best-practices.md)
 
 ## Success Criteria
 
