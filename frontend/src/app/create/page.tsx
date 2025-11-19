@@ -18,8 +18,8 @@ import { useToast } from '@/hooks/use-toast'
 
 type Mode = 'ad-creative' | 'music-video'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+// Use relative paths to proxy routes (API key handled server-side)
+const API_BASE = '/api/mv'
 
 export default function CreatePage() {
   const router = useRouter()
@@ -146,12 +146,9 @@ export default function CreatePage() {
         formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
       }
 
-      // Call the real API endpoint
-      const response = await fetch(`${API_URL}/api/mv/projects`, {
+      // Call the proxy route (API key handled server-side)
+      const response = await fetch(`${API_BASE}/projects`, {
         method: 'POST',
-        headers: {
-          'X-API-Key': API_KEY,
-        },
         body: formData,
       })
 
@@ -202,12 +199,7 @@ export default function CreatePage() {
    * Uses redirect=false to get JSON response (cloud) or direct file (local).
    */
   const fetchCharacterImage = async (imageId: string): Promise<string> => {
-    const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
-      headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json'
-      },
-    })
+    const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`)
 
     if (!response.ok) {
       throw new Error(`Failed to fetch image ${imageId}`)
@@ -247,11 +239,10 @@ export default function CreatePage() {
 
     try {
       // Step 1: Generate images and get image IDs (no base64 in v10)
-      const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
+      const response = await fetch(`${API_BASE}/generate_character_reference`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           character_description: characterDescription.trim(),

@@ -24,8 +24,8 @@ import {
   Music,
 } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+// Use relative paths to proxy routes (API key handled server-side)
+const API_BASE = '/api/mv'
 
 // Configuration Constants
 const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 * 60 // 7 minutes in seconds
@@ -58,7 +58,8 @@ const resolveVideoUrl = (videoUrl: string): string => {
   if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
     return videoUrl // S3 presigned URL
   }
-  return `${API_URL}${videoUrl}` // Local backend
+  // For local backend, use relative path (proxy route handles backend URL)
+  return videoUrl.startsWith('/') ? videoUrl : `/${videoUrl}`
 }
 
 interface QuickJobData {
@@ -167,12 +168,7 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
-          headers: {
-            'X-API-Key': API_KEY,
-            'Content-Type': 'application/json'
-          },
-        })
+        const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`)
 
         if (!response.ok) {
           throw new Error(`Failed to fetch image ${imageId}`)
@@ -301,11 +297,10 @@ export default function QuickGenPage() {
 
   const generateScenes = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/mv/create_scenes`, {
+      const response = await fetch(`${API_BASE}/create_scenes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           idea: jobData.videoDescription,
@@ -419,11 +414,10 @@ export default function QuickGenPage() {
     sceneIndex: number
   ) => {
     try {
-      const response = await fetch(`${API_URL}/api/mv/generate_video`, {
+      const response = await fetch(`${API_BASE}/generate_video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           prompt,
@@ -489,11 +483,10 @@ export default function QuickGenPage() {
     )
 
     try {
-      const response = await fetch(`${API_URL}/api/mv/create_scenes`, {
+      const response = await fetch(`${API_BASE}/create_scenes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           idea: jobData.videoDescription,
@@ -679,11 +672,10 @@ export default function QuickGenPage() {
         requestBody.suppress_video_audio = true
       }
 
-      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+      const response = await fetch(`${API_BASE}/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify(requestBody),
       })
@@ -849,7 +841,7 @@ export default function QuickGenPage() {
                           )}
                           <audio
                             controls
-                            src={`${API_URL}/api/audio/get/${jobData.audioId}`}
+                            src={`/api/audio/get/${jobData.audioId}`}
                             className="w-full h-10"
                           />
                           <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>
