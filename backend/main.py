@@ -102,7 +102,9 @@ async def api_authentication_middleware(request: Request, call_next):
 
     # If no API key is configured, skip authentication (development mode)
     configured_key = auth.get_api_key_from_env()
+    logger.debug("api_auth_check", has_api_key=bool(configured_key), path=request.url.path)
     if not configured_key:
+        logger.info("api_auth_skip", message="No API_KEY configured, skipping authentication", path=request.url.path)
         return await call_next(request)
 
     # Get API key from header or query parameter
