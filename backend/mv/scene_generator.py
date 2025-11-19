@@ -25,9 +25,8 @@ from mv.debug import (
 
 logger = structlog.get_logger()
 
-# Module-level config storage (loaded at startup)
-_parameters_config: dict = {}
-_prompts_config: dict = {}
+# Config loading has been moved to config_manager.py
+# Configs are now loaded per-request based on config_flavor parameter
 
 
 class Scene(BaseModel):
@@ -55,8 +54,12 @@ class CreateScenesRequest(BaseModel):
     video_characteristics: Optional[str] = Field(None, description="Visual style of the video")
     camera_angle: Optional[str] = Field(None, description="Camera perspective")
     project_id: Optional[str] = Field(
-        None, 
+        None,
         description="Optional project ID to associate scenes with a DynamoDB project. When provided, scenes will be saved to DynamoDB."
+    )
+    config_flavor: Optional[str] = Field(
+        None,
+        description="Config flavor to use for generation (defaults to 'default')"
     )
 
 
@@ -67,63 +70,51 @@ class CreateScenesResponse(BaseModel):
     metadata: dict = Field(..., description="Request metadata and parameters used")
 
 
-def load_configs(config_dir: str = "mv/configs") -> None:
+# load_configs() has been deprecated - use config_manager.initialize_config_flavors() instead
+
+
+def get_default_parameters(config_flavor: Optional[str] = None) -> dict:
     """
-    Load YAML configuration files at startup.
+    Get default parameters from loaded config.
 
     Args:
-        config_dir: Directory containing config YAML files
+        config_flavor: Optional flavor name to use (defaults to 'default')
+
+    Returns:
+        Dictionary of default parameters
     """
-    global _parameters_config, _prompts_config
+    from mv.config_manager import get_config
 
-    base_path = Path(__file__).parent.parent / config_dir.split("/", 1)[-1] if "/" in config_dir else Path(config_dir)
-    # Adjust path to be relative to backend directory
-    if not base_path.is_absolute():
-        base_path = Path(__file__).parent / "configs"
+    parameters_config = get_config(config_flavor, "parameters")
 
-    parameters_path = base_path / "parameters.yaml"
-    prompts_path = base_path / "scene_prompts.yaml"
-
-    if parameters_path.exists():
-        with open(parameters_path, "r") as f:
-            _parameters_config = yaml.safe_load(f) or {}
-        logger.info("mv_config_loaded", file="parameters.yaml", keys=list(_parameters_config.keys()))
-    else:
-        logger.warning("mv_config_not_found", file=str(parameters_path))
-        _parameters_config = {}
-
-    if prompts_path.exists():
-        with open(prompts_path, "r") as f:
-            _prompts_config = yaml.safe_load(f) or {}
-        logger.info("mv_config_loaded", file="scene_prompts.yaml", keys=list(_prompts_config.keys()))
-    else:
-        logger.warning("mv_config_not_found", file=str(prompts_path))
-        _prompts_config = {}
-
-    log_config_params({
-        "parameters": _parameters_config,
-        "prompts": list(_prompts_config.keys())
-    })
-
-
-def get_default_parameters() -> dict:
-    """Get default parameters from loaded config."""
     return {
-        "character_characteristics": _parameters_config.get(
+        "character_characteristics": parameters_config.get(
             "character_characteristics", "sarcastic, dramatic, emotional, and lovable"
         ),
-        "number_of_scenes": _parameters_config.get("number_of_scenes", 4),
-        "video_type": _parameters_config.get("video_type", "video"),
-        "video_characteristics": _parameters_config.get(
+        "number_of_scenes": parameters_config.get("number_of_scenes", 4),
+        "video_type": parameters_config.get("video_type", "video"),
+        "video_characteristics": parameters_config.get(
             "video_characteristics", "vlogging, realistic, 4k, cinematic"
         ),
-        "camera_angle": _parameters_config.get("camera_angle", "front"),
+        "camera_angle": parameters_config.get("camera_angle", "front"),
     }
 
 
-def get_prompt_template() -> str:
-    """Get the scene generation prompt template from loaded config."""
-    return _prompts_config.get("scene_generation_prompt", _get_default_prompt_template())
+def get_prompt_template(config_flavor: Optional[str] = None) -> str:
+    """
+    Get the scene generation prompt template from loaded config.
+
+    Args:
+        config_flavor: Optional flavor name to use (defaults to 'default')
+
+    Returns:
+        Scene generation prompt template string
+    """
+    from mv.config_manager import get_config
+
+    prompts_config = get_config(config_flavor, "scene_prompts")
+
+    return prompts_config.get("scene_generation_prompt", _get_default_prompt_template())
 
 
 def _get_default_prompt_template() -> str:
@@ -182,6 +173,7 @@ def generate_scenes(
     video_characteristics: Optional[str] = None,
     camera_angle: Optional[str] = None,
     prompt_template: Optional[str] = None,
+    config_flavor: Optional[str] = None,
 ) -> tuple[list[Scene], dict[str, str]]:
     """
     Generate scene descriptions for a video based on an idea.
@@ -195,6 +187,7 @@ def generate_scenes(
         video_characteristics: The overall style of the video.
         camera_angle: The primary camera perspective.
         prompt_template: Custom prompt template for scene generation.
+        config_flavor: Config flavor to use (defaults to 'default').
 
     Returns:
         Tuple of (list of Scene objects, dict of output file paths)
@@ -218,8 +211,8 @@ def generate_scenes(
     if not settings.GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY is not configured. Please set it in your environment.")
 
-    # Apply defaults from config
-    defaults = get_default_parameters()
+    # Apply defaults from config (using specified flavor)
+    defaults = get_default_parameters(config_flavor)
 
     if character_characteristics is None:
         character_characteristics = defaults["character_characteristics"]
@@ -250,9 +243,9 @@ def generate_scenes(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # Get prompt template
+    # Get prompt template (using specified flavor)
     if prompt_template is None:
-        prompt_template = get_prompt_template()
+        prompt_template = get_prompt_template(config_flavor)
 
     # Format the prompt
     prompt = prompt_template.format(

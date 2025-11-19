@@ -25,8 +25,8 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
-# Module-level config storage (loaded at startup)
-_video_params_config: dict = {}
+# Config loading has been moved to config_manager.py
+# Configs are now loaded per-request based on config_flavor parameter
 
 
 class GenerateVideoRequest(BaseModel):
@@ -66,6 +66,9 @@ class GenerateVideoRequest(BaseModel):
     sequence: Optional[int] = Field(
         None, ge=1, description="Scene sequence number for DynamoDB integration (requires project_id)"
     )
+    config_flavor: Optional[str] = Field(
+        None, description="Config flavor to use for generation (defaults to 'default')"
+    )
 
 
 class GenerateVideoResponse(BaseModel):
@@ -90,28 +93,7 @@ class VideoGenerationError(BaseModel):
     timestamp: str = Field(..., description="Error timestamp")
 
 
-def load_video_configs() -> None:
-    """
-    Load video generation configuration from YAML files.
-    Called at application startup.
-    """
-    global _video_params_config
-
-    config_dir = Path(__file__).parent / "configs"
-    params_file = config_dir / "image_params.yaml"  # Video params are in the same file
-
-    if params_file.exists():
-        with open(params_file) as f:
-            all_config = yaml.safe_load(f) or {}
-            # Extract video-specific params
-            _video_params_config = {
-                k.replace("video_", ""): v
-                for k, v in all_config.items()
-                if k.startswith("video_")
-            }
-            if settings.MV_DEBUG_MODE:
-                from mv.debug import debug_log
-                debug_log("video_configs_loaded", **_video_params_config)
+# load_video_configs() has been deprecated - use config_manager.initialize_config_flavors() instead
 
 
 def get_character_reference_image(character_reference_id: str) -> tuple[Optional[Path], bool]:
@@ -145,32 +127,38 @@ def get_character_reference_image(character_reference_id: str) -> tuple[Optional
     return None, False
 
 
-def get_default_video_parameters() -> dict:
+def get_default_video_parameters(config_flavor: Optional[str] = None) -> dict:
     """
     Get default video generation parameters.
-    Returns config values if loaded, otherwise returns hardcoded defaults.
-    """
-    if _video_params_config:
-        return {
-            "model": _video_params_config.get("model", "google/veo-3.1"),
-            "aspect_ratio": _video_params_config.get("aspect_ratio", "16:9"),
-            "duration": _video_params_config.get("duration", 8),
-            "generate_audio": _video_params_config.get("generate_audio", True),
-            "person_generation": _video_params_config.get("person_generation", "allow_all"),
-            "rules_template": _video_params_config.get(
-                "rules_template",
-                "- No subtitles or camera directions.\n- The video should be in {aspect_ratio} aspect ratio.\n- Keep it short, visual, simple, cinematic."
-            ),
-        }
 
-    # Fallback defaults
+    Args:
+        config_flavor: Optional flavor name to use (defaults to 'default')
+
+    Returns:
+        Dictionary of default video parameters
+    """
+    from mv.config_manager import get_config
+
+    image_params_config = get_config(config_flavor, "image_params")
+
+    # Extract video-specific params (prefixed with video_)
+    video_params = {
+        k.replace("video_", ""): v
+        for k, v in image_params_config.items()
+        if k.startswith("video_")
+    }
+
+    # Return with fallback defaults
     return {
-        "model": "google/veo-3.1",
-        "aspect_ratio": "16:9",
-        "duration": 8,
-        "generate_audio": True,
-        "person_generation": "allow_all",
-        "rules_template": "- No subtitles or camera directions.\n- The video should be in {aspect_ratio} aspect ratio.\n- Keep it short, visual, simple, cinematic.",
+        "model": video_params.get("model", "google/veo-3.1"),
+        "aspect_ratio": video_params.get("aspect_ratio", "16:9"),
+        "duration": video_params.get("duration", 8),
+        "generate_audio": video_params.get("generate_audio", True),
+        "person_generation": video_params.get("person_generation", "allow_all"),
+        "rules_template": video_params.get(
+            "rules_template",
+            "- No subtitles or camera directions.\n- The video should be in {aspect_ratio} aspect ratio.\n- Keep it short, visual, simple, cinematic."
+        ),
     }
 
 
@@ -185,6 +173,7 @@ def generate_video(
     reference_image_base64: Optional[str] = None,
     video_rules_template: Optional[str] = None,
     backend: str = "replicate",
+    config_flavor: Optional[str] = None,
 ) -> tuple[str, str, str, dict, Optional[str]]:
     """
     Generate a single video clip from a text prompt.
@@ -200,6 +189,7 @@ def generate_video(
         reference_image_base64: [DEPRECATED] Base64 encoded reference image
         video_rules_template: Custom template for video rules
         backend: Backend to use ('replicate' or 'gemini')
+        config_flavor: Config flavor to use (defaults to 'default')
 
     Returns:
         Tuple of (video_id, video_path, video_url, metadata, character_reference_warning)
@@ -263,8 +253,8 @@ def generate_video(
             "backend": backend,
         })
 
-    # Get defaults from config
-    defaults = get_default_video_parameters()
+    # Get defaults from config (using specified flavor)
+    defaults = get_default_video_parameters(config_flavor)
 
     # Apply defaults for unspecified parameters
     if aspect_ratio is None:

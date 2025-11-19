@@ -220,6 +220,7 @@ async def create_scenes(request: CreateScenesRequest):
             video_type=request.video_type.strip() if request.video_type else None,
             video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
             camera_angle=request.camera_angle.strip() if request.camera_angle else None,
+            config_flavor=request.config_flavor,
         )
 
         # If project_id provided, create scene records in DynamoDB
@@ -482,6 +483,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
             output_format=request.output_format.strip() if request.output_format else None,
             negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
             seed=request.seed,
+            config_flavor=request.config_flavor,
         )
 
         # Upload to S3 if cloud storage is configured (follows video_generator.py pattern)
@@ -922,6 +924,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             reference_image_base64=request.reference_image_base64,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
+            config_flavor=request.config_flavor,
         )
 
         # DynamoDB integration: Update scene record if project_id and sequence provided

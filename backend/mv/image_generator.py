@@ -24,9 +24,8 @@ from mv.debug import (
 
 logger = structlog.get_logger()
 
-# Module-level config storage (loaded at startup)
-_image_params_config: dict = {}
-_image_prompts_config: dict = {}
+# Config loading has been moved to config_manager.py
+# Configs are now loaded per-request based on config_flavor parameter
 
 
 class GenerateCharacterReferenceRequest(BaseModel):
@@ -39,6 +38,7 @@ class GenerateCharacterReferenceRequest(BaseModel):
     output_format: Optional[str] = Field(None, description="Output image format (png, jpg, webp)")
     negative_prompt: Optional[str] = Field(None, description="Elements to exclude from the image")
     seed: Optional[int] = Field(None, description="Random seed for reproducibility")
+    config_flavor: Optional[str] = Field(None, description="Config flavor to use for generation (defaults to 'default')")
 
 
 class CharacterReferenceImage(BaseModel):
@@ -59,51 +59,47 @@ class GenerateCharacterReferenceResponse(BaseModel):
     metadata: dict = Field(..., description="Request metadata and parameters used")
 
 
-def load_image_configs(config_dir: str = "mv/configs") -> None:
+# load_image_configs() has been deprecated - use config_manager.initialize_config_flavors() instead
+
+
+def get_default_image_parameters(config_flavor: Optional[str] = None) -> dict:
     """
-    Load YAML configuration files for image generation at startup.
+    Get default image parameters from loaded config.
 
     Args:
-        config_dir: Directory containing config YAML files
+        config_flavor: Optional flavor name to use (defaults to 'default')
+
+    Returns:
+        Dictionary of default image parameters
     """
-    global _image_params_config, _image_prompts_config
+    from mv.config_manager import get_config
 
-    base_path = Path(__file__).parent / "configs"
+    image_params_config = get_config(config_flavor, "image_params")
 
-    params_path = base_path / "image_params.yaml"
-    prompts_path = base_path / "image_prompts.yaml"
-
-    if params_path.exists():
-        with open(params_path, "r") as f:
-            _image_params_config = yaml.safe_load(f) or {}
-        logger.info("mv_image_config_loaded", file="image_params.yaml", keys=list(_image_params_config.keys()))
-    else:
-        logger.warning("mv_image_config_not_found", file=str(params_path))
-        _image_params_config = {}
-
-    if prompts_path.exists():
-        with open(prompts_path, "r") as f:
-            _image_prompts_config = yaml.safe_load(f) or {}
-        logger.info("mv_image_config_loaded", file="image_prompts.yaml", keys=list(_image_prompts_config.keys()))
-    else:
-        logger.warning("mv_image_config_not_found", file=str(prompts_path))
-        _image_prompts_config = {}
-
-
-def get_default_image_parameters() -> dict:
-    """Get default image parameters from loaded config."""
     return {
-        "model": _image_params_config.get("model", "google/imagen-4"),
-        "aspect_ratio": _image_params_config.get("aspect_ratio", "1:1"),
-        "safety_filter_level": _image_params_config.get("safety_filter_level", "block_medium_and_above"),
-        "person_generation": _image_params_config.get("person_generation", "allow_adult"),
-        "output_format": _image_params_config.get("output_format", "png"),
+        "model": image_params_config.get("model", "google/imagen-4"),
+        "aspect_ratio": image_params_config.get("aspect_ratio", "1:1"),
+        "safety_filter_level": image_params_config.get("safety_filter_level", "block_medium_and_above"),
+        "person_generation": image_params_config.get("person_generation", "allow_adult"),
+        "output_format": image_params_config.get("output_format", "png"),
     }
 
 
-def get_character_reference_prompt_template() -> str:
-    """Get the character reference prompt template from loaded config."""
-    return _image_prompts_config.get(
+def get_character_reference_prompt_template(config_flavor: Optional[str] = None) -> str:
+    """
+    Get the character reference prompt template from loaded config.
+
+    Args:
+        config_flavor: Optional flavor name to use (defaults to 'default')
+
+    Returns:
+        Character reference prompt template string
+    """
+    from mv.config_manager import get_config
+
+    image_prompts_config = get_config(config_flavor, "image_prompts")
+
+    return image_prompts_config.get(
         "character_reference_prompt",
         "A full-body character reference image of {character_description}. Clear, well-lit, neutral background, professional quality, detailed features, front-facing view."
     )
@@ -118,6 +114,7 @@ def generate_character_reference_image(
     output_format: Optional[str] = None,
     negative_prompt: Optional[str] = None,
     seed: Optional[int] = None,
+    config_flavor: Optional[str] = None,
 ) -> tuple[list[CharacterReferenceImage], dict]:
     """
     Generate character reference images using Replicate API.
@@ -131,6 +128,7 @@ def generate_character_reference_image(
         output_format: Output image format.
         negative_prompt: Elements to exclude from the image.
         seed: Random seed for reproducibility.
+        config_flavor: Config flavor to use (defaults to 'default').
 
     Returns:
         Tuple of (list of CharacterReferenceImage, metadata)
@@ -163,8 +161,8 @@ def generate_character_reference_image(
     # Set the token for replicate
     os.environ["REPLICATE_API_TOKEN"] = api_token
 
-    # Apply defaults from config
-    defaults = get_default_image_parameters()
+    # Apply defaults from config (using specified flavor)
+    defaults = get_default_image_parameters(config_flavor)
 
     if aspect_ratio is None:
         aspect_ratio = defaults["aspect_ratio"]
@@ -194,8 +192,8 @@ def generate_character_reference_image(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # Format the prompt
-    prompt_template = get_character_reference_prompt_template()
+    # Format the prompt (using specified flavor)
+    prompt_template = get_character_reference_prompt_template(config_flavor)
     prompt = prompt_template.format(character_description=character_description).strip()
 
     log_image_prompt(prompt)
