@@ -1,0 +1,48 @@
+# Default parameters for character reference image generation
+# These values are used when optional parameters are not provided in the request
+
+# Replicate model to use for image generation
+model: "google/imagen-4"
+
+# Image aspect ratio (e.g., "1:1", "16:9", "9:16", "4:3", "3:4")
+aspect_ratio: "1:1"
+
+# Safety filter level for content moderation
+# Options: "block_low_and_above", "block_medium_and_above", "block_high_and_above", "block_none"
+safety_filter_level: "block_medium_and_above"
+
+# Person generation setting
+# Options: "allow_adult", "dont_allow"
+person_generation: "allow_adult"
+
+# Output image format
+# Options: "png", "jpg", "webp"
+output_format: "png"
+
+# =============================================================================
+# Video Generation Parameters
+# =============================================================================
+
+# Replicate model to use for video generation
+video_model: "google/veo-3.1"
+
+# Video aspect ratio
+# Options: "16:9", "9:16", "1:1"
+video_aspect_ratio: "16:9"
+
+# Video duration in seconds
+video_duration: 8
+
+# Whether to generate audio for the video
+video_generate_audio: true
+
+# Person generation setting for videos
+# Options: "allow_all", "dont_allow"
+video_person_generation: "allow_all"
+
+# Default video rules template (appended to prompt)
+# Use {aspect_ratio} placeholder for dynamic aspect ratio
+video_rules_template: |
+  - No subtitles or camera directions.
+  - The video should be in {aspect_ratio} aspect ratio.
+  - Keep it short, visual, simple, cinematic.
