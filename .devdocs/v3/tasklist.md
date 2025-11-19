@@ -463,3 +463,228 @@ async def get_config_flavors():
 - [ ] Error handling for missing/invalid flavors
 - [ ] UI matches existing dark theme styling
 - [ ] All manual tests pass
+
+---
+
+# v3: Lipsync Integration with Quick-Gen Page
+
+## Overview
+Integrate lipsync capability with the quick-gen-page, allowing users to regenerate individual video clips with lipsync applied using the audio from the original YouTube video.
+
+## Task List
+
+### Backend Tasks
+
+#### Task 1: Update Lipsync API Endpoint
+**File**: `backend/routers/mv.py`
+
+- [ ] 1.1: Make `video_url` and `audio_url` optional parameters in lipsync endpoint
+- [ ] 1.2: Add optional `video_id` parameter to lipsync request schema
+- [ ] 1.3: Add optional `audio_id` parameter to lipsync request schema
+- [ ] 1.4: Add optional `start_time` parameter (float) to lipsync request schema
+- [ ] 1.5: Add optional `end_time` parameter (float) to lipsync request schema
+- [ ] 1.6: Implement URL lookup logic for `video_id` (similar to `/api/mv/get_video/{id}`)
+- [ ] 1.7: Implement URL lookup logic for `audio_id` (similar to `/api/audio/get/{id}`)
+- [ ] 1.8: Implement audio clipping logic using start_time and end_time before Replicate API call
+- [ ] 1.9: Update lipsync endpoint to use looked-up URLs when IDs are provided
+- [ ] 1.10: Ensure backwards compatibility (direct URLs still work)
+- [ ] 1.11: Add error handling for invalid IDs
+- [ ] 1.12: Add error handling for audio clipping failures
+
+**Notes**:
+- The endpoint should prioritize IDs over URLs if both are provided
+- Use existing patterns from `get_video` and `get_audio` endpoints for URL lookup
+- Audio comes from the clipped version of YouTube audio attached to this generation
+
+#### Task 2: Verify Video/Audio Retrieval Endpoints
+**Files**: `backend/routers/mv.py`, `backend/routers/audio.py`
+
+- [ ] 2.1: Verify `/api/mv/get_video/{id}` returns correct URL format
+- [ ] 2.2: Verify `/api/audio/get/{id}` returns correct URL format
+- [ ] 2.3: Document the ID-to-URL lookup pattern for consistency
+
+### Frontend Tasks
+
+#### Task 3: Add Lipsync UI to Video Cards
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 3.1: Add `lipsyncEnabled` state array (one boolean per video index)
+- [ ] 3.2: Add checkbox component next to each video's "Regenerate" button (NOT scene regenerate)
+- [ ] 3.3: Update button text to "Regenerate with lipsync" when checkbox is checked
+- [ ] 3.4: Keep regular "Regenerate" text when checkbox is unchecked
+- [ ] 3.5: Style checkbox to be visually aligned with regenerate button
+- [ ] 3.6: Ensure checkbox only appears for video regenerate, NOT scene regenerate
+
+**Notes**:
+- This applies ONLY to the video regenerate buttons in the video section of each card
+- Each video card needs its own checkbox state
+- The checkbox should be clearly associated with the regenerate button
+
+#### Task 4: Implement Lipsync Request Flow
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 4.1: Create `handleLipsyncRegenerate` function
+- [ ] 4.2: Determine which video_id to use (from current scene's video_ids array)
+- [ ] 4.3: Determine which audio_id to use (from jobData.audioId)
+- [ ] 4.4: Calculate start_time based on scene position (scene_index * 8 seconds)
+- [ ] 4.5: Calculate end_time based on scene position (start_time + 8 seconds)
+- [ ] 4.6: Call `/api/mv/lipsync` endpoint with video_id, audio_id, start_time, and end_time
+- [ ] 4.7: Handle lipsync API response (get new video ID)
+- [ ] 4.8: Replace the current video clip with lipsynced version in UI
+- [ ] 4.9: Update the scene's video_ids array with new lipsynced video ID
+- [ ] 4.10: Update video URL/source in UI to display lipsynced video
+- [ ] 4.11: Auto-trigger stitch-video with all current video IDs after lipsync completes
+- [ ] 4.12: Update final stitched video in UI
+- [ ] 4.13: Add error handling and user feedback for failed lipsync
+- [ ] 4.14: Add error handling for failed auto-restitch
+
+**Notes**:
+- Audio comes from jobData.audioId (the clipped YouTube audio)
+- The lipsynced video replaces the existing video in both UI and state
+- video_ids array must be updated to track the latest version
+- Each clip is assumed to be 8 seconds long starting at time 0
+- start_time = scene_index * 8, end_time = start_time + 8
+- After lipsync completes, automatically trigger re-stitch with all current video IDs
+
+#### Task 5: Add Lipsync Processing Status
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 5.1: Add `lipsyncProcessing` state array (one boolean per video index)
+- [ ] 5.2: Show processing spinner/status while lipsync is in progress
+- [ ] 5.3: Disable regenerate button and checkbox while lipsync is processing
+- [ ] 5.4: Show completion message when lipsync finishes successfully
+- [ ] 5.5: Show error message if lipsync fails
+- [ ] 5.6: Clear processing status after completion/error
+- [ ] 5.7: Update status text to indicate "Lipsyncing..." or similar
+
+**Notes**:
+- Similar pattern to existing video generation processing status
+- Should provide clear feedback during the async lipsync operation
+- Prevent multiple concurrent lipsync operations on same video
+
+#### Task 6: Add Re-stitch Button to Final Video Section
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 6.1: Add "Re-stitch with current clips" button to final video card
+- [ ] 6.2: Position button appropriately in the final video section
+- [ ] 6.3: Create `handleRestitch` function
+- [ ] 6.4: Collect current/latest video IDs from all scenes (use latest from video_ids arrays)
+- [ ] 6.5: Call `/api/mv/stitch_video` endpoint with collected video IDs
+- [ ] 6.6: Add processing status for re-stitch operation
+- [ ] 6.7: Update final video display with newly stitched video
+- [ ] 6.8: Update final video ID in state
+- [ ] 6.9: Add error handling for failed re-stitch
+
+**Notes**:
+- Use the latest version of each scene's video (including lipsynced versions)
+- This triggers a fresh stitch of all current clips
+- Should use the most recent video ID from each scene's video_ids array
+
+### Testing Tasks
+
+#### Task 7: Integration Testing
+
+- [ ] 7.1: Test lipsync endpoint with valid video_id and audio_id
+- [ ] 7.2: Test lipsync endpoint with invalid IDs (error handling)
+- [ ] 7.3: Test backwards compatibility with direct URLs (video_url/audio_url)
+- [ ] 7.4: Test video replacement in UI after successful lipsync
+- [ ] 7.5: Test video_ids array updates correctly with new lipsynced video ID
+- [ ] 7.6: Test re-stitch with mix of original and lipsynced videos
+- [ ] 7.7: Test processing status displays correctly during lipsync
+- [ ] 7.8: Test checkbox toggle behavior (enabled/disabled states)
+- [ ] 7.9: Test button text changes with checkbox state
+- [ ] 7.10: Test that checkbox only appears on video regenerate (not scene regenerate)
+
+#### Task 8: End-to-End Testing
+
+- [ ] 8.1: Create full video generation with YouTube audio
+- [ ] 8.2: Apply lipsync to one video clip
+- [ ] 8.3: Verify lipsynced video replaces original in UI
+- [ ] 8.4: Apply lipsync to multiple clips
+- [ ] 8.5: Use re-stitch button to create new final video
+- [ ] 8.6: Verify final video uses lipsynced versions where applied
+- [ ] 8.7: Test error scenarios (network failures, invalid data, missing audio)
+- [ ] 8.8: Test workflow without YouTube audio (ensure graceful handling)
+
+## Dependencies
+
+- Task 3 depends on Task 1 (backend API must support video_id/audio_id)
+- Task 4 depends on Task 3 (UI elements must exist)
+- Task 5 can be done in parallel with Task 4
+- Task 6 depends on Tasks 1-5 (re-stitch uses updated video IDs from lipsync operations)
+- Task 7 depends on Tasks 1-6 (all features implemented)
+- Task 8 depends on Task 7 (integration tests pass)
+
+## Technical Notes
+
+### API Endpoints Used
+- `POST /api/mv/lipsync` - Updated with video_id/audio_id/timing support
+  - Accepts either (video_url + audio_url) OR (video_id + audio_id)
+  - Accepts optional start_time and end_time for audio clipping
+  - Clips audio segment before passing to Replicate API
+  - Returns new lipsynced video ID
+- `GET /api/mv/get_video/{id}` - For video ID to URL lookup
+- `GET /api/audio/get/{id}` - For audio ID to URL lookup
+- `POST /api/mv/stitch_video` - For re-stitching with current clips
+  - Accepts array of video IDs
+  - Returns new stitched video ID
+  - Triggered automatically after lipsync OR manually via "Re-stitch" button
+
+### State Management
+- Track lipsync checkbox state per video: `lipsyncEnabled[sceneIndex]`
+- Track lipsync processing state per video: `lipsyncProcessing[sceneIndex]`
+- Update video_ids array when lipsync completes: `scenes[i].video_ids.push(newVideoId)`
+- Maintain latest video IDs for re-stitch operation (use last element of video_ids arrays)
+
+### Data Flow
+1. User checks lipsync checkbox for a video
+2. User clicks "Regenerate with lipsync" button
+3. Frontend extracts:
+   - `video_id`: Current video ID from scene.video_ids[scene.video_ids.length - 1]
+   - `audio_id`: From jobData.audioId (YouTube audio clip)
+   - `start_time`: scene_index * 8 (assuming 8 seconds per clip)
+   - `end_time`: (scene_index * 8) + 8
+4. Frontend calls `/api/mv/lipsync` with video_id, audio_id, start_time, end_time
+5. Backend looks up URLs, clips audio segment, and calls Replicate lipsync API
+6. Backend returns new lipsynced video ID
+7. Frontend updates scene.video_ids array and displays new video
+8. Frontend auto-triggers `/api/mv/stitch_video` with all current video IDs
+9. Frontend updates final stitched video display
+10. User can also manually click "Re-stitch with current clips" to re-stitch without regenerating
+
+### UI/UX Considerations
+- Clear visual indication of lipsync option (checkbox next to regenerate)
+- Processing feedback during async lipsync operations
+- Error messages for failed operations (network, API errors)
+- Button state management (disabled during processing)
+- Smooth replacement of video clips in UI
+- Re-stitch button clearly indicates it uses "current clips"
+- Only show lipsync checkbox on video regenerate buttons, NOT scene regenerate buttons
+
+### Edge Cases to Handle
+- Missing audio_id (no YouTube audio attached to generation)
+  - Hide lipsync checkbox or disable it with tooltip
+- Invalid video_id or audio_id
+  - Show error message, don't crash
+- Multiple lipsync operations on same video
+  - Keep history in video_ids array (array of all versions)
+- Re-stitch with incomplete scenes
+  - Only use scenes that have at least one video
+- Lipsync operation takes very long
+  - Show meaningful progress indicator
+  - Consider timeout handling
+
+## Success Criteria
+
+- [ ] Users can check a box next to video regenerate button to enable lipsync
+- [ ] Button text changes to "Regenerate with lipsync" when checked
+- [ ] Lipsync operation uses video_id and audio_id from current generation
+- [ ] Processing status shows clearly during lipsync operation
+- [ ] Video clip is replaced with lipsynced version on success
+- [ ] video_ids array tracks all versions (original + lipsynced)
+- [ ] Re-stitch button creates new final video using latest clips
+- [ ] Re-stitch correctly uses lipsynced videos where applied
+- [ ] All error cases handled gracefully with user feedback
+- [ ] Feature works end-to-end in production environment
+- [ ] Lipsync checkbox only appears on video regenerate, not scene regenerate
+- [ ] UI clearly distinguishes between original and lipsynced videos (optional enhancement)
