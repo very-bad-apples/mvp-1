@@ -29,7 +29,7 @@ This system generates marketing videos using AI-powered script generation, video
 - **ElevenLabs** - Voice synthesis
 
 ### Frontend
-- **Next.js 15** - React framework with App Router
+- **Next.js 14.2.18** - React framework with App Router
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Styling
 - **Shadcn/ui** - Component library
@@ -102,7 +102,7 @@ python worker_mv.py
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Frontend (Next.js 15)                       │
+│                  Frontend (Next.js 14.2.18)                       │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │  Direct API Client (lib/api/client.ts)              │   │
 │  │  • Type-safe TypeScript interfaces                   │   │
@@ -291,7 +291,7 @@ pnpm test
 curl http://localhost:8000/health
 
 # DynamoDB connection
-python backend/check_database.py dynamodb --list
+python backend/scripts/check_database.py dynamodb --list
 
 # Redis connection
 redis-cli ping
