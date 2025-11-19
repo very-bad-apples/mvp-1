@@ -258,7 +258,9 @@ Projection: All attributes
     "characterDescription": "Silver metallic humanoid robot",
     "productDescription": "EcoWater sustainable bottle",  # Optional
 
-    # S3 References (object keys, not URLs)
+    # S3 References (object keys, not URLs - validated before saving)
+    # All *S3Key fields store keys like "mv/projects/{id}/file.ext"
+    # Presigned URLs are generated on-demand when serving API responses
     "characterImageS3Key": "mv/projects/550e8400/character.png",
     "productImageS3Key": "mv/projects/550e8400/product.jpg",
     "audioBackingTrackS3Key": "mv/projects/550e8400/audio.mp3",
@@ -295,7 +297,8 @@ Projection: All attributes
     "negativePrompt": "No other people, no music",
     "duration": 8.0,  # seconds
 
-    # Assets
+    # Assets (S3 object keys, validated - not URLs)
+    # Presigned URLs generated on-demand in API responses
     "referenceImageS3Keys": [
         "mv/projects/550e8400/character.png"
     ],
@@ -414,17 +417,51 @@ scene_lipsync_key = f"mv/projects/{project_id}/scenes/{sequence:03d}/lipsynced.m
 
 #### Presigned URL Generation
 
-```python
-from services.s3_storage import get_s3_service
+Presigned URLs are generated **on-demand** when serving API responses, never stored in the database:
 
-s3_service = get_s3_service()
+```python
+from services.s3_storage import get_s3_storage_service
+
+s3_service = get_s3_storage_service()
+
+# Read S3 key from database (e.g., "mv/projects/{project_id}/final.mp4")
+s3_key = project_item.finalOutputS3Key
 
 # Generate presigned URL (expires in 1 hour)
 video_url = s3_service.generate_presigned_url(
-    s3_key="mv/projects/{project_id}/final.mp4",
-    expiration=3600
+    s3_key=s3_key,
+    expiry=3600
 )
+# Returns: "https://bucket.s3.amazonaws.com/mv/projects/{id}/final.mp4?X-Amz-Signature=..."
 ```
+
+#### S3 Key Validation
+
+All S3 keys are validated before being saved to ensure they are keys, not URLs:
+
+```python
+from services.s3_storage import validate_s3_key
+
+# ✅ Valid - S3 key (accepted)
+key = validate_s3_key("mv/projects/123/file.png")
+
+# ❌ Invalid - HTTP URL (rejected with ValueError)
+validate_s3_key("https://bucket.s3.amazonaws.com/file.png")
+
+# ❌ Invalid - Presigned URL (rejected with ValueError)
+validate_s3_key("mv/projects/123/file.png?X-Amz-Signature=abc123")
+```
+
+**Validation occurs automatically in:**
+- `create_project_metadata()` - All project S3 keys
+- `create_scene_item()` - Reference image S3 keys
+- Direct assignments in routers/workers
+- Update endpoints when users provide S3 keys
+
+**Why validate?**
+- Prevents accidentally saving presigned URLs (which expire)
+- Ensures data integrity (keys are permanent, URLs are temporary)
+- Makes debugging easier (clear error messages)
 
 ### Terraform S3 Configuration
 

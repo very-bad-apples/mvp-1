@@ -48,6 +48,7 @@ from mv_models import (
 from services.s3_storage import (
     get_s3_storage_service,
     generate_scene_s3_key,
+    validate_s3_key,
 )
 from pynamodb.exceptions import DoesNotExist, PutError
 
@@ -927,10 +928,14 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                             )
                             # Continue without S3 key - will use local path
 
-                    # Update scene record
-                    scene_item.videoClipS3Key = video_s3_key
+                    # Update scene record (validate S3 key to ensure it's not a URL)
+                    # Only set S3 key if we have a valid one (S3 upload succeeded or S3 not configured)
+                    if video_s3_key:
+                        scene_item.videoClipS3Key = validate_s3_key(video_s3_key, "videoClipS3Key")
                     scene_item.videoGenerationJobId = video_id
-                    scene_item.status = "completed"
+                    # Only mark completed if S3 upload succeeded or S3 is not configured
+                    if video_s3_key or not settings.STORAGE_BUCKET:
+                        scene_item.status = "completed"
                     scene_item.updatedAt = datetime.now(timezone.utc)
                     scene_item.save()
 
@@ -1597,12 +1602,16 @@ async def lipsync_video(request: LipsyncRequest):
                             )
                             # Continue without S3 key - will use local path
 
-                    # Update scene record
-                    scene_item.lipSyncedVideoClipS3Key = lipsync_s3_key
+                    # Update scene record (validate S3 key to ensure it's not a URL)
+                    # Only set S3 key if we have a valid one (S3 upload succeeded or S3 not configured)
+                    if lipsync_s3_key:
+                        scene_item.lipSyncedVideoClipS3Key = validate_s3_key(lipsync_s3_key, "lipSyncedVideoClipS3Key")
                     scene_item.lipsyncJobId = video_id
-                    # Keep status as "completed" if already completed, otherwise set to completed
-                    if scene_item.status != "completed":
-                        scene_item.status = "completed"
+                    # Only mark completed if S3 upload succeeded or S3 is not configured
+                    # Keep existing completed status if already completed
+                    if lipsync_s3_key or not settings.STORAGE_BUCKET:
+                        if scene_item.status != "completed":
+                            scene_item.status = "completed"
                     scene_item.updatedAt = datetime.now(timezone.utc)
                     scene_item.save()
 

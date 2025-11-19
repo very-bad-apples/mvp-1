@@ -54,3 +54,9 @@ backend/mv/outputs/*/*
 
 # Terraform secrets
 terraform/terraform.tfvars
+
+# NoMAD
+.cursor/
+_docs_NR/
+_context-summaries/
+memory-bank

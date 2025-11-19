@@ -296,6 +296,46 @@ def generate_scene_s3_key(project_id: str, sequence: int, asset_type: str) -> st
     return f"{base_path}/{asset_type}.{ext}"
 
 
+def validate_s3_key(s3_key: Optional[str], field_name: str = "S3 key") -> Optional[str]:
+    """
+    Validate that an S3 key is not a URL.
+    
+    S3 keys should be paths like "mv/projects/{id}/file.ext", not URLs like
+    "https://..." or "s3://...". This ensures we never accidentally save
+    presigned URLs or full S3 URLs to the database.
+    
+    Args:
+        s3_key: S3 key to validate (can be None)
+        field_name: Name of the field for error messages
+        
+    Returns:
+        The validated S3 key (or None if input was None)
+        
+    Raises:
+        ValueError: If s3_key appears to be a URL instead of a key
+    """
+    if s3_key is None:
+        return None
+    
+    s3_key = s3_key.strip()
+    
+    # Check for URL patterns
+    if s3_key.startswith(("http://", "https://", "s3://")):
+        raise ValueError(
+            f"{field_name} must be an S3 key (e.g., 'mv/projects/{id}/file.ext'), "
+            f"not a URL. Received: {s3_key[:50]}..."
+        )
+    
+    # Check for presigned URL patterns (AWS signature parameters)
+    if "?" in s3_key and ("X-Amz-" in s3_key or "AWSAccessKeyId" in s3_key):
+        raise ValueError(
+            f"{field_name} must be an S3 key, not a presigned URL. "
+            f"Presigned URLs contain query parameters and expire. Received: {s3_key[:50]}..."
+        )
+    
+    return s3_key
+
+
 # Singleton instance
 _s3_storage_service: Optional[S3StorageService] = None
 

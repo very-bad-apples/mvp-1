@@ -26,6 +26,7 @@ from mv_models import (
 from services.s3_storage import (
     get_s3_storage_service,
     generate_s3_key,
+    validate_s3_key,
 )
 from config import settings
 from pynamodb.exceptions import PutError, DoesNotExist
@@ -430,7 +431,11 @@ async def update_project(project_id: str, update_data: ProjectUpdateRequest):
             updated = True
 
         if update_data.finalOutputS3Key:
-            project_item.finalOutputS3Key = update_data.finalOutputS3Key
+            # Validate that it's an S3 key, not a URL
+            project_item.finalOutputS3Key = validate_s3_key(
+                update_data.finalOutputS3Key, 
+                "finalOutputS3Key"
+            )
             updated = True
 
         if updated:

@@ -133,8 +133,9 @@ async def process_composition_job(project_id: str) -> Dict[str, Any]:
             content_type="video/mp4"
         )
 
-        # Update project with final output
-        project_item.finalOutputS3Key = final_s3_key
+        # Update project with final output (validate S3 key to ensure it's not a URL)
+        from services.s3_storage import validate_s3_key
+        project_item.finalOutputS3Key = validate_s3_key(final_s3_key, "finalOutputS3Key")
         project_item.status = "completed"
         project_item.GSI1PK = "completed"
         project_item.updatedAt = datetime.now(timezone.utc)

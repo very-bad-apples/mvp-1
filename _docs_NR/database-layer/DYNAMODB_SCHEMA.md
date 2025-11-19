@@ -39,11 +39,11 @@ The Music Video (MV) pipeline uses a **single-table design** in DynamoDB to stor
 - `status`: Current project status (pending, processing, completed, failed, composing, generating_scenes)
 - `conceptPrompt`: Video concept description
 - `characterDescription`: Character/style description
-- `characterImageS3Key`: S3 key for character reference image (optional)
+- `characterImageS3Key`: S3 object key for character reference image (optional, validated - not a URL)
 - `productDescription`: Product description for ad-creative mode (optional)
-- `productImageS3Key`: S3 key for product image (optional)
-- `audioBackingTrackS3Key`: S3 key for audio backing track (optional)
-- `finalOutputS3Key`: S3 key for final composed video (optional)
+- `productImageS3Key`: S3 object key for product image (optional, validated - not a URL)
+- `audioBackingTrackS3Key`: S3 object key for audio backing track (optional, validated - not a URL)
+- `finalOutputS3Key`: S3 object key for final composed video (optional, validated - not a URL)
 - `sceneCount`: Number of scenes (integer, default: 0)
 - `completedScenes`: Number of completed scenes (integer, default: 0)
 - `failedScenes`: Number of failed scenes (integer, default: 0)
@@ -82,11 +82,11 @@ GSI1SK: 2025-11-17T10:00:00Z
 - `prompt`: Scene description for video generation
 - `negativePrompt`: Elements to exclude from scene (optional)
 - `duration`: Scene duration in seconds (float)
-- `referenceImageS3Keys`: List of S3 keys for reference images (optional)
-- `audioClipS3Key`: S3 key for scene audio clip (optional)
-- `videoClipS3Key`: S3 key for generated video clip (optional)
+- `referenceImageS3Keys`: List of S3 object keys for reference images (optional, validated - not URLs)
+- `audioClipS3Key`: S3 object key for scene audio clip (optional, validated - not a URL)
+- `videoClipS3Key`: S3 object key for generated video clip (optional, validated - not a URL)
 - `needsLipSync`: Boolean indicating if lip sync is required
-- `lipSyncedVideoClipS3Key`: S3 key for lip-synced video clip (optional)
+- `lipSyncedVideoClipS3Key`: S3 object key for lip-synced video clip (optional, validated - not a URL)
 - `retryCount`: Number of retry attempts (integer, default: 0)
 - `errorMessage`: Error message if scene generation failed (optional)
 - `createdAt`: UTC datetime
@@ -162,11 +162,20 @@ recent_pending = MVProjectItem.status_index.query(
 
 **Principle:** Store only S3 object keys in DynamoDB, generate presigned URLs on-demand.
 
+**Important:** All `*S3Key` fields in the database store **S3 object keys only** (e.g., `mv/projects/{id}/file.ext`), **NOT** presigned URLs or full S3 URLs. The system validates this automatically to prevent accidentally saving URLs.
+
 **Benefits:**
 - Presigned URLs expire (default: 1 hour), improving security
 - S3 keys are immutable and don't change
 - Reduces database size
 - Enables URL regeneration without database updates
+- Validation ensures data integrity (keys vs URLs)
+
+**Validation:**
+- All S3 key assignments are validated using `validate_s3_key()` from `services.s3_storage`
+- Rejects URLs starting with `http://`, `https://`, or `s3://`
+- Rejects presigned URLs (detects AWS signature query parameters)
+- Raises `ValueError` with clear error message if URL is detected
 
 ### S3 Key Patterns
 
@@ -186,14 +195,53 @@ recent_pending = MVProjectItem.status_index.query(
 
 ### Presigned URL Generation
 
-Presigned URLs are generated using `S3StorageService.generate_presigned_url()`:
+Presigned URLs are generated **on-demand** when serving API responses, never stored in the database. Use `S3StorageService.generate_presigned_url()`:
 
 ```python
 from services.s3_storage import get_s3_storage_service
 
 s3_service = get_s3_storage_service()
+# s3_key comes from database (e.g., "mv/projects/{id}/file.ext")
 url = s3_service.generate_presigned_url(s3_key, expiry=3600)  # 1 hour default
 ```
+
+**Example Flow:**
+1. Database stores: `characterImageS3Key = "mv/projects/123/character.png"`
+2. API endpoint reads S3 key from database
+3. API generates presigned URL: `https://bucket.s3.amazonaws.com/mv/projects/123/character.png?X-Amz-Signature=...`
+4. API returns presigned URL in response (URL expires after 1 hour)
+5. Client uses presigned URL to access file directly from S3
+
+### S3 Key Validation
+
+All S3 keys are validated before being saved to ensure they are keys, not URLs:
+
+```python
+from services.s3_storage import validate_s3_key
+
+# Valid S3 key (accepted)
+key = validate_s3_key("mv/projects/123/file.png")  # Returns: "mv/projects/123/file.png"
+
+# Invalid - URL (rejected)
+try:
+    validate_s3_key("https://bucket.s3.amazonaws.com/file.png")
+except ValueError as e:
+    # Error: "S3 key must be an S3 key, not a URL"
+    pass
+
+# Invalid - Presigned URL (rejected)
+try:
+    validate_s3_key("mv/projects/123/file.png?X-Amz-Signature=abc123")
+except ValueError as e:
+    # Error: "S3 key must be an S3 key, not a presigned URL"
+    pass
+```
+
+**Where Validation Occurs:**
+- `create_project_metadata()` - Validates all project S3 keys
+- `create_scene_item()` - Validates reference image S3 keys
+- Direct assignments in routers/workers - Validates before saving
+- Update endpoints - Validates user-provided S3 keys
 
 ## Status Values
 
@@ -241,7 +289,8 @@ This DynamoDB schema is **independent** from the existing SQLAlchemy/SQLite data
 ## References
 
 - Model Definition: `backend/mv_models.py`
-- S3 Storage Service: `backend/services/s3_storage.py`
+- S3 Storage Service: `backend/services/s3_storage.py` (includes `validate_s3_key()`)
 - Database Initialization: `backend/init_dynamodb.py`
 - API Endpoints: `backend/routers/mv_projects.py`
+- Validation Function: `backend/services/s3_storage.py::validate_s3_key()`
 

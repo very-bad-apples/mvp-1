@@ -124,15 +124,15 @@ class TestProjectCreation:
             concept_prompt="Full test concept",
             character_description="Full character",
             product_description="Full product",
-            character_image_s3_key="s3://bucket/character.png",
-            product_image_s3_key="s3://bucket/product.jpg",
-            audio_backing_track_s3_key="s3://bucket/audio.mp3"
+            character_image_s3_key="mv/projects/test-project/character.png",
+            product_image_s3_key="mv/projects/test-project/product.jpg",
+            audio_backing_track_s3_key="mv/projects/test-project/audio.mp3"
         )
         
         assert project.conceptPrompt == "Full test concept"
         assert project.characterDescription == "Full character"
         assert project.productDescription == "Full product"
-        assert project.characterImageS3Key == "s3://bucket/character.png"
+        assert project.characterImageS3Key == "mv/projects/test-project/character.png"
         
         # Cleanup
         try:

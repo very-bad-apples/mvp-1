@@ -8,17 +8,22 @@ from datetime import datetime
 
 
 class SceneResponse(BaseModel):
-    """Response model for individual scene."""
+    """
+    Response model for individual scene.
+    
+    Note: All *Url fields contain presigned S3 URLs, NOT S3 object keys.
+    These URLs are generated on-demand from S3 keys stored in the database.
+    """
     sequence: int
     status: str
     prompt: str
     negativePrompt: Optional[str] = None
     duration: float
-    referenceImageUrls: List[str] = Field(default_factory=list)
-    audioClipUrl: Optional[str] = None
-    videoClipUrl: Optional[str] = None
+    referenceImageUrls: List[str] = Field(default_factory=list, description="List of presigned S3 URLs for reference images")
+    audioClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for scene audio clip")
+    videoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for generated video clip")
     needsLipSync: bool
-    lipSyncedVideoClipUrl: Optional[str] = None
+    lipSyncedVideoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for lip-synced video clip")
     retryCount: int = 0
     errorMessage: Optional[str] = None
     createdAt: datetime
@@ -89,16 +94,22 @@ class ProjectCreateResponse(BaseModel):
 
 
 class ProjectResponse(BaseModel):
-    """Response model for project retrieval."""
+    """
+    Response model for project retrieval.
+    
+    Note: All *Url fields contain presigned S3 URLs (e.g., "https://bucket.s3.amazonaws.com/...?X-Amz-Signature=..."),
+    NOT S3 object keys. These URLs are generated on-demand from S3 keys stored in the database.
+    Presigned URLs expire after a configured time (default: 1 hour).
+    """
     projectId: str
     status: str
     conceptPrompt: str
     characterDescription: str
-    characterImageUrl: Optional[str] = None
+    characterImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for character image (expires after configured time)")
     productDescription: Optional[str] = None
-    productImageUrl: Optional[str] = None
-    audioBackingTrackUrl: Optional[str] = None
-    finalOutputUrl: Optional[str] = None
+    productImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for product image (expires after configured time)")
+    audioBackingTrackUrl: Optional[str] = Field(None, description="Presigned S3 URL for audio backing track (expires after configured time)")
+    finalOutputUrl: Optional[str] = Field(None, description="Presigned S3 URL for final composed video (expires after configured time)")
     sceneCount: int
     completedScenes: int
     failedScenes: int
@@ -190,10 +201,15 @@ class ComposeResponse(BaseModel):
 
 
 class FinalVideoResponse(BaseModel):
-    """Response model for final video retrieval."""
+    """
+    Response model for final video retrieval.
+    
+    Note: videoUrl contains a presigned S3 URL, NOT an S3 object key.
+    The URL expires after expiresInSeconds.
+    """
     projectId: str
-    videoUrl: str
-    expiresInSeconds: int
+    videoUrl: str = Field(..., description="Presigned S3 URL for final composed video")
+    expiresInSeconds: int = Field(..., description="Number of seconds until the presigned URL expires")
 
     class Config:
         json_schema_extra = {

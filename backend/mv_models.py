@@ -20,6 +20,7 @@ from pynamodb.indexes import GlobalSecondaryIndex, AllProjection
 from pynamodb.exceptions import DoesNotExist
 from config import settings
 from dynamodb_config import BaseDynamoModel
+from services.s3_storage import validate_s3_key
 import structlog
 
 logger = structlog.get_logger()
@@ -85,27 +86,31 @@ class MVProjectItem(BaseDynamoModel):
     status_index = StatusIndex()
 
     # Project-specific Attributes (only for entityType="project")
+    # NOTE: All *S3Key fields store S3 object keys (e.g., "mv/projects/{id}/file.ext"),
+    # NOT presigned URLs or full S3 URLs. Presigned URLs are generated on-demand
+    # when serving API responses.
     conceptPrompt = UnicodeAttribute(null=True)
     characterDescription = UnicodeAttribute(null=True)
-    characterImageS3Key = UnicodeAttribute(null=True)
+    characterImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     productDescription = UnicodeAttribute(null=True)
-    productImageS3Key = UnicodeAttribute(null=True)
-    audioBackingTrackS3Key = UnicodeAttribute(null=True)
-    finalOutputS3Key = UnicodeAttribute(null=True)
+    productImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    audioBackingTrackS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    finalOutputS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     sceneCount = NumberAttribute(null=True, default=0)
     completedScenes = NumberAttribute(null=True, default=0)
     failedScenes = NumberAttribute(null=True, default=0)
 
     # Scene-specific Attributes (only for entityType="scene")
+    # NOTE: All *S3Key fields store S3 object keys, NOT presigned URLs
     sequence = NumberAttribute(null=True)
     prompt = UnicodeAttribute(null=True)
     negativePrompt = UnicodeAttribute(null=True)
-    referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True)  # List of S3 keys
+    referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True)  # List of S3 keys, not URLs
     duration = NumberAttribute(null=True)
-    audioClipS3Key = UnicodeAttribute(null=True)
-    videoClipS3Key = UnicodeAttribute(null=True)
+    audioClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    videoClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     needsLipSync = BooleanAttribute(null=True)
-    lipSyncedVideoClipS3Key = UnicodeAttribute(null=True)
+    lipSyncedVideoClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     videoGenerationJobId = UnicodeAttribute(null=True)
     lipsyncJobId = UnicodeAttribute(null=True)
     retryCount = NumberAttribute(null=True, default=0)
@@ -190,12 +195,16 @@ def create_project_metadata(
         concept_prompt: User's video concept description
         character_description: Character description
         product_description: Optional product description
-        character_image_s3_key: S3 key for character reference image
-        product_image_s3_key: S3 key for product image
-        audio_backing_track_s3_key: S3 key for audio file
+        character_image_s3_key: S3 object key for character reference image 
+            (e.g., "mv/projects/{id}/character.png"), NOT a URL
+        product_image_s3_key: S3 object key for product image, NOT a URL
+        audio_backing_track_s3_key: S3 object key for audio file, NOT a URL
 
     Returns:
         MVProjectItem instance
+        
+    Raises:
+        ValueError: If any S3 key parameter is a URL instead of a key
     """
     now = datetime.now(timezone.utc)
 
@@ -210,9 +219,10 @@ def create_project_metadata(
     item.conceptPrompt = concept_prompt
     item.characterDescription = character_description
     item.productDescription = product_description
-    item.characterImageS3Key = character_image_s3_key
-    item.productImageS3Key = product_image_s3_key
-    item.audioBackingTrackS3Key = audio_backing_track_s3_key
+    # Validate S3 keys to ensure they're keys, not URLs
+    item.characterImageS3Key = validate_s3_key(character_image_s3_key, "character_image_s3_key")
+    item.productImageS3Key = validate_s3_key(product_image_s3_key, "product_image_s3_key")
+    item.audioBackingTrackS3Key = validate_s3_key(audio_backing_track_s3_key, "audio_backing_track_s3_key")
     item.sceneCount = 0
     item.completedScenes = 0
     item.failedScenes = 0
@@ -243,10 +253,14 @@ def create_scene_item(
         negative_prompt: Negative prompt for video generation
         duration: Scene duration in seconds
         needs_lipsync: Whether scene requires lip sync processing
-        reference_image_s3_keys: List of S3 keys for reference images
+        reference_image_s3_keys: List of S3 object keys for reference images
+            (e.g., ["mv/projects/{id}/ref1.png"]), NOT URLs
 
     Returns:
         MVProjectItem instance configured as scene
+        
+    Raises:
+        ValueError: If any S3 key in reference_image_s3_keys is a URL instead of a key
     """
     now = datetime.now(timezone.utc)
 
@@ -263,7 +277,12 @@ def create_scene_item(
     item.negativePrompt = negative_prompt
     item.duration = duration
     item.needsLipSync = needs_lipsync
-    item.referenceImageS3Keys = reference_image_s3_keys or []
+    # Validate S3 keys in list to ensure they're keys, not URLs
+    if reference_image_s3_keys:
+        item.referenceImageS3Keys = [validate_s3_key(key, f"reference_image_s3_keys[{i}]") 
+                                     for i, key in enumerate(reference_image_s3_keys) if key]
+    else:
+        item.referenceImageS3Keys = []
     item.retryCount = 0
 
     # GSI attributes are only for project metadata items, not scenes
