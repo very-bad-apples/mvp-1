@@ -5,14 +5,10 @@ This module provides functionality for lip-syncing audio to video using
 Sync Labs' Lipsync-2-Pro model via Replicate API using the ReplicateClient wrapper.
 """
 
-import os
 import time
 import uuid
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
-from io import BytesIO
 
 import httpx
 import structlog
@@ -152,86 +148,75 @@ def generate_lipsync(
         """Upload video and audio to S3."""
         storage = get_storage_backend()
         
-        # Use temporary file for video upload (required by storage_backend)
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
-            temp_video.write(video_data)
-            temp_video_path = temp_video.name
+        # Upload video directly from memory (no temp file)
+        video_cloud_path = f"mv/jobs/{video_id}/lipsync.mp4"
+        video_s3_url = await storage.upload_bytes(
+            video_data,
+            video_cloud_path,
+            content_type="video/mp4"
+        )
         
+        logger.info(
+            "lipsync_video_uploaded_to_s3",
+            video_id=video_id,
+            cloud_path=video_cloud_path,
+            size_bytes=len(video_data)
+        )
+        
+        # Download audio from URL and upload to S3
+        audio_s3_url = None
+        audio_s3_key = None
         try:
-            # Upload video to S3
-            video_cloud_path = f"mv/jobs/{video_id}/lipsync.mp4"
-            video_s3_url = await storage.upload_file(
-                temp_video_path,
-                video_cloud_path
-            )
-            
-            logger.info(
-                "lipsync_video_uploaded_to_s3",
-                video_id=video_id,
-                cloud_path=video_cloud_path
-            )
-            
-            # Download audio from URL and upload to S3
-            audio_s3_url = None
-            audio_s3_key = None
-            try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     audio_response = await client.get(audio_url)
                     audio_response.raise_for_status()
                     audio_data = audio_response.content
                 
-                # Determine audio file extension from URL or content type
+                # Determine audio file extension and content type from URL
                 audio_ext = ".mp3"  # Default
+                content_type = "audio/mpeg"  # Default
+                
                 if ".mp3" in audio_url.lower():
                     audio_ext = ".mp3"
+                    content_type = "audio/mpeg"
                 elif ".wav" in audio_url.lower():
                     audio_ext = ".wav"
+                    content_type = "audio/wav"
                 elif ".m4a" in audio_url.lower():
                     audio_ext = ".m4a"
+                    content_type = "audio/mp4"
                 elif ".ogg" in audio_url.lower():
                     audio_ext = ".ogg"
+                    content_type = "audio/ogg"
                 
-                # Use temporary file for audio upload
-                with tempfile.NamedTemporaryFile(delete=False, suffix=audio_ext) as temp_audio:
-                    temp_audio.write(audio_data)
-                    temp_audio_path = temp_audio.name
-                
-                try:
-                    # Upload audio to S3
-                    audio_cloud_path = f"mv/jobs/{video_id}/audio{audio_ext}"
-                    audio_s3_url = await storage.upload_file(
-                        temp_audio_path,
-                        audio_cloud_path
-                    )
-                    audio_s3_key = audio_cloud_path  # Store S3 key for DynamoDB
-                    
-                    logger.info(
-                        "audio_uploaded_to_s3",
-                        video_id=video_id,
-                        cloud_path=audio_cloud_path
-                    )
-                finally:
-                    # Clean up temporary audio file
-                    if os.path.exists(temp_audio_path):
-                        os.unlink(temp_audio_path)
-                        
-            except Exception as e:
-                logger.warning(
-                    "audio_upload_to_s3_failed",
-                    video_id=video_id,
-                    audio_url=audio_url[:100] if len(audio_url) > 100 else audio_url,
-                    error=str(e)
+                # Upload audio directly from memory (no temp file)
+                audio_cloud_path = f"mv/jobs/{video_id}/audio{audio_ext}"
+                audio_s3_url = await storage.upload_bytes(
+                    audio_data,
+                    audio_cloud_path,
+                    content_type=content_type
                 )
-                # Continue without audio upload - video is still available
+                audio_s3_key = audio_cloud_path  # Store S3 key for DynamoDB
+                
+                logger.info(
+                    "audio_uploaded_to_s3",
+                    video_id=video_id,
+                    cloud_path=audio_cloud_path,
+                    size_bytes=len(audio_data)
+                )
+                
+        except Exception as e:
+            logger.warning(
+                "audio_upload_to_s3_failed",
+                video_id=video_id,
+                audio_url=audio_url[:100] if len(audio_url) > 100 else audio_url,
+                error=str(e)
+            )
+            # Continue without audio upload - video is still available
             
-            # Return both S3 URL and S3 key for audio (key needed for DynamoDB)
-            # Fallback to original URL if upload fails, but no S3 key in that case
-            return video_s3_url, audio_s3_url or audio_url, audio_s3_key
-            
-        finally:
-            # Clean up temporary video file
-            if os.path.exists(temp_video_path):
-                os.unlink(temp_video_path)
+        # Return both S3 URL and S3 key for audio (key needed for DynamoDB)
+        # Fallback to original URL if upload fails, but no S3 key in that case
+        return video_s3_url, audio_s3_url or audio_url, audio_s3_key
     
     # Run async upload in separate thread to avoid event loop conflicts
     def run_upload():

@@ -5,7 +5,6 @@ Handles scene generation and related music video pipeline operations.
 """
 
 import os
-import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1783,7 +1782,7 @@ async def lipsync_video(request: LipsyncRequest):
                                 "lipsynced"
                             )
                             
-                            # Download from generic path and upload to scene-specific path
+                            # Use S3 server-side copy (no download/upload needed)
                             from services.storage_backend import get_storage_backend
                             import asyncio
                             import concurrent.futures
@@ -1792,20 +1791,10 @@ async def lipsync_video(request: LipsyncRequest):
                                 storage = get_storage_backend()
                                 generic_path = f"mv/jobs/{video_id}/lipsync.mp4"
                                 
-                                # Download from generic path
-                                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
-                                    temp_path = temp_file.name
+                                # Direct S3-to-S3 copy (fast, no temp files)
+                                await storage.copy_file(generic_path, scene_s3_key)
                                 
-                                try:
-                                    await storage.download_file(generic_path, temp_path)
-                                    
-                                    # Upload to scene-specific path
-                                    await storage.upload_file(temp_path, scene_s3_key)
-                                    
-                                    return scene_s3_key
-                                finally:
-                                    if os.path.exists(temp_path):
-                                        os.unlink(temp_path)
+                                return scene_s3_key
                             
                             def run_copy():
                                 return asyncio.run(copy_to_scene_path())
