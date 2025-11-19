@@ -45,6 +45,7 @@ interface WebSocketMessage {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 const STAGE_NAMES = {
   script_gen: 'Script Generation',
@@ -85,7 +86,11 @@ export default function JobStatusPage() {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(`${API_URL}/api/jobs/${jobId}`)
+      const response = await fetch(`${API_URL}/api/jobs/${jobId}`, {
+        headers: {
+          'X-API-Key': API_KEY,
+        },
+      })
 
       if (!response.ok) {
         if (response.status === 404) {

@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 type Mode = 'ad-creative' | 'music-video'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 export default function CreatePage() {
   const router = useRouter()
@@ -148,6 +149,9 @@ export default function CreatePage() {
       // Call the real API endpoint
       const response = await fetch(`${API_URL}/api/mv/projects`, {
         method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+        },
         body: formData,
       })
 
@@ -242,6 +246,7 @@ export default function CreatePage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           character_description: characterDescription.trim(),

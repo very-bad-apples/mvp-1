@@ -108,9 +108,13 @@ async def api_authentication_middleware(request: Request, call_next):
     # Skip authentication for non-API routes
     if not request.url.path.startswith("/api/"):
         return await call_next(request)
-    
+
     # Skip authentication for health check and docs
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+        return await call_next(request)
+
+    # Skip authentication for CORS preflight requests
+    if request.method == "OPTIONS":
         return await call_next(request)
     
     # Import here to avoid circular imports

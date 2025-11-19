@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 // Configuration Constants
 const VIDEO_EXPECTED_LOAD_TIME_SECONDS = 7 * 60 // 7 minutes in seconds
@@ -485,6 +486,7 @@ export default function QuickGenPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           idea: jobData.videoDescription,
@@ -674,6 +676,7 @@ export default function QuickGenPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
         body: JSON.stringify(requestBody),
       })
