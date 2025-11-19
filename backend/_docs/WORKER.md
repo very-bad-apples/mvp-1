@@ -2,6 +2,22 @@
 
 ## Overview
 
+This project has **two separate worker systems** for different pipelines:
+
+1. **Legacy Ad-Creative Worker** (`worker.py`) - Processes ad-creative video generation jobs
+   - Uses SQLAlchemy/SQLite database
+   - Queue: `video_generation_queue`
+   - Handles script generation, voiceover, video scenes, compositing
+
+2. **MV Pipeline Worker** (`worker_mv.py`) - Processes Music Video pipeline jobs
+   - Uses DynamoDB for project/scene storage
+   - Queues: `scene_generation_queue`, `video_composition_queue`
+   - Handles scene generation and video composition
+
+---
+
+## Legacy Ad-Creative Worker (`worker.py`)
+
 The queue worker (`worker.py`) is responsible for processing video generation jobs from the Redis queue. It's designed to be:
 
 - **Reliable**: Exponential backoff retry logic for transient failures
@@ -399,6 +415,66 @@ def _execute_job(self, job_id: str, job_data: Dict[str, Any]):
 
     orchestrator.execute_pipeline(job_data)
 ```
+
+---
+
+## MV Pipeline Worker (`worker_mv.py`)
+
+The MV pipeline worker processes Music Video project jobs from Redis queues.
+
+### Architecture
+
+```
+Worker Process (worker_mv.py)
+│
+├── Main Loop
+│   ├── Poll scene_generation_queue (Redis BLPOP)
+│   ├── Poll video_composition_queue (Redis BLPOP)
+│   └── Process jobs asynchronously
+│
+├── Scene Generation Worker (workers/scene_worker.py)
+│   ├── Retrieve project metadata from DynamoDB
+│   ├── Call scene generation API (Gemini)
+│   ├── Create scene items in DynamoDB
+│   └── Update project scene count and status
+│
+└── Composition Worker (workers/compose_worker.py)
+    ├── Retrieve project + scenes from DynamoDB
+    ├── Download scene videos from S3
+    ├── Download audio from S3
+    ├── Stitch with moviepy
+    ├── Upload final video to S3
+    └── Update project status to "completed"
+```
+
+### Queue Names
+
+- **Scene Generation Queue**: `scene_generation_queue`
+- **Composition Queue**: `video_composition_queue`
+
+### Running the MV Worker
+
+```bash
+cd backend
+python worker_mv.py
+```
+
+### Worker Status Updates
+
+The MV worker updates project status in DynamoDB:
+- `generating_scenes`: When scene generation starts
+- `composing`: When composition starts
+- `completed`: When final video is ready
+- `failed`: On any error
+
+### Differences from Legacy Worker
+
+| Feature | Legacy Worker (`worker.py`) | MV Worker (`worker_mv.py`) |
+|---------|----------------------------|----------------------------|
+| Database | SQLAlchemy/SQLite | DynamoDB |
+| Queue Names | `video_generation_queue` | `scene_generation_queue`, `video_composition_queue` |
+| Job Types | Ad-creative pipeline | Scene generation, video composition |
+| Status Tracking | Job/Stage models | MVProjectItem in DynamoDB |
 
 ## Security Considerations
 

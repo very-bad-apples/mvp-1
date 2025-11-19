@@ -54,6 +54,33 @@ This document extracts the most valuable, evergreen insights from various brains
 }
 ```
 
+### Configuration Flavors System (v3)
+**New Architecture**: Multiple preset configurations for different video styles.
+
+**Implementation**:
+- Config flavors stored in `backend/mv/configs/{flavor_name}/`
+- Each flavor contains YAML files for prompts and parameters
+- Loaded at startup, queried at runtime via `config_flavor` parameter
+- Frontend UI provides flavor selector for easy switching
+
+**Benefits**:
+- Easy A/B testing of different generation strategies
+- Team members can create/share custom configurations
+- No code changes required to experiment with new styles
+- Configurations version-controlled alongside code
+
+**Structure**:
+```
+backend/mv/configs/
+├── default/
+│   ├── image_params.yaml
+│   ├── image_prompts.yaml
+│   ├── scene_prompts.yaml
+│   └── parameters.yaml
+└── example/
+    └── (same files)
+```
+
 ### Cost Optimization Strategies
 **Hybrid Approach**: 3 video scenes + 1 static image = 25% cost savings
 
@@ -169,6 +196,37 @@ async def generate_multiple_scenes(prompts: list[str]):
 - Backoff: Exponential (1s → 2s → 4s)
 - Retry on: Rate limits, network errors, 5xx
 - Don't retry: 4xx validation errors
+
+### Frontend Direct Backend Communication (v3)
+**Architecture Shift**: Removed Next.js API routes, frontend calls FastAPI directly.
+
+**Why This Works**:
+- Eliminates unnecessary proxy layer
+- Type-safe API client with TypeScript
+- Simpler debugging (direct request/response)
+- Reduced latency (one less hop)
+- Better error handling (no double stream reads)
+
+**Implementation**:
+```typescript
+// frontend/src/lib/api/client.ts
+class MVApiClient {
+  async createProject(data: CreateProjectRequest): Promise<Project> {
+    const response = await fetch(`${API_URL}/api/mv/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  }
+}
+```
+
+**Benefits**:
+- 562-line type-safe API client replaces multiple API route files
+- Centralized error handling
+- Easier to maintain and test
+- Frontend-backend contract is explicit
 
 ### Error Handling Strategy
 ```python

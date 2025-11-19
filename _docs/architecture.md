@@ -76,18 +76,23 @@ The AI Video Pipeline is a full-stack application that generates AI-powered vide
 
 ### Core Components
 
-1. **Frontend (Next.js)**
+1. **Frontend (Next.js 15)**
    - User interface for project creation and viewing
+   - Direct backend API communication (no Next.js API routes)
+   - Type-safe API client (`lib/api/client.ts`)
    - File uploads (images, audio)
-   - Real-time project status polling
-   - Video playback
+   - Real-time project status polling with smart intervals
+   - Video playback and project management UI
+   - Configuration flavor selection
 
 2. **Backend API (FastAPI)**
    - RESTful API endpoints
    - File upload handling
-   - Database operations
+   - Database operations (DynamoDB)
    - S3 integration
-   - Job queue management
+   - Job queue management (Redis)
+   - Configuration flavor system (`mv/configs/`)
+   - Multi-config support for different video styles
 
 3. **Database (DynamoDB)**
    - Project metadata storage
@@ -123,13 +128,23 @@ The AI Video Pipeline is a full-stack application that generates AI-powered vide
 
 ### Frontend
 ```yaml
-Framework: Next.js 14 (App Router)
+Framework: Next.js 15 (App Router)
 Language: TypeScript
 UI Components: shadcn/ui
 Styling: Tailwind CSS
+API Client: Direct FastAPI communication (no Next.js API routes)
+State Management: React hooks (useState, useEffect, custom hooks)
+Real-time Updates: Polling with smart intervals
+Type Safety: TypeScript interfaces for API contracts
 Deployment: Vercel
 Dev Server: localhost:3000
 ```
+
+**Key Architecture Decisions**:
+- **Direct Backend Communication**: Removed Next.js API route layer for simpler, more maintainable architecture
+- **Type-Safe API Client**: Centralized `lib/api/client.ts` with TypeScript interfaces
+- **Smart Polling**: `useProjectPolling` hook with dynamic intervals based on project status
+- **Component Organization**: Dedicated project detail page (`/project/[id]`) with modular components
 
 ### Backend
 ```yaml
@@ -139,9 +154,22 @@ Database ORM: PynamoDB (for DynamoDB)
 Async Runtime: asyncio, aiofiles
 Storage SDK: boto3 (AWS S3)
 Queue: Redis
+Configuration: YAML-based flavor system
 Dev Server: localhost:8000
 Deployment: AWS (EC2/ECS/Lambda)
 ```
+
+**Configuration Flavor System**:
+- **Location**: `backend/mv/configs/{flavor_name}/`
+- **Manager**: `mv/config_manager.py` loads all flavors at startup
+- **Flavors**: Multiple preset configurations (default, example, custom)
+- **Files per Flavor**:
+  - `image_params.yaml` - Image generation model parameters
+  - `image_prompts.yaml` - Character/product image prompts
+  - `scene_prompts.yaml` - Video scene generation prompts
+  - `parameters.yaml` - Pipeline parameters
+- **Usage**: Pass `?config_flavor=example` query parameter to endpoints
+- **Discovery**: Auto-detects subdirectories in `configs/` at startup
 
 ### Database
 ```yaml
