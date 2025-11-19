@@ -202,7 +202,12 @@ export default function CreatePage() {
    * Uses redirect=false to get JSON response (cloud) or direct file (local).
    */
   const fetchCharacterImage = async (imageId: string): Promise<string> => {
-    const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`)
+    const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
+      headers: {
+        'X-API-Key': API_KEY,
+        'Content-Type': 'application/json'
+      },
+    })
 
     if (!response.ok) {
       throw new Error(`Failed to fetch image ${imageId}`)

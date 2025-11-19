@@ -167,7 +167,12 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`)
+        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
+          headers: {
+            'X-API-Key': API_KEY,
+            'Content-Type': 'application/json'
+          },
+        })
 
         if (!response.ok) {
           throw new Error(`Failed to fetch image ${imageId}`)
@@ -300,6 +305,7 @@ export default function QuickGenPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           idea: jobData.videoDescription,
@@ -417,6 +423,7 @@ export default function QuickGenPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           prompt,

@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 export async function GET(
   request: NextRequest,
@@ -27,6 +28,9 @@ export async function GET(
     // Proxy the request to backend
     const response = await fetch(`${BACKEND_URL}/api/audio/get/${audioId}`, {
       method: 'GET',
+      headers: {
+        'X-API-Key': API_KEY,
+      },
     })
 
     if (!response.ok) {

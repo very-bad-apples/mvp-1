@@ -7,6 +7,8 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.openapi.models import SecurityScheme
+from fastapi.security import APIKeyHeader
 from contextlib import asynccontextmanager
 import time
 
@@ -82,8 +84,41 @@ app = FastAPI(
     title="AI Video Generator API",
     description="Backend API for generating AI-powered video ads",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    swagger_ui_parameters={
+        "persistAuthorization": True,
+    }
 )
+
+# Configure OpenAPI schema to include API key authentication
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    openapi_schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for authentication. Use the value from your .env file (API_KEY)"
+        }
+    }
+    # Apply security globally to all endpoints
+    openapi_schema["security"] = [{"ApiKeyAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # CORS middleware configuration
 # Get allowed origins from environment variable

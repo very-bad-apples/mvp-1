@@ -1030,7 +1030,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             video_path=video_path,
             processing_time_seconds=metadata.get("processing_time_seconds"),
             backend_used=metadata.get("backend_used"),
-            character_reference_warning=character_reference_warning
+            character_reference_warning=character_reference_warning,
             has_project_id=request.project_id is not None
         )
 
