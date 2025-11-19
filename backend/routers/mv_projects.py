@@ -6,9 +6,12 @@ Implements CRUD endpoints for project management with DynamoDB.
 
 import uuid
 import structlog
+import tempfile
+import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional, List
+from pathlib import Path
 
 from mv_schemas import (
     ProjectCreateResponse,
@@ -53,7 +56,7 @@ This endpoint:
 
 **Files:**
 - `images[]`: Product images (ad-creative mode, required)
-- `audio`: Music file (music-video mode, required)
+- `audio`: Music file (music-video mode, required - MP3 format)
 
 **Form Data:**
 - `mode`: "ad-creative" or "music-video"
@@ -61,6 +64,11 @@ This endpoint:
 - `characterDescription`: Character/style description
 - `characterReferenceImageId`: UUID of pre-generated character image (optional)
 - `productDescription`: Product details (optional)
+
+**Audio:**
+- For music-video mode, audio file is required
+- Audio should be converted from YouTube on frontend using `/api/audio/convert-youtube`
+- Audio is uploaded to S3 and S3 key saved to `audioBackingTrackS3Key` in DynamoDB
 """
 )
 async def create_project(
@@ -82,7 +90,7 @@ async def create_project(
         characterReferenceImageId: Optional pre-generated character image UUID
         productDescription: Optional product description
         images: Optional list of product images
-        audio: Optional audio file
+        audio: Optional audio file (MP3 format, converted from YouTube on frontend)
 
     Returns:
         ProjectCreateResponse with project ID
@@ -124,7 +132,7 @@ async def create_project(
                 detail={
                     "error": "ValidationError",
                     "message": "Audio file required for music-video mode",
-                    "details": "Music file must be provided"
+                    "details": "Please provide an audio file (converted from YouTube or uploaded)"
                 }
             )
 
@@ -166,7 +174,8 @@ async def create_project(
                 s3_key=product_image_s3_key
             )
 
-        # Upload audio file
+        # Upload audio file to S3 if provided
+        audio_s3_key = None
         if audio:
             audio_s3_key = generate_s3_key(project_id, "audio")
             content_type = audio.content_type or "audio/mpeg"

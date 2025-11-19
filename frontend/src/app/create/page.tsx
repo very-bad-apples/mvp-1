@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
-import { YouTubeAudioDownloader } from '@/components/YouTubeAudioDownloader'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
@@ -29,8 +29,9 @@ export default function CreatePage() {
   const [characterDescription, setCharacterDescription] = useState('')
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
-  const [downloadedAudioId, setDownloadedAudioId] = useState<string>('')
-  const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('')
+  const [convertedAudioFile, setConvertedAudioFile] = useState<File | null>(null)
+  const [isConvertingAudio, setIsConvertingAudio] = useState(false)
   const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('youtube')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [useAICharacter, setUseAICharacter] = useState(true)
@@ -62,7 +63,7 @@ export default function CreatePage() {
     if (mode === 'ad-creative' && uploadedImages.length === 0) return false
     if (mode === 'music-video') {
       if (audioSource === 'upload' && !uploadedAudio) return false
-      if (audioSource === 'youtube' && !downloadedAudioId) return false
+      if (audioSource === 'youtube' && !convertedAudioFile) return false
     }
 
     // Check AI character requirements - only required for ad-creative mode
@@ -102,10 +103,10 @@ export default function CreatePage() {
         })
         return
       }
-      if (audioSource === 'youtube' && !downloadedAudioId) {
+      if (audioSource === 'youtube' && !convertedAudioFile) {
         toast({
           title: "Error",
-          description: "Please download audio from YouTube",
+          description: "Please convert YouTube audio first",
           variant: "destructive",
         })
         return
@@ -136,8 +137,10 @@ export default function CreatePage() {
           formData.append(`images`, image)
         })
       } else {
-        if (uploadedAudio) {
-          formData.append('audio', uploadedAudio)
+        // Music video mode - send audio file (either uploaded or converted from YouTube)
+        const audioFile = audioSource === 'upload' ? uploadedAudio : convertedAudioFile
+        if (audioFile) {
+          formData.append('audio', audioFile)
         }
       }
 
@@ -189,9 +192,8 @@ export default function CreatePage() {
       videoDescription: prompt,
       characterDescription: characterDescription,
       characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
-      // Include audio data if YouTube audio was downloaded
-      audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
-      audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
+      // Include YouTube URL for music-video mode
+      youtubeUrl: audioSource === 'youtube' ? youtubeUrl : undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
@@ -646,8 +648,8 @@ export default function CreatePage() {
                         setAudioSource(value as 'upload' | 'youtube')
                         // Clear the other source when switching
                         if (value === 'upload') {
-                          setDownloadedAudioId('')
-                          setDownloadedAudioUrl('')
+                          setYoutubeUrl('')
+                          setConvertedAudioFile(null)
                         } else {
                           setUploadedAudio(null)
                         }
@@ -685,15 +687,116 @@ export default function CreatePage() {
                       </div>
                     )}
 
-                    {/* YouTube Downloader */}
+                    {/* YouTube URL Input */}
                     {audioSource === 'youtube' && (
-                      <div>
-                        <YouTubeAudioDownloader
-                          onAudioDownloaded={(audioId, audioUrl) => {
-                            setDownloadedAudioId(audioId)
-                            setDownloadedAudioUrl(audioUrl)
-                          }}
-                        />
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="youtube-url" className="text-white">
+                            YouTube URL
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="youtube-url"
+                              type="url"
+                              placeholder="https://www.youtube.com/watch?v=..."
+                              value={youtubeUrl}
+                              onChange={(e) => setYoutubeUrl(e.target.value)}
+                              className="bg-gray-800 border-gray-700 text-white placeholder-gray-500 flex-1"
+                              disabled={isConvertingAudio}
+                            />
+                            <Button
+                              type="button"
+                              onClick={async () => {
+                                if (!youtubeUrl.trim()) {
+                                  toast({
+                                    title: "Error",
+                                    description: "Please enter a YouTube URL",
+                                    variant: "destructive",
+                                  })
+                                  return
+                                }
+
+                                setIsConvertingAudio(true)
+                                try {
+                                  const response = await fetch(`${API_URL}/api/audio/convert-youtube`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'X-API-Key': API_KEY,
+                                    },
+                                    body: JSON.stringify({ url: youtubeUrl }),
+                                  })
+
+                                  if (!response.ok) {
+                                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+                                    throw new Error(errorData.detail?.message || errorData.detail || 'Failed to convert audio')
+                                  }
+
+                                  const blob = await response.blob()
+                                  const audioFile = new File([blob], "audio.mp3", { type: "audio/mpeg" })
+                                  setConvertedAudioFile(audioFile)
+
+                                  toast({
+                                    title: "Success",
+                                    description: "Audio converted successfully!",
+                                  })
+                                } catch (error) {
+                                  console.error('Error converting audio:', error)
+                                  toast({
+                                    title: "Error",
+                                    description: error instanceof Error ? error.message : "Failed to convert audio",
+                                    variant: "destructive",
+                                  })
+                                } finally {
+                                  setIsConvertingAudio(false)
+                                }
+                              }}
+                              disabled={isConvertingAudio || !youtubeUrl.trim()}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {isConvertingAudio ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Converting...
+                                </>
+                              ) : (
+                                'Convert'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Show converted audio file */}
+                        {convertedAudioFile && (
+                          <div className="border border-gray-600 rounded-lg p-4 bg-gray-800/30">
+                            <div className="flex items-center gap-4">
+                              <div className="rounded-lg bg-green-500/10 p-3 flex-shrink-0">
+                                <CheckCircle2 className="h-6 w-6 text-green-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white">{convertedAudioFile.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {(convertedAudioFile.size / (1024 * 1024)).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Audio Preview */}
+                            <div className="mt-4">
+                              <audio
+                                controls
+                                src={URL.createObjectURL(convertedAudioFile)}
+                                className="w-full h-10"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {!convertedAudioFile && !isConvertingAudio && (
+                          <p className="text-xs text-red-400">
+                            Click &quot;Convert&quot; to download audio from YouTube
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -752,9 +855,9 @@ export default function CreatePage() {
                             Please upload a music file
                           </p>
                         )}
-                        {audioSource === 'youtube' && !downloadedAudioId && (
+                        {audioSource === 'youtube' && !convertedAudioFile && (
                           <p className="text-xs text-yellow-400 text-center">
-                            Audio is required
+                            Convert YouTube audio first
                           </p>
                         )}
                       </>
