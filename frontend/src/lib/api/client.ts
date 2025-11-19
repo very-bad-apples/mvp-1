@@ -548,6 +548,17 @@ export function getVideoUrl(videoId: string): string {
 }
 
 /**
+ * Get available configuration flavors
+ * @returns Available config flavors
+ */
+export async function getConfigFlavors(): Promise<{ flavors: string[] }> {
+  const url = `${getAPIUrl()}/api/mv/get_config_flavors`
+  return apiFetch<{ flavors: string[] }>(url, {
+    method: 'GET',
+  })
+}
+
+/**
  * Health check utility
  * @returns True if API is reachable
  */
