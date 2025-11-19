@@ -52,5 +52,46 @@ When MV_DEBUG_MODE=true, the flavor of config chosen at prompt time should log o
 
 on the frontend create page create a toggelable config section between Generation Mode and Video Description. It is collpase on page creation.
 
-Add the first config: Config Flavor select box
+Add the first config: Config Flavor select box, default is "default"
     - we'll probably need create an endpoint: /api/mv/get_config_flavors to populate this
+
+Pass this information to the quick-gen-page and display in the input data. Allow this to be adjustable by a select box just like on th ecreate page
+
+Have the quickgen page attach the config flavor specified (either passed from create page or specified from quickgen-page select box) to the outgoing requests to the api e.g. create_scenes, generate_videos
+
+---
+
+### Implementation Plan (v2)
+
+**Status**: Planning Complete - See `.devdocs/v3/tasklist.md` (v2 section) for detailed task breakdown
+
+**Key Design Decisions**:
+1. **API Endpoint**: New `GET /api/mv/get_config_flavors` endpoint returns list of available flavors
+2. **Data Flow**: Config flavor passed via sessionStorage (same as other create → quick-gen data)
+3. **UI Component**: Collapsible "Configuration" section using Card/Collapsible component
+4. **Positioning**: Section placed between "Generation Mode" and "Video Description" on create page
+5. **Default State**: Configuration section collapsed by default on both pages
+6. **Quick-Gen Integration**:
+   - Configuration section above "Input Data" card
+   - Selected flavor displayed in "Input Data" section
+   - Flavor changeable via select box in Configuration section
+7. **API Integration**: `config_flavor` parameter added to both `create_scenes` and `generate_video` calls
+
+**Frontend Changes**:
+- **Create page** (`frontend/src/app/create/page.tsx`):
+  - New collapsible Configuration section with config flavor select
+  - Fetch flavors from `/api/mv/get_config_flavors` on mount
+  - Add `configFlavor` to sessionStorage when navigating to quick-gen
+
+- **Quick-gen page** (`frontend/src/app/quick-gen-page/page.tsx`):
+  - New Configuration section for changing flavor
+  - Display received flavor in Input Data card
+  - Attach flavor to `create_scenes` API call
+  - Attach flavor to `generate_video` API calls
+
+**Backend Changes**:
+- New endpoint: `GET /api/mv/get_config_flavors`
+- Returns: `{"flavors": ["default", "example", ...]}`
+- Uses existing `get_discovered_flavors()` from config_manager
+
+**See**: `.devdocs/v3/tasklist.md` (v2 section) for complete 11-section task breakdown with 40+ subtasks

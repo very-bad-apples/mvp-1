@@ -58,6 +58,47 @@ router = APIRouter(prefix="/api/mv", tags=["Music Video"])
 
 
 @router.get(
+    "/get_config_flavors",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Config Flavors",
+    description="""
+Get list of available configuration flavors.
+
+Returns an array of flavor names that are available for use with the
+config_flavor parameter in scene generation, video generation, and
+character reference generation endpoints.
+
+**Example Response:**
+```json
+{
+    "flavors": ["default", "example", "cinematic"]
+}
+```
+"""
+)
+async def get_config_flavors():
+    """
+    Get list of available configuration flavors.
+
+    Returns:
+        Dictionary with 'flavors' key containing list of available flavor names
+    """
+    try:
+        from mv.config_manager import get_discovered_flavors
+
+        flavors = get_discovered_flavors()
+
+        logger.info("config_flavors_requested", flavors=flavors)
+
+        return {"flavors": flavors}
+    except Exception as e:
+        logger.error("get_config_flavors_error", error=str(e), exc_info=True)
+        # Return default as fallback
+        return {"flavors": ["default"]}
+
+
+@router.get(
     "/config/debug",
     summary="Debug Configuration",
     description="Shows current configuration values for troubleshooting"
