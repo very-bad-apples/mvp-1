@@ -91,20 +91,25 @@ async def api_authentication_middleware(request: Request, call_next):
     # Skip authentication for non-API routes
     if not request.url.path.startswith("/api/"):
         return await call_next(request)
-    
+
     # Skip authentication for health check and docs
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
         return await call_next(request)
-    
+
     # Import here to avoid circular imports
     # Import the verification function (not the FastAPI dependency)
     import auth
-    
+
+    # If no API key is configured, skip authentication entirely (development mode)
+    configured_key = auth.get_api_key_from_env()
+    if not configured_key:
+        return await call_next(request)
+
     # Get API key from header or query parameter
     api_key_header = request.headers.get("X-API-Key")
     api_key_query = request.query_params.get("api_key")
     api_key = api_key_header or api_key_query
-    
+
     if not api_key:
         return JSONResponse(
             status_code=401,
@@ -115,7 +120,7 @@ async def api_authentication_middleware(request: Request, call_next):
             },
             headers={"WWW-Authenticate": "ApiKey"}
         )
-    
+
     # Verify API key using the auth module's verification function
     if not auth.check_api_key(api_key):
         return JSONResponse(
@@ -127,7 +132,7 @@ async def api_authentication_middleware(request: Request, call_next):
             },
             headers={"WWW-Authenticate": "ApiKey"}
         )
-    
+
     # Continue to the endpoint
     return await call_next(request)
 
