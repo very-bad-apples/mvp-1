@@ -73,3 +73,95 @@ on the fronend /create page make the following modifications:
     - don't display the product image upload, and don't require for validation for "generate video" button
     - display character & style input box by default with "use ai generation" toggled on by default
 
+## v9
+
+on the frontend /quick-gen-page make a large refactor of the page display:
+- combine the scene cards with the clip cards:
+    - scene prompt on the left of the card, corresponding clip on the right
+        - refactor how scene prompt displays to be more visually appealing, and emphasize description with negative description as toggeable, default collpased
+        - for both scene prompts and video clips improve the loading animation to be more visually compelling for the long wait times. Use input data about what the video description and character description in the loading state so use understand what's going to be generated there. Note: scene prompts take an estimated 20-30s, and video clips take 2-7minutes to generate
+        - enable new buttons and associate routes with them for these combined cards:
+            - scene prompt:
+                - enable edit of the prompt
+                - regenerate the prompt
+            - video prompt:
+                - regenerate video
+        - remove the scene generation loading page, and move the progress bar loading to the individual scene prompt cards
+        - collapse the input data section into a toggeable expand/collapse when scene prompt generation returns.
+        - when scene generation returns, teletype the scene prompts into the display over 10 second duration.
+
+### Implementation Details (Clarified):
+- **Layout**: Side-by-side on desktop (50/50 split), vertical stack on mobile (scene top, video bottom)
+- **Edit Prompt**: Inline editing within card with Save/Cancel buttons
+- **Regenerate Prompt**: Calls `/api/mv/create_scenes` and updates only that specific card's scene prompt (using scene index)
+- **Regenerate Video**: Calls `/api/mv/generate_video` with current scene prompt (edited or original)
+- **Loading Snippets**: Brief contextual text that rotates every 3-5s (scene) or 10-15s (video) based on input data
+- **Teletype**: Parallel animation - all scenes type simultaneously within 10 second total duration (configurable constant)
+- **Input Data Collapse**: Auto-collapses when scene generation completes, manually toggleable
+- **Auto-scroll**: Automatically scrolls to Full Video section when stitching completes
+- **Responsive**: Uses Tailwind `flex-col md:flex-row` for responsive behavior
+
+## v10
+
+- update the generate_character_reference endpoint and the frontend elements that utilize it to no longer send back base64 encoded image, but instead get the frontend to download the image /get_character_reference endpoint.
+
+### Implementation Details (Clarified):
+- **Backend Model Changes**: Remove `base64` field from `CharacterReferenceImage`, keep `id`, `path`, and `cloud_url`
+- **Image Fetching**: Frontend uses `/api/mv/get_character_reference/{id}?redirect=false` to fetch images
+  - `redirect=false` returns JSON with presigned URL (cloud) or serves file directly (local)
+  - Mark in `v2/impl-notes.md` that we use `redirect=false` for img element population
+- **Frontend Flow**:
+  1. Call `/generate_character_reference` → receive image IDs only (no base64)
+  2. Fetch all 4 images in parallel via `/get_character_reference/{id}`
+  3. Show loading spinners on placeholder cards during fetch
+  4. Display images when loaded, show error state on individual failures
+- **UI/UX**: Fixed aspect ratio placeholders prevent layout shift, parallel loading with individual loading states
+- **Error Handling**: Show error icon/message on failed images, use existing "Regenerate All" button (no individual retry)
+- **Performance**: Reduces response payload from 4-16MB to ~1KB, enables HTTP caching, parallel image loading
+
+## v11
+
+for the generate_video endpoint refactor the character_reference handling: replace the request paramater of expecting base64 and instead expect a uuid of the character_reference which can be converted into to url via /get_character_reference that can be used by replicate service call supply the reference_image to the video generation call to replicate's api.
+
+### Implementation Details (Clarified):
+- **New Parameter**: Add `character_reference_id: Optional[str]` to request model
+- **Backward Compatibility**: Keep `reference_image_base64` parameter (deprecated) for transition period
+- **Priority**: If both UUID and base64 provided, UUID takes precedence with warning log
+- **File Resolution**: Backend resolves UUID to file path: `mv/outputs/character_reference/{uuid}.{ext}`
+- **File Extensions**: Check for `.png`, `.jpg`, `.jpeg`, `.webp` extensions
+- **Replicate Integration**: Pass open file handle to `input_params["reference_images"]`
+- **Error Handling**:
+  - UUID not found: Log warning to stdout, add warning to response metadata, continue without reference (don't fail)
+  - Invalid file path: Raise clear error with UUID and attempted paths
+- **Response Warning**: Add optional `character_reference_warning` field if UUID not found
+- **Performance**: Eliminates base64 encoding/decoding overhead, reduces request payload
+- **Frontend**: Not implemented yet - frontend doesn't currently send character reference to generate_video
+
+## v12
+
+implement a trim_audio method that will operate on youtube video audio download and accept start/end duration.
+
+for the frontend quick-gen-page add the id of audio file and the audio component that will allow the user to play the clip. do this only if a youtube video's audio has been selected.
+
+on the stitch-videos endpoint add an optional paramater for audio stiching that accepts optional params:
+    - audio_overlay_id: which is an id to audio track downloaded from youtube which will be overlaid to the sitched video output
+    - suppress_video_audio: which will strip the audio from the video clips leaving only the audio_overlay audio in the final video.
+
+thes desired behavior here is to make the target output duration equal to the sum of the video clip duration so clip the audio to make this work.
+
+have the frontend attach those new params to the stitch-video request if a youtube song is selected on the create page.
+
+### Implementation Details (Clarified):
+- **Audio Trimmer Module**: New utility in `services/audio_trimmer.py` with `trim_audio(audio_id, start_time, end_time)` function
+- **Trimming Strategy**: Create new UUID for trimmed audio, preserve original file
+- **Audio Storage**: All audio files in `mv/outputs/audio/{uuid}.mp3` format
+- **Duration Matching**: If audio > video duration, trim audio from start (0 to video_duration)
+- **Video Audio Suppression**: Use `clip.without_audio()` on video clips when `suppress_video_audio=True`
+- **Audio Overlay**: Use `final_clip.set_audio(audio_clip)` from moviepy's `AudioFileClip`
+- **Error Handling**: Audio errors never fail stitching - log warning and continue without audio overlay
+- **Frontend Audio Display**: Reuse AudioPlayer component from create page in quick-gen-page Input Data section
+- **Data Flow**: audioId passed from create page → quick-gen-page via router state/sessionStorage
+- **Conditional Parameters**: Only send `audio_overlay_id` and `suppress_video_audio` to stitch endpoint if audioId exists
+- **Response Fields**: Add `audio_overlay_applied` (bool) and `audio_overlay_warning` (optional string) to StitchVideosResponse
+- **Debug Logging**: Log audio operations when `MV_DEBUG_MODE=true`
+- **Metadata Tracking**: Store trimmed audio metadata in `{uuid}_metadata.json` with source_audio_id, start_time, end_time

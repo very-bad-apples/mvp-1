@@ -18,7 +18,8 @@ import { useToast } from '@/hooks/use-toast'
 
 type Mode = 'ad-creative' | 'music-video'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Use relative paths to proxy routes (API key handled server-side)
+const API_BASE = '/api/mv'
 
 export default function CreatePage() {
   const router = useRouter()
@@ -39,6 +40,7 @@ export default function CreatePage() {
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
   const [generationAttempts, setGenerationAttempts] = useState(0)
+  const [imageLoadingStates, setImageLoadingStates] = useState<{ [imageId: string]: 'loading' | 'loaded' | 'error' }>({})
 
   // Update useAICharacter default when mode changes
   useEffect(() => {
@@ -49,16 +51,7 @@ export default function CreatePage() {
     }
   }, [mode])
 
-  // Cleanup blob URLs on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      generatedImages.forEach(url => {
-        if (url.startsWith('blob:')) {
-          URL.revokeObjectURL(url)
-        }
-      })
-    }
-  }, [generatedImages])
+  // Note: Blob URL cleanup removed in v10 - images now fetched directly from backend
 
   // Check if form is valid and ready to submit
   const isFormValid = () => {
@@ -153,19 +146,28 @@ export default function CreatePage() {
         formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
       }
 
-      // Mock API call (simulating network delay)
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // Generate a mock job ID
-      const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
-
-      toast({
-        title: "Video generation started!",
-        description: `Job ID: ${jobId}`,
+      // Call the proxy route (API key handled server-side)
+      const response = await fetch(`${API_BASE}/projects`, {
+        method: 'POST',
+        body: formData,
       })
 
-      // Navigate to the mock result page
-      router.push(`/result/${jobId}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        const errorMessage = errorData.detail?.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      const projectId = data.projectId
+
+      toast({
+        title: "Project created successfully!",
+        description: `Project ID: ${projectId}`,
+      })
+
+      // Navigate to the project result page
+      router.push(`/result/${projectId}`)
     } catch (error) {
       console.error('Error submitting form:', error)
       toast({
@@ -184,9 +186,38 @@ export default function CreatePage() {
       videoDescription: prompt,
       characterDescription: characterDescription,
       characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+      // Include audio data if YouTube audio was downloaded
+      audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
+      audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
+  }
+
+  /**
+   * Fetch a single character reference image by ID.
+   * Uses redirect=false to get JSON response (cloud) or direct file (local).
+   */
+  const fetchCharacterImage = async (imageId: string): Promise<string> => {
+    const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image ${imageId}`)
+    }
+
+    // For cloud storage: response is JSON with image_url
+    // For local storage: response is the image file directly
+    const contentType = response.headers.get('content-type')
+
+    if (contentType?.includes('application/json')) {
+      // Cloud storage mode - get presigned URL from JSON
+      const data = await response.json()
+      return data.image_url || data.video_url // video_url is legacy field name
+    } else {
+      // Local storage mode - create object URL from blob
+      const blob = await response.blob()
+      return URL.createObjectURL(blob)
+    }
   }
 
   const handleGenerateImages = async () => {
@@ -202,18 +233,13 @@ export default function CreatePage() {
     setIsGeneratingImages(true)
     setSelectedImageIndex(null) // Reset selection
     setImageGenerationError(null) // Clear previous errors
-
-    // Clean up previous blob URLs to prevent memory leaks
-    generatedImages.forEach(url => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url)
-      }
-    })
     setGeneratedImages([])
     setGeneratedImageIds([])
+    setImageLoadingStates({})
 
     try {
-      const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
+      // Step 1: Generate images and get image IDs (no base64 in v10)
+      const response = await fetch(`${API_BASE}/generate_character_reference`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,33 +256,55 @@ export default function CreatePage() {
       }
 
       const data = await response.json()
+      const imageIds = data.images.map((img: any) => img.id)
 
-      // Convert each base64 image to blob URL for better performance
-      const blobUrls: string[] = []
-      const imageIds: string[] = []
-
-      for (const image of data.images) {
-        const base64Image = image.base64
-        const byteCharacters = atob(base64Image)
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i)
-        }
-        const byteArray = new Uint8Array(byteNumbers)
-        const blob = new Blob([byteArray], { type: 'image/png' })
-        const blobUrl = URL.createObjectURL(blob)
-
-        blobUrls.push(blobUrl)
-        imageIds.push(image.id)
-      }
-
-      setGeneratedImages(blobUrls)
+      // Initialize image IDs and placeholder URLs
       setGeneratedImageIds(imageIds)
+      setGeneratedImages(new Array(imageIds.length).fill('')) // Placeholder empty strings
+
+      // Initialize all images as loading
+      const initialLoadingStates: { [key: string]: 'loading' | 'loaded' | 'error' } = {}
+      imageIds.forEach((id: string) => {
+        initialLoadingStates[id] = 'loading'
+      })
+      setImageLoadingStates(initialLoadingStates)
+
+      // Step 2: Fetch all images in parallel
+      const fetchPromises = imageIds.map(async (imageId: string, index: number) => {
+        try {
+          const imageUrl = await fetchCharacterImage(imageId)
+
+          // Update the specific image URL
+          setGeneratedImages(prev => {
+            const newImages = [...prev]
+            newImages[index] = imageUrl
+            return newImages
+          })
+
+          // Update loading state to loaded
+          setImageLoadingStates(prev => ({
+            ...prev,
+            [imageId]: 'loaded'
+          }))
+        } catch (error) {
+          console.error(`Failed to fetch image ${imageId}:`, error)
+
+          // Update loading state to error
+          setImageLoadingStates(prev => ({
+            ...prev,
+            [imageId]: 'error'
+          }))
+        }
+      })
+
+      // Wait for all fetches to complete
+      await Promise.allSettled(fetchPromises)
+
       setGenerationAttempts(prev => prev + 1)
 
       toast({
         title: "Character Images Generated",
-        description: `${blobUrls.length} character references ready. Click to select one.`,
+        description: `${imageIds.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)
@@ -448,38 +496,70 @@ export default function CreatePage() {
                     )}
 
                     {/* Generated Images Grid - Above the button */}
-                    {generatedImages.length > 0 && !isGeneratingImages && (
+                    {generatedImageIds.length > 0 && !isGeneratingImages && (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                          {generatedImages.map((imageUrl, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => setSelectedImageIndex(index)}
-                              className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                                selectedImageIndex === index
-                                  ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
-                                  : 'border-gray-600 hover:border-gray-500'
-                              }`}
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={imageUrl}
-                                alt={`Character option ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                              {selectedImageIndex === index && (
-                                <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                                  <div className="bg-blue-500 rounded-full p-2">
-                                    <CheckCircle2 className="h-6 w-6 text-white" />
+                          {generatedImageIds.map((imageId, index) => {
+                            const imageUrl = generatedImages[index]
+                            const loadingState = imageLoadingStates[imageId]
+
+                            return (
+                              <button
+                                key={imageId}
+                                type="button"
+                                onClick={() => {
+                                  if (loadingState === 'loaded') {
+                                    setSelectedImageIndex(index)
+                                  }
+                                }}
+                                disabled={loadingState !== 'loaded'}
+                                className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                  selectedImageIndex === index && loadingState === 'loaded'
+                                    ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
+                                    : 'border-gray-600 hover:border-gray-500'
+                                } ${loadingState !== 'loaded' ? 'cursor-not-allowed' : ''}`}
+                              >
+                                {/* Loading State */}
+                                {loadingState === 'loading' && (
+                                  <div className="absolute inset-0 bg-gray-800/50 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
                                   </div>
+                                )}
+
+                                {/* Error State */}
+                                {loadingState === 'error' && (
+                                  <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center p-4">
+                                    <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
+                                    <span className="text-xs text-red-300 text-center">Failed to load image</span>
+                                  </div>
+                                )}
+
+                                {/* Loaded Image */}
+                                {loadingState === 'loaded' && imageUrl && (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={imageUrl}
+                                      alt={`Character option ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    {selectedImageIndex === index && (
+                                      <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                        <div className="bg-blue-500 rounded-full p-2">
+                                          <CheckCircle2 className="h-6 w-6 text-white" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Image Label */}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
+                                  <span className="text-xs text-white">Option {index + 1}</span>
                                 </div>
-                              )}
-                              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
-                                <span className="text-xs text-white">Option {index + 1}</span>
-                              </div>
-                            </button>
-                          ))}
+                              </button>
+                            )
+                          })}
                         </div>
 
                         {selectedImageIndex !== null && (

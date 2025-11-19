@@ -24,15 +24,48 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      dynamodb-local:
+        condition: service_started
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=sqlite:///./video_generator.db
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - USE_LOCAL_DYNAMODB=true
+      - DYNAMODB_REGION=us-east-1
+      - DYNAMODB_TABLE_NAME=MVProjects
     volumes:
       - ./backend:/app
       - backend_data:/app/data
     restart: unless-stopped
     networks:
       - video-network
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    ports:
+      - "8001:8000"
+    # Using in-memory mode to avoid SQLite file permission issues
+    # Note: Data is lost on container restart. For persistence, use -dbPath with volume mount
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    networks:
+      - video-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Future: Add backend service
+  # backend:
+  #   build: ./backend
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379/0
 
 networks:
   video-network:
@@ -42,4 +75,6 @@ volumes:
   redis_data:
     driver: local
   backend_data:
+    driver: local
+  dynamodb-data:
     driver: local

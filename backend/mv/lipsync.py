@@ -38,6 +38,12 @@ class LipsyncRequest(BaseModel):
         None,
         description="Automatically detect and sync the active speaker in multi-person videos"
     )
+    project_id: Optional[str] = Field(
+        None, description="Project UUID for DynamoDB integration (requires sequence)"
+    )
+    sequence: Optional[int] = Field(
+        None, ge=1, description="Scene sequence number for DynamoDB integration (requires project_id)"
+    )
 
 
 class LipsyncResponse(BaseModel):

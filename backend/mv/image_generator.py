@@ -3,7 +3,6 @@ Image generation module for Music Video pipeline.
 Ported from .ref-pipeline/src/image_generator.py:generate_character_reference_image
 """
 
-import base64
 import os
 import uuid
 from datetime import datetime, timezone
@@ -43,10 +42,14 @@ class GenerateCharacterReferenceRequest(BaseModel):
 
 
 class CharacterReferenceImage(BaseModel):
-    """Single character reference image data."""
+    """
+    Single character reference image data.
+
+    Note: base64 field removed in v10 for performance optimization.
+    Images should be fetched via /api/mv/get_character_reference/{id} endpoint.
+    """
     id: str = Field(..., description="UUID of the image")
     path: str = Field(..., description="File path to saved image")
-    base64: str = Field(..., description="Base64-encoded image data")
     cloud_url: Optional[str] = Field(None, description="Presigned/public URL for cloud access")
 
 
@@ -265,14 +268,12 @@ def generate_character_reference_image(
         with open(output_path, "wb") as f:
             f.write(image_data)
 
-        # Encode to base64
-        image_base64 = base64.b64encode(image_data).decode("utf-8")
-
-        # Create image object
+        # Create image object (base64 removed in v10 for performance)
+        # Frontend should fetch images via /api/mv/get_character_reference/{id}
         images.append(CharacterReferenceImage(
             id=image_id,
             path=str(output_path),
-            base64=image_base64
+            cloud_url=None  # Populated by storage service if cloud storage enabled
         ))
 
         logger.info(

@@ -7,6 +7,8 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.openapi.models import SecurityScheme
+from fastapi.security import APIKeyHeader
 from contextlib import asynccontextmanager
 import time
 
@@ -35,6 +37,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("application_startup", message="FastAPI application starting up")
 
+    # Validate configuration
+    try:
+        from config import settings
+        settings.validate_dynamodb_config()
+        logger.info("config_validated", message="Configuration validated successfully")
+    except ValueError as e:
+        logger.error("config_validation_failed", error=str(e))
+        raise
+
     # Initialize database
     try:
         from database import init_db
@@ -42,6 +53,14 @@ async def lifespan(app: FastAPI):
         logger.info("database_tables_created", message="Database initialized successfully")
     except Exception as e:
         logger.error("database_init_error", error=str(e))
+
+    # Initialize DynamoDB tables
+    try:
+        from dynamodb_config import init_dynamodb_tables
+        init_dynamodb_tables()
+        logger.info("dynamodb_tables_created", message="DynamoDB tables initialized successfully")
+    except Exception as e:
+        logger.error("dynamodb_init_error", error=str(e))
 
     # Load MV (Music Video) module configs
     try:
@@ -65,8 +84,41 @@ app = FastAPI(
     title="AI Video Generator API",
     description="Backend API for generating AI-powered video ads",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    swagger_ui_parameters={
+        "persistAuthorization": True,
+    }
 )
+
+# Configure OpenAPI schema to include API key authentication
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    openapi_schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for authentication. Use the value from your .env file (API_KEY)"
+        }
+    }
+    # Apply security globally to all endpoints
+    openapi_schema["security"] = [{"ApiKeyAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # CORS middleware configuration
 # Get allowed origins from environment variable
@@ -91,9 +143,13 @@ async def api_authentication_middleware(request: Request, call_next):
     # Skip authentication for non-API routes
     if not request.url.path.startswith("/api/"):
         return await call_next(request)
-    
+
     # Skip authentication for health check and docs
     if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+        return await call_next(request)
+
+    # Skip authentication for CORS preflight requests
+    if request.method == "OPTIONS":
         return await call_next(request)
     
     # Import here to avoid circular imports
@@ -212,6 +268,8 @@ async def health_check():
 
 # Include routers
 from routers import generate, jobs, websocket, models, mv, audio
+from routers import projects
+from routers import mv_projects
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
@@ -219,6 +277,10 @@ app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
 app.include_router(audio.router)
+app.include_router(projects.router)
+app.include_router(mv_projects.router)
+logger.info("router_loaded", router="projects")
+logger.info("router_loaded", router="mv_projects")
 
 
 # Root endpoint

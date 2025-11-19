@@ -43,8 +43,9 @@ interface WebSocketMessage {
   error_message?: string
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+// Use relative path to proxy route (API key handled server-side)
+const API_BASE = '/api/jobs'
 
 const STAGE_NAMES = {
   script_gen: 'Script Generation',
@@ -85,7 +86,7 @@ export default function JobStatusPage() {
       setIsLoading(true)
       setError(null)
 
-      const response = await fetch(`${API_URL}/api/jobs/${jobId}`)
+      const response = await fetch(`${API_BASE}/${jobId}`)
 
       if (!response.ok) {
         if (response.status === 404) {

@@ -5,6 +5,8 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Use server-side API key (not exposed to client)
+const API_KEY = process.env.API_KEY || ''
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': API_KEY,
       },
       body: JSON.stringify({
         url: body.url.trim(),

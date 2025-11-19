@@ -10,9 +10,9 @@ Tests:
 import asyncio
 import pytest
 from pathlib import Path
-from templates import get_scene_template, fill_template, get_available_styles, validate_template
-from asset_manager import AssetManager
-from error_handler import (
+from pipeline.templates import get_scene_template, fill_template, get_available_styles, validate_template
+from pipeline.asset_manager import AssetManager
+from pipeline.error_handler import (
     PipelineError,
     ErrorCode,
     should_retry,
