@@ -59,6 +59,47 @@ router = APIRouter(prefix="/api/mv", tags=["Music Video"])
 
 
 @router.get(
+    "/get_config_flavors",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Config Flavors",
+    description="""
+Get list of available configuration flavors.
+
+Returns an array of flavor names that are available for use with the
+config_flavor parameter in scene generation, video generation, and
+character reference generation endpoints.
+
+**Example Response:**
+```json
+{
+    "flavors": ["default", "example", "cinematic"]
+}
+```
+"""
+)
+async def get_config_flavors():
+    """
+    Get list of available configuration flavors.
+
+    Returns:
+        Dictionary with 'flavors' key containing list of available flavor names
+    """
+    try:
+        from mv.config_manager import get_discovered_flavors
+
+        flavors = get_discovered_flavors()
+
+        logger.info("config_flavors_requested", flavors=flavors)
+
+        return {"flavors": flavors}
+    except Exception as e:
+        logger.error("get_config_flavors_error", error=str(e), exc_info=True)
+        # Return default as fallback
+        return {"flavors": ["default"]}
+
+
+@router.get(
     "/config/debug",
     summary="Debug Configuration",
     description="Shows current configuration values for troubleshooting"
@@ -221,6 +262,7 @@ async def create_scenes(request: CreateScenesRequest):
             video_type=request.video_type.strip() if request.video_type else None,
             video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
             camera_angle=request.camera_angle.strip() if request.camera_angle else None,
+            config_flavor=request.config_flavor,
         )
 
         # If project_id provided, create scene records in DynamoDB
@@ -483,6 +525,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
             output_format=request.output_format.strip() if request.output_format else None,
             negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
             seed=request.seed,
+            config_flavor=request.config_flavor,
         )
 
         # Upload to S3 if cloud storage is configured (follows video_generator.py pattern)
@@ -923,6 +966,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             reference_image_base64=request.reference_image_base64,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
+            config_flavor=request.config_flavor,
         )
 
         # DynamoDB integration: Update scene record if project_id and sequence provided

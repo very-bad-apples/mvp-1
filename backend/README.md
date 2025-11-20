@@ -173,13 +173,49 @@ for scene in script['scenes']:
 backend/
 ├── main.py                 # FastAPI application
 ├── config.py              # Configuration management
-├── database.py            # Database session management
-├── models.py              # SQLAlchemy models
+├── database.py            # SQLite database session management (legacy)
+├── dynamodb_config.py     # DynamoDB configuration and initialization
+├── models.py              # SQLAlchemy models (legacy jobs)
+├── mv_models.py           # PynamoDB models (MV projects)
+├── mv_schemas.py          # Pydantic schemas for MV endpoints
 ├── redis_client.py        # Redis client with queue ops
+├── worker.py              # Legacy ad-creative worker (SQLAlchemy)
+├── worker_mv.py          # MV pipeline worker (DynamoDB)
+├── init_dynamodb.py       # DynamoDB table initialization script
 ├── requirements.txt       # Python dependencies
 ├── .env                   # Environment variables
 ├── venv/                  # Virtual environment
-├── video_generator.db     # SQLite database
+├── video_generator.db     # SQLite database (legacy)
+├── routers/               # API endpoint routers
+│   ├── generate.py       # Legacy generation endpoint
+│   ├── jobs.py           # Job status endpoints
+│   ├── mv.py             # Music Video pipeline endpoints
+│   ├── mv_projects.py    # MV Project CRUD endpoints (ACTIVE)
+│   ├── projects.py       # Legacy/duplicate router (NOT REGISTERED - conflict resolved)
+│   ├── audio.py          # Audio download endpoints
+│   ├── models.py         # Model configuration endpoints
+│   ├── websocket.py      # WebSocket endpoints
+│   └── regenerate.py     # Regeneration endpoints
+├── services/              # External service clients
+│   ├── s3_storage.py     # S3 storage service
+│   └── ...
+├── mv/                    # Music Video pipeline
+│   ├── configs/          # Configuration flavors
+│   ├── scene_generator.py
+│   ├── video_generator.py
+│   └── ...
+├── workers/              # Worker processes
+│   ├── scene_worker.py   # Scene generation worker
+│   └── compose_worker.py # Video composition worker
+├── scripts/               # Utility scripts
+│   ├── check_database.py # Database inspection
+│   └── ...
+├── tests/                 # Test suite
+│   ├── test_dynamodb_models.py
+│   └── ...
+├── _docs/                 # Documentation
+│   ├── API_ENDPOINTS.md  # API reference (legacy endpoints)
+│   └── WORKER.md         # Worker system docs
 └── README.md             # This file
 ```
 
@@ -199,8 +235,20 @@ CORS_ORIGINS=http://localhost:3000
 DEBUG=true
 
 # API Keys
-OPENAI_API_KEY=<your-key>
-REPLICATE_API_KEY=<your-key>
+ANTHROPIC_API_KEY=<your-key>
+REPLICATE_API_TOKEN=<your-key>
+ELEVENLABS_API_KEY=<your-key>
+
+# AWS (for DynamoDB and S3)
+AWS_ACCESS_KEY_ID=<your-key>
+AWS_SECRET_ACCESS_KEY=<your-secret>
+AWS_REGION=us-east-1
+STORAGE_BUCKET=<your-bucket-name>
+
+# DynamoDB
+DYNAMODB_TABLE_NAME=MVProjects
+USE_LOCAL_DYNAMODB=true
+DYNAMODB_ENDPOINT=http://localhost:8001
 ```
 
 ## Installation & Setup
@@ -208,7 +256,7 @@ REPLICATE_API_KEY=<your-key>
 ### 1. Install Dependencies
 
 ```bash
-cd /Users/zeno/Projects/bad-apple/video/backend
+cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -226,7 +274,7 @@ redis-cli ping
 ### 3. Run the Server
 
 ```bash
-cd /Users/zeno/Projects/bad-apple/video/backend
+cd backend
 source venv/bin/activate
 python main.py
 ```
@@ -314,16 +362,15 @@ Response: {"message": "AI Video Generator API", "version": "1.0.0", "docs": "/do
 - **sqlalchemy**: ORM for database
 - **aiofiles**: Async file operations
 
-## Next Steps (Phase 2)
+## Additional Documentation
 
-### Ready to implement:
-- **Task 8**: Develop Video Generation Endpoint
-- **Task 9**: Implement Job Status Endpoint
-- **Task 10**: Set Up WebSocket for Progress Updates
-- **Task 11**: Develop File Upload Handling Service
-- **Task 21**: Develop Queue Worker
-
-These tasks all depend on Task 7 (FastAPI initialization) which is now complete.
+For detailed information about specific components:
+- **API Endpoints**: See [backend/_docs/API_ENDPOINTS.md](_docs/API_ENDPOINTS.md) (legacy endpoints)
+- **Worker System**: See [backend/_docs/WORKER.md](_docs/WORKER.md)
+- **System Architecture**: See [_docs/architecture.md](../_docs/architecture.md)
+- **Database Schema**: See [_docs/database/DYNAMODB_SCHEMA.md](../_docs/database/DYNAMODB_SCHEMA.md)
+- **Key Insights**: See [_docs/key-insights.md](../_docs/key-insights.md)
+- **Best Practices**: See [_docs/best-practices.md](../_docs/best-practices.md)
 
 ## Success Criteria
 

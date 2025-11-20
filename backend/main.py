@@ -62,17 +62,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("dynamodb_init_error", error=str(e))
 
-    # Load MV (Music Video) module configs
+    # Initialize MV (Music Video) config flavors system
     try:
-        from mv.scene_generator import load_configs
-        from mv.image_generator import load_image_configs
-        from mv.video_generator import load_video_configs
-        load_configs()
-        load_image_configs()
-        load_video_configs()
-        logger.info("mv_configs_loaded", message="Music Video configs loaded successfully")
+        from mv.config_manager import initialize_config_flavors
+        initialize_config_flavors()
+        logger.info("mv_config_flavors_initialized", message="Music Video config flavors initialized successfully")
     except Exception as e:
-        logger.error("mv_config_load_error", error=str(e))
+        logger.error("mv_config_flavor_init_error", error=str(e))
 
     yield
 
@@ -267,8 +263,8 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models, mv
 from routers import projects
+from routers import generate, jobs, websocket, models, mv, audio
 from routers import mv_projects
 from routers import audio_converter
 
@@ -278,9 +274,8 @@ app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
 app.include_router(audio_converter.router)
-app.include_router(projects.router)
+app.include_router(audio.router)
 app.include_router(mv_projects.router)
-logger.info("router_loaded", router="projects")
 logger.info("router_loaded", router="mv_projects")
 
 

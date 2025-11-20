@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import {
   Video,
   ChevronLeft,
@@ -68,6 +70,7 @@ interface QuickJobData {
   audioId?: string
   audioUrl?: string
   audioTitle?: string
+  configFlavor?: string
 }
 
 interface Scene {
@@ -123,6 +126,12 @@ export default function QuickGenPage() {
   // Input data collapse state
   const [isInputDataExpanded, setIsInputDataExpanded] = useState(true)
 
+  // Config flavor state
+  const [isConfigExpanded, setIsConfigExpanded] = useState(false)
+  const [configFlavor, setConfigFlavor] = useState<string>('default')
+  const [availableFlavors, setAvailableFlavors] = useState<string[]>(['default'])
+  const [isFetchingFlavors, setIsFetchingFlavors] = useState(false)
+
   // Character reference image state
   const [characterImageUrl, setCharacterImageUrl] = useState<string | null>(null)
   const [characterImageLoading, setCharacterImageLoading] = useState(false)
@@ -140,6 +149,31 @@ export default function QuickGenPage() {
   const [teletypeStates, setTeletypeStates] = useState<{ [key: number]: string }>({})
   const teletypeTimersRef = useRef<{ [key: number]: NodeJS.Timeout }>({})
 
+  // Fetch available config flavors on mount
+  useEffect(() => {
+    const fetchConfigFlavors = async () => {
+      setIsFetchingFlavors(true)
+      try {
+        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.flavors && Array.isArray(data.flavors)) {
+            setAvailableFlavors(data.flavors)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch config flavors:', error)
+        // Keep default fallback
+      } finally {
+        setIsFetchingFlavors(false)
+      }
+    }
+
+    fetchConfigFlavors()
+  }, [])
+
   // Load job data from sessionStorage
   useEffect(() => {
     const storedData = sessionStorage.getItem('quickJobData')
@@ -153,7 +187,12 @@ export default function QuickGenPage() {
           audioId: parsed.audioId || undefined,
           audioUrl: parsed.audioUrl || undefined,
           audioTitle: parsed.audioTitle || undefined,
+          configFlavor: parsed.configFlavor,
         })
+        // Initialize configFlavor from sessionStorage
+        if (parsed.configFlavor) {
+          setConfigFlavor(parsed.configFlavor)
+        }
       } catch (error) {
         console.error('Failed to parse quickJobData from sessionStorage:', error)
       }
@@ -310,6 +349,7 @@ export default function QuickGenPage() {
         body: JSON.stringify({
           idea: jobData.videoDescription,
           character_description: jobData.characterDescription,
+          config_flavor: configFlavor,
         }),
       })
 
@@ -428,6 +468,8 @@ export default function QuickGenPage() {
         body: JSON.stringify({
           prompt,
           negative_prompt: negativePrompt,
+          character_reference_id: jobData.characterReferenceImageId,
+          config_flavor: configFlavor,
         }),
       })
 
@@ -498,6 +540,7 @@ export default function QuickGenPage() {
         body: JSON.stringify({
           idea: jobData.videoDescription,
           character_description: jobData.characterDescription,
+          config_flavor: configFlavor,
         }),
       })
 
@@ -757,6 +800,58 @@ export default function QuickGenPage() {
           </div>
 
           <div className="space-y-6">
+            {/* Configuration Card - Collapsible */}
+            <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
+              <CardHeader className="cursor-pointer" onClick={() => setIsConfigExpanded(!isConfigExpanded)}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white">Configuration</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Adjust generation settings
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+                    {isConfigExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </Button>
+                </div>
+              </CardHeader>
+              {isConfigExpanded && (
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quick-config-flavor" className="text-sm font-medium text-white">
+                      Config Flavor
+                    </Label>
+                    <Select
+                      value={configFlavor}
+                      onValueChange={setConfigFlavor}
+                      disabled={isFetchingFlavors}
+                    >
+                      <SelectTrigger
+                        id="quick-config-flavor"
+                        className="w-full bg-gray-800 border-gray-600 text-white"
+                      >
+                        <SelectValue placeholder={isFetchingFlavors ? "Loading..." : "Select flavor"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-800 border-gray-600">
+                        {availableFlavors.map((flavor) => (
+                          <SelectItem
+                            key={flavor}
+                            value={flavor}
+                            className="text-white hover:bg-gray-700"
+                          >
+                            {flavor}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-400">
+                      Config flavor affects prompts and generation parameters
+                    </p>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
             {/* Input Data Card - Collapsible */}
             <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
               <CardHeader className="cursor-pointer" onClick={() => setIsInputDataExpanded(!isInputDataExpanded)}>
@@ -830,6 +925,18 @@ export default function QuickGenPage() {
                             <p className="text-xs text-gray-500 font-mono">ID: {jobData.characterReferenceImageId}</p>
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Config Flavor Display */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-400">
+                        Config Flavor
+                      </label>
+                      <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                        <p className="text-white text-sm">
+                          {jobData.configFlavor || configFlavor || 'default'}
+                        </p>
                       </div>
                     </div>
 
