@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -142,6 +142,7 @@ export default function QuickGenPage() {
   const [stitchedVideo, setStitchedVideo] = useState<StitchedVideo | null>(null)
   const [stitchingError, setStitchingError] = useState<string | null>(null)
   const [estimatedStitchTime, setEstimatedStitchTime] = useState(0)
+  const [isRestitching, setIsRestitching] = useState(false)
   const hasStartedStitchingRef = useRef(false)
   const stitchedVideoRef = useRef<HTMLDivElement>(null)
 
@@ -211,9 +212,8 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
+        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false&api_key=${API_KEY}`, {
           headers: {
-            'X-API-Key': API_KEY,
             'Content-Type': 'application/json'
           },
         })
@@ -245,15 +245,20 @@ export default function QuickGenPage() {
 
     if (jobData.characterReferenceImageId) {
       fetchCharacterImage(jobData.characterReferenceImageId)
+    } else {
+      // Clear image URL if no reference image ID
+      setCharacterImageUrl(null)
     }
+  }, [jobData.characterReferenceImageId])
 
-    // Cleanup function to revoke object URLs
+  // Cleanup effect for character image object URLs
+  useEffect(() => {
     return () => {
       if (characterImageUrl && characterImageUrl.startsWith('blob:')) {
         URL.revokeObjectURL(characterImageUrl)
       }
     }
-  }, [jobData.characterReferenceImageId])
+  }, [characterImageUrl])
 
   // Initialize placeholder cards and start scene generation
   useEffect(() => {
@@ -283,6 +288,7 @@ export default function QuickGenPage() {
 
     // Start scene generation
     generateScenes()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobData])
 
   // Start video generation when all scenes are ready
@@ -296,6 +302,7 @@ export default function QuickGenPage() {
       hasStartedVideoGenRef.current = true
       generateVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates])
 
   // Start video stitching when all videos complete
@@ -317,6 +324,7 @@ export default function QuickGenPage() {
       hasStartedStitchingRef.current = true
       stitchVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates, stitchingStatus])
 
   // Auto-scroll to stitched video when completed
@@ -341,9 +349,9 @@ export default function QuickGenPage() {
         setIsInputDataExpanded(false)
       }, 500)
     }
-  }, [sceneVideoStates])
+  }, [sceneVideoStates, isInputDataExpanded])
 
-  const generateScenes = async () => {
+  const generateScenes = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/mv/create_scenes`, {
         method: 'POST',
@@ -397,7 +405,7 @@ export default function QuickGenPage() {
         }))
       )
     }
-  }
+  }, [jobData.videoDescription, jobData.characterDescription, configFlavor])
 
   const startTeletypeAnimations = (scenes: Scene[]) => {
     // Calculate total characters across all scenes
@@ -441,24 +449,7 @@ export default function QuickGenPage() {
     }))
   }
 
-  const generateVideos = async () => {
-    // Set all videos to loading
-    setSceneVideoStates(prev =>
-      prev.map(s => ({
-        ...s,
-        video: { ...s.video, status: 'loading' },
-      }))
-    )
-
-    // Generate videos in parallel
-    const videoPromises = sceneVideoStates.map((state) =>
-      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
-    )
-
-    await Promise.allSettled(videoPromises)
-  }
-
-  const generateSingleVideo = async (
+  const generateSingleVideo = useCallback(async (
     prompt: string,
     negativePrompt: string,
     sceneIndex: number
@@ -533,7 +524,24 @@ export default function QuickGenPage() {
         )
       )
     }
-  }
+  }, [jobData.characterReferenceImageId, configFlavor])
+
+  const generateVideos = useCallback(async () => {
+    // Set all videos to loading
+    setSceneVideoStates(prev =>
+      prev.map(s => ({
+        ...s,
+        video: { ...s.video, status: 'loading' },
+      }))
+    )
+
+    // Generate videos in parallel
+    const videoPromises = sceneVideoStates.map((state) =>
+      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
+    )
+
+    await Promise.allSettled(videoPromises)
+  }, [sceneVideoStates, generateSingleVideo])
 
   const regenerateScene = async (sceneIndex: number) => {
     // Set scene to loading
@@ -712,17 +720,31 @@ export default function QuickGenPage() {
 
     if (videoIds.length === 0) return
 
+    setIsRestitching(true)
+
     try {
+      // Build request body with optional audio parameters
+      const requestBody: {
+        video_ids: string[]
+        audio_overlay_id?: string
+        suppress_video_audio?: boolean
+      } = {
+        video_ids: videoIds,
+      }
+
+      // Add audio overlay parameters if audio is available
+      if (jobData.audioId) {
+        requestBody.audio_overlay_id = jobData.audioId
+        requestBody.suppress_video_audio = true
+      }
+
       const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': API_KEY,
         },
-        body: JSON.stringify({
-          video_ids: videoIds,
-          audio_id: jobData.audioId,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -740,6 +762,8 @@ export default function QuickGenPage() {
     } catch (error) {
       console.error('Auto re-stitch error:', error)
       // Don't show error to user for auto-restitch, they can manually restitch if needed
+    } finally {
+      setIsRestitching(false)
     }
   }
 
@@ -814,7 +838,7 @@ export default function QuickGenPage() {
     )
   }
 
-  const stitchVideos = async () => {
+  const stitchVideos = useCallback(async () => {
     const successfulVideoIds = sceneVideoStates
       .filter(s => s.video.status === 'completed' && s.video.videoId)
       .sort((a, b) => a.sceneIndex - b.sceneIndex)
@@ -876,7 +900,7 @@ export default function QuickGenPage() {
       setStitchingStatus('error')
       console.error('Video stitching error:', err)
     }
-  }
+  }, [sceneVideoStates, jobData.audioId])
 
   const retryStitching = () => {
     hasStartedStitchingRef.current = false
@@ -1081,7 +1105,7 @@ export default function QuickGenPage() {
                           )}
                           <audio
                             controls
-                            src={`${API_URL}/api/audio/get/${jobData.audioId}`}
+                            src={`${API_URL}/api/audio/get/${jobData.audioId}?api_key=${API_KEY}`}
                             className="w-full h-10"
                           />
                           <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>
@@ -1234,10 +1258,20 @@ export default function QuickGenPage() {
                             onClick={() => autoRestitch()}
                             variant="outline"
                             size="sm"
-                            className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+                            disabled={isRestitching}
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50"
                           >
-                            <RefreshCw className="mr-2 h-3 w-3" />
-                            Re-stitch with current clips
+                            {isRestitching ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Re-stitching...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="mr-2 h-3 w-3" />
+                                Re-stitch with current clips
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>
