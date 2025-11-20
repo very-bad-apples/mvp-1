@@ -9,7 +9,12 @@
     .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
     .form-section { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; }
     .form-section h2 { margin-top: 0; font-size: 18px; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
+    .form-section > label { display: block; margin-top: 10px; font-weight: bold; }
+    .form-section > label:first-of-type { margin-top: 0; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
+    .form-row:first-child { margin-top: 0; }
+    .form-row label { display: block; margin-top: 0; font-weight: bold; }
+    .form-row select, .form-row input { width: 100%; padding: 5px; margin-top: 5px; }
     select, input { width: 100%; padding: 5px; margin-top: 5px; }
     select[multiple] { height: 150px; }
     button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-top: 10px; }
@@ -37,112 +42,130 @@
 
       <div class="form-section">
         <h2>Camera Parameters</h2>
-        <label>
-          Shot Type:
-          <select id="camera_shotType">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Movement:
-          <select id="camera_movement">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Lens:
-          <select id="camera_lens">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Angle:
-          <select id="camera_angle">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Shot Type:
+            <select id="camera_shotType">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Movement:
+            <select id="camera_movement">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>
+            Lens:
+            <select id="camera_lens">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Angle:
+            <select id="camera_angle">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
         <h2>Lighting Parameters</h2>
-        <label>
-          Type:
-          <select id="lighting_type">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Direction:
-          <select id="lighting_direction">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Type:
+            <select id="lighting_type">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Direction:
+            <select id="lighting_direction">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
         <h2>Style & Mood</h2>
-        <label>
-          Visual Style:
-          <select id="style_visualStyle">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Mood:
-          <select id="style_mood">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Color Grading:
-          <select id="style_colorGrading">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Visual Style:
+            <select id="style_visualStyle">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Mood:
+            <select id="style_mood">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>
+            Color Grading:
+            <select id="style_colorGrading">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
         <h2>Motion Control</h2>
-        <label>
-          Motion Intensity (0.0 - 1.0):
-          <input type="number" id="motion_intensity" min="0" max="1" step="0.1" placeholder="0.5">
-        </label>
-        <label>
-          Guidance Scale (1 - 24):
-          <input type="number" id="motion_guidanceScale" min="1" max="24" placeholder="10">
-        </label>
-        <label>
-          CFG Scale (1 - 15):
-          <input type="number" id="motion_cfgScale" min="1" max="15" placeholder="8">
-        </label>
+        <div class="form-row">
+          <label>
+            Motion Intensity (0.0 - 1.0):
+            <input type="number" id="motion_intensity" min="0" max="1" step="0.1" placeholder="0.5">
+          </label>
+          <label>
+            Guidance Scale (1 - 24):
+            <input type="number" id="motion_guidanceScale" min="1" max="24" placeholder="10">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>
+            CFG Scale (1 - 15):
+            <input type="number" id="motion_cfgScale" min="1" max="15" placeholder="8">
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
         <h2>Audio Parameters</h2>
-        <label>
-          Dialogue Tone:
-          <select id="audio_dialogue_tone">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Music Style:
-          <select id="audio_music_style">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Music Mood:
-          <select id="audio_music_mood">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
-        <label>
-          Music Intensity:
-          <select id="audio_music_intensity">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Dialogue Tone:
+            <select id="audio_dialogue_tone">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Music Style:
+            <select id="audio_music_style">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>
+            Music Mood:
+            <select id="audio_music_mood">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+          <label>
+            Music Intensity:
+            <select id="audio_music_intensity">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
@@ -155,22 +178,26 @@
             <optgroup label="Content Exclusions"></optgroup>
           </select>
         </label>
-        <label>
-          Safety Level:
-          <select id="quality_safetyLevel">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Safety Level:
+            <select id="quality_safetyLevel">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="form-section">
         <h2>Scene Transitions</h2>
-        <label>
-          Transition Type:
-          <select id="transitions_type">
-            <option value="">-- Select --</option>
-          </select>
-        </label>
+        <div class="form-row">
+          <label>
+            Transition Type:
+            <select id="transitions_type">
+              <option value="">-- Select --</option>
+            </select>
+          </label>
+        </div>
       </div>
 
     </div>
