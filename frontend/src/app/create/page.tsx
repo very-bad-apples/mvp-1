@@ -182,11 +182,16 @@ export default function CreatePage() {
   }
 
   const handleQuickJob = () => {
+    // Get character reference image ID if using AI character and image is selected
+    const characterReferenceImageId = useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
+      ? generatedImageIds[selectedImageIndex]
+      : undefined
+
     // Store form data in sessionStorage before navigating
     const quickJobData = {
       videoDescription: prompt,
       characterDescription: characterDescription,
-      characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+      characterReferenceImageId,
       // Include audio data if YouTube audio was downloaded
       audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
       audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
