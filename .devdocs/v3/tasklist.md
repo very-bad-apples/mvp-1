@@ -833,3 +833,289 @@ video_url_path = cloud_urls.get("video") if cloud_urls else f"/api/mv/get_video/
 - [ ] No breaking changes to API response structure
 - [ ] `/api/mv/get_video/{id}` endpoint serves S3 URLs for lipsynced videos
 - [ ] Feature works in both cloud-enabled and local-only configurations
+
+---
+
+# v4: Music Video Config Flavor (`mv1`)
+
+## Overview
+Create a new config flavor `mv1` optimized for generating music videos featuring a band and lead singer performing at an outdoor stadium venue. This config will modify scene generation prompts and parameters to produce concert/performance-style videos with appropriate camera work, staging, and audience elements.
+
+## Task List
+
+### 1. Create mv1 Config Directory
+**Location**: `backend/mv/configs/`
+
+- [ ] 1.1: Copy the entire `default/` directory to create `mv1/` directory
+- [ ] 1.2: Verify all YAML files copied successfully:
+  - `scene_prompts.yaml`
+  - `parameters.yaml`
+  - `image_params.yaml` (copied but not modified)
+  - `image_prompts.yaml` (if exists - copied but not modified)
+
+**Commands**:
+```bash
+cd backend/mv/configs/
+cp -r default/ mv1/
+```
+
+### 2. Update scene_prompts.yaml for Music Video
+**File**: `backend/mv/configs/mv1/scene_prompts.yaml`
+
+- [ ] 2.1: Read current `default/scene_prompts.yaml` to understand structure
+- [ ] 2.2: Update `scene_generation_prompt` (or equivalent prompt field):
+  - Add outdoor stadium performance context
+  - Specify live concert/music video aesthetic
+  - Include band and lead singer performance elements
+  - Add staging and lighting descriptions
+  - Specify camera work variety (wide shots, close-ups)
+  - Include selective audience presence
+  - Maintain character consistency references
+
+- [ ] 2.3: Update prompt to ensure scene variety:
+  - At least one scene with close-up of lead singer's face
+  - Mix of wide stadium shots showing full band
+  - Medium shots of band performing
+  - Some scenes with audience visible
+  - Some scenes focused only on performers
+  - Dynamic stage lighting and outdoor atmosphere
+
+- [ ] 2.4: Update negative prompts (if present):
+  - Add negative terms to avoid (e.g., indoor venues, studio settings, static/boring performances)
+  - Maintain quality-related negative prompts from default
+
+**Key Elements to Include**:
+- Outdoor stadium setting
+- Stage with professional lighting
+- Full band (drums, guitar, bass, keyboards/instruments)
+- Prominent lead singer
+- Dynamic performance energy
+- Concert atmosphere
+- Selective audience presence (excited crowd in background for some scenes)
+- Professional camera work (mix of wide and close-up shots)
+
+### 3. Update parameters.yaml for Music Video
+**File**: `backend/mv/configs/mv1/parameters.yaml`
+
+- [ ] 3.1: Read current `default/parameters.yaml` to understand structure
+- [ ] 3.2: Review and adjust generation parameters as needed:
+  - Camera movement parameters (if applicable) - more dynamic for concert feel
+  - Scene duration/timing parameters (if applicable)
+  - Any scene-count or pacing parameters
+  - Aspect ratio considerations (if configurable)
+
+- [ ] 3.3: Update any prompt-related parameters:
+  - Strength/weight of certain prompt elements
+  - Negative prompt weights
+  - Scene variety parameters
+
+- [ ] 3.4: Add comments documenting mv1-specific parameter choices
+- [ ] 3.5: Ensure parameters align with music video aesthetic (energetic, dynamic)
+
+**Notes**:
+- Review what parameters actually exist in the default config first
+- Only modify parameters that enhance music video generation
+- Document reasoning for parameter changes in comments
+
+### 4. Testing and Validation
+
+#### Task 4.1: Config Discovery Test
+- [ ] 4.1.1: Restart backend server (or trigger config reload)
+- [ ] 4.1.2: Verify `mv1` appears in `/api/mv/get_config_flavors` response
+- [ ] 4.1.3: Check startup logs for successful `mv1` flavor loading (if MV_DEBUG_MODE=true)
+
+#### Task 4.2: Scene Generation Test
+- [ ] 4.2.1: Create test request to `/api/mv/create_scenes` with `config_flavor: "mv1"`
+- [ ] 4.2.2: Verify generated scenes match music video theme:
+  - Outdoor stadium setting present
+  - Band and lead singer mentioned
+  - Mix of shot types (wide, close-up)
+  - Audience mentioned in some scenes but not all
+  - Performance/concert context clear
+- [ ] 4.2.3: Generate multiple batches to verify scene variety
+
+#### Task 4.3: Video Generation Test
+- [ ] 4.3.1: Generate actual videos using mv1 config flavor
+- [ ] 4.3.2: Verify video outputs align with music video aesthetic:
+  - Outdoor stadium visuals
+  - Band performance visible
+  - Lead singer prominence in appropriate scenes
+  - Audience visible in select scenes
+  - Concert lighting and atmosphere
+
+#### Task 4.4: Frontend Integration Test
+- [ ] 4.4.1: Verify `mv1` appears in config flavor dropdown on create page
+- [ ] 4.4.2: Select `mv1` flavor and create a quick job
+- [ ] 4.4.3: Verify scenes and videos generated match music video theme
+- [ ] 4.4.4: Test full workflow: create → quick-gen → scene generation → video generation
+
+### 5. Prompt Engineering Refinement
+
+#### Task 5.1: Iterate on Scene Prompts
+- [ ] 5.1.1: Review initial test results from Task 4.2
+- [ ] 5.1.2: Identify areas for improvement:
+  - Scene descriptions too generic?
+  - Missing key music video elements?
+  - Insufficient variety in camera angles?
+  - Lead singer not prominent enough in close-ups?
+  - Audience presence unclear or inconsistent?
+
+- [ ] 5.1.3: Refine `scene_prompts.yaml` based on test results:
+  - Strengthen outdoor stadium descriptors
+  - Emphasize lead singer face close-ups
+  - Clarify audience placement instructions
+  - Enhance performance energy descriptors
+  - Improve camera work variety instructions
+
+- [ ] 5.1.4: Re-test after refinements (repeat Task 4.2)
+- [ ] 5.1.5: Iterate until scene descriptions consistently match requirements
+
+#### Task 5.2: Validate Scene Variety
+- [ ] 5.2.1: Generate 10+ scene batches with mv1 config
+- [ ] 5.2.2: Analyze scene variety across batches:
+  - Count scenes with lead singer close-ups
+  - Count scenes with audience visible
+  - Count wide vs medium vs close shots
+  - Verify mix is appropriate and varied
+
+- [ ] 5.2.3: Adjust prompts if variety is insufficient
+
+### 6. Documentation
+
+#### Task 6.1: Update Feature Documentation
+- [ ] 6.1.1: Update `.devdocs/v3/feats.md` - add completion note to v4 section
+- [ ] 6.1.2: Document final implementation details
+- [ ] 6.1.3: Include example scenes generated with mv1 config (optional)
+
+#### Task 6.2: Create mv1 Config Documentation
+- [ ] 6.2.1: Add comments to `mv1/scene_prompts.yaml` explaining:
+  - Purpose of mv1 flavor (music video for outdoor stadium performance)
+  - Key elements included in prompts
+  - Differences from default config
+
+- [ ] 6.2.2: Add comments to `mv1/parameters.yaml` explaining:
+  - Parameter choices specific to mv1
+  - Why parameters differ from default (if they do)
+
+#### Task 6.3: Create Usage Guide (Optional)
+- [ ] 6.3.1: Create `.devdocs/v3/mv1-config-guide.md` (optional)
+- [ ] 6.3.2: Document when to use mv1 vs default flavor
+- [ ] 6.3.3: Provide example inputs and expected outputs
+- [ ] 6.3.4: Include tips for best results with mv1 config
+
+### 7. Quality Assurance
+
+#### Task 7.1: Cross-Config Comparison
+- [ ] 7.1.1: Generate same video idea with both `default` and `mv1` configs
+- [ ] 7.1.2: Compare scene descriptions:
+  - Verify mv1 has stadium/concert elements
+  - Verify mv1 has band/performance focus
+  - Verify default doesn't have these elements (confirms configs are distinct)
+
+- [ ] 7.1.3: Compare generated videos
+- [ ] 7.1.4: Document observable differences
+
+#### Task 7.2: Edge Cases
+- [ ] 7.2.1: Test mv1 with non-music video prompts (e.g., "cooking tutorial")
+  - Verify config still applies music video aesthetic
+  - Determine if this is acceptable behavior
+
+- [ ] 7.2.2: Test mv1 with explicit band/music mentions in user prompt
+  - Check for redundancy or conflicts
+  - Verify prompts work harmoniously
+
+- [ ] 7.2.3: Test with different character descriptions
+  - Solo artist vs full band
+  - Different music genres
+  - Various performer descriptions
+
+### 8. Performance Validation
+
+- [ ] 8.1: Verify mv1 config loads at similar speed to default
+- [ ] 8.2: Verify no performance degradation in scene/video generation
+- [ ] 8.3: Check for any memory or resource issues with mv1
+- [ ] 8.4: Validate concurrent usage of multiple config flavors works correctly
+
+---
+
+## Implementation Notes
+
+### Scene Prompt Structure Considerations
+
+The `scene_prompts.yaml` likely contains a prompt template that gets filled with user inputs. The mv1 version should:
+
+1. **Establish Setting Context**:
+   ```
+   "Generate a scene for a music video set in an outdoor stadium concert..."
+   ```
+
+2. **Camera Work Variety**:
+   - Specify shot types: "Mix wide stadium shots showing the full band on stage, medium shots of the band performing, and intimate close-ups of the lead singer's face"
+   - Emphasize at least one scene must feature lead singer face close-up
+
+3. **Performance Elements**:
+   - "The band is performing live with full instrumentation (drums, guitars, bass, keyboards)"
+   - "Lead singer is engaging and prominent, especially in close-up shots"
+   - "Dynamic stage lighting with outdoor concert atmosphere"
+
+4. **Selective Audience**:
+   - "Some scenes should include an excited audience visible in the background"
+   - "Other scenes focus solely on the performers on stage"
+
+5. **Character Consistency**:
+   - Maintain references to character descriptions provided by user
+   - Ensure lead singer matches character reference image
+
+### Parameters to Consider
+
+In `parameters.yaml`, common adjustable parameters might include:
+
+- **Number of scenes**: Keep same or adjust for music video pacing
+- **Scene descriptions length**: May want more detailed descriptions for mv1
+- **Negative prompt strength**: Adjust to avoid unwanted elements
+- **Randomness/temperature**: Control variety vs consistency
+- **Any motion/camera parameters**: Increase for dynamic concert feel
+
+### Example Scene Descriptions (Expected Output)
+
+With mv1 config, generated scenes might look like:
+
+1. "Wide shot of outdoor stadium stage at sunset, full band performing with dramatic lighting, excited crowd visible in background"
+2. "Extreme close-up of lead singer's face under stage lights, passionate expression, singing into microphone"
+3. "Medium shot of guitarist and bassist performing together on stage, outdoor stadium setting, energetic performance"
+4. "Wide angle from audience perspective, entire band visible on massive outdoor stage, stadium lights illuminating the night"
+5. "Close-up of drummer performing, outdoor concert stage, intense focus"
+6. "Lead singer center stage with arms raised, crowd visible in foreground and background, outdoor stadium concert atmosphere"
+
+---
+
+## Definition of Done
+
+- [ ] `mv1` config directory created with all necessary YAML files
+- [ ] `scene_prompts.yaml` updated with music video outdoor stadium performance theme
+- [ ] `parameters.yaml` reviewed and adjusted appropriately
+- [ ] Config flavor discoverable via `/api/mv/get_config_flavors` API
+- [ ] Scenes generated with mv1 consistently match music video theme:
+  - Outdoor stadium setting
+  - Band with lead singer
+  - Mix of wide shots and close-ups (including lead singer face)
+  - Selective audience presence
+  - Concert/performance atmosphere
+- [ ] Videos generated with mv1 match expected aesthetic
+- [ ] Frontend can select and use mv1 config flavor
+- [ ] Documentation complete with implementation notes
+- [ ] Quality assurance tests pass
+- [ ] No performance degradation introduced
+
+---
+
+## Success Criteria
+
+1. **Functional**: mv1 config flavor generates scenes and videos distinct from default config
+2. **Thematic Accuracy**: Generated content clearly reflects outdoor stadium music video aesthetic
+3. **Scene Variety**: Mix of shot types (wide, medium, close-up) with prominent lead singer moments
+4. **Audience Integration**: Audience appears in some scenes but not all, as specified
+5. **Quality**: Generated videos maintain same quality standards as default config
+6. **Usability**: Config can be selected and used through frontend UI workflow
+7. **Consistency**: Character references properly maintained across music video scenes
+8. **Documentation**: Clear documentation of mv1 purpose and usage
