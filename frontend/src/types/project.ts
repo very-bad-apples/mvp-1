@@ -114,9 +114,6 @@ export interface Project {
   /** Character description used for scene generation */
   characterDescription: string
 
-  /** Configuration flavor used for scene generation */
-  configFlavor?: string | null
-
   /** Character reference image ID - used when creating/updating project */
   characterReferenceImageId?: string | null
 
@@ -177,9 +174,6 @@ export interface CreateProjectRequest {
 
   /** Character description */
   characterDescription: string
-
-  /** Configuration flavor for scene generation */
-  configFlavor?: string | null
 
   /** Character reference image ID */
   characterReferenceImageId?: string | null
