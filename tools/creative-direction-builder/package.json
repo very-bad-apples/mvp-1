@@ -1,0 +1,16 @@
+{
+  "name": "creative-direction-builder",
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.19.0",
+  "main": "index.js",
+  "description": "Internal dev tool for creating pre-made creative direction templates for Veo 3.1 video generation",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "js-yaml": "^4.1.1"
+  }
+}
