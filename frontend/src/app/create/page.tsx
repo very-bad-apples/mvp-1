@@ -182,13 +182,49 @@ export default function CreatePage() {
         ? generatedImageIds[selectedImageIndex]
         : null
 
+      // Prepare files for upload
+      let audioFile: File | undefined = undefined
+
+      if (mode === 'music-video') {
+        if (audioSource === 'upload' && uploadedAudio) {
+          // Use uploaded audio file directly
+          audioFile = uploadedAudio
+        } else if (audioSource === 'youtube' && downloadedAudioId) {
+          // Fetch YouTube audio file from backend and convert to File
+          try {
+            const audioResponse = await fetch(`${API_URL}/api/audio/get/${downloadedAudioId}`, {
+              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+            })
+
+            if (!audioResponse.ok) {
+              throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`)
+            }
+
+            const audioBlob = await audioResponse.blob()
+            // Create a File from the blob with a proper filename
+            audioFile = new File([audioBlob], `${downloadedAudioId}.mp3`, { type: 'audio/mpeg' })
+          } catch (error) {
+            console.error('Error fetching YouTube audio:', error)
+            toast({
+              title: "Error",
+              description: "Failed to fetch audio file. Please try again.",
+              variant: "destructive",
+            })
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
+
       // Call the createProject API
       const response = await createProject({
         mode,
         prompt: prompt.trim(),
-        characterDescription: characterDescription.trim(),
+        characterDescription: characterDescription.trim() || 'No character description provided',
         characterReferenceImageId,
         directorConfig: directorConfig || undefined,
+        images: mode === 'ad-creative' ? uploadedImages : undefined,
+        audio: audioFile,
       })
 
       toast({

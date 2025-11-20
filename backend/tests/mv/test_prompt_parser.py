@@ -247,3 +247,5 @@ class TestGeneratePrompt:
         assert "{{" not in prompt
         assert "}}" not in prompt
 
+
+
