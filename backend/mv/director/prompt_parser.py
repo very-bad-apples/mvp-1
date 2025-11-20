@@ -205,3 +205,30 @@ def generate_prompt(config_name: str) -> str:
 
     return prompt
 
+
+def discover_director_configs() -> list[str]:
+    """
+    Discover all director config files (YAML and JSON) in the configs directory.
+
+    Returns:
+        List of config names (without extension), sorted alphabetically
+    """
+    if not CONFIGS_DIR.exists():
+        logger.warning("director_configs_directory_not_found", path=str(CONFIGS_DIR))
+        return []
+
+    configs = []
+    for file_path in CONFIGS_DIR.iterdir():
+        if file_path.is_file():
+            # Check for YAML/JSON extensions
+            if file_path.suffix in ['.yaml', '.yml', '.json']:
+                # Get name without extension
+                config_name = file_path.stem
+                configs.append(config_name)
+
+    # Remove duplicates and sort
+    configs = sorted(list(set(configs)))
+    logger.info("director_configs_discovered", count=len(configs), configs=configs)
+
+    return configs
+

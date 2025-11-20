@@ -69,6 +69,7 @@ async def create_project(
     characterDescription: str = Form(...),
     characterReferenceImageId: Optional[str] = Form(None),
     productDescription: Optional[str] = Form(None),
+    directorConfig: Optional[str] = Form(None),
     images: Optional[List[UploadFile]] = File(None),
     audio: Optional[UploadFile] = File(None)
 ):
@@ -81,6 +82,7 @@ async def create_project(
         characterDescription: Character description
         characterReferenceImageId: Optional pre-generated character image UUID
         productDescription: Optional product description
+        directorConfig: Optional director config name (e.g., "Wes-Anderson")
         images: Optional list of product images
         audio: Optional audio file
 
@@ -93,7 +95,8 @@ async def create_project(
             mode=mode,
             has_images=images is not None and len(images) > 0 if images else False,
             has_audio=audio is not None,
-            has_character_ref=characterReferenceImageId is not None
+            has_character_ref=characterReferenceImageId is not None,
+            director_config=directorConfig
         )
 
         # Validate mode
@@ -193,7 +196,8 @@ async def create_project(
             product_description=productDescription,
             character_image_s3_key=character_image_s3_key,
             product_image_s3_key=product_image_s3_key,
-            audio_backing_track_s3_key=audio_s3_key
+            audio_backing_track_s3_key=audio_s3_key,
+            director_config=directorConfig
         )
 
         try:
@@ -347,6 +351,7 @@ async def get_project(project_id: str):
             productImageUrl=product_url,
             audioBackingTrackUrl=audio_url,
             finalOutputUrl=final_url,
+            directorConfig=project_item.directorConfig,
             sceneCount=project_item.sceneCount or 0,
             completedScenes=project_item.completedScenes or 0,
             failedScenes=project_item.failedScenes or 0,

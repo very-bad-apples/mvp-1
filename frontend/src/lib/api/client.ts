@@ -314,6 +314,10 @@ export async function createProject(
     formData.append('productDescription', data.productDescription)
   }
 
+  if (data.directorConfig) {
+    formData.append('directorConfig', data.directorConfig)
+  }
+
   // Add product images if provided (for ad-creative mode)
   if (data.images && data.images.length > 0) {
     data.images.forEach((image) => {
@@ -554,6 +558,17 @@ export function getVideoUrl(videoId: string): string {
 export async function getConfigFlavors(): Promise<{ flavors: string[] }> {
   const url = `${getAPIUrl()}/api/mv/get_config_flavors`
   return apiFetch<{ flavors: string[] }>(url, {
+    method: 'GET',
+  })
+}
+
+/**
+ * Get available director configs
+ * @returns List of available director config names
+ */
+export async function getDirectorConfigs(): Promise<{ configs: string[] }> {
+  const url = `${getAPIUrl()}/api/mv/get_director_configs`
+  return apiFetch<{ configs: string[] }>(url, {
     method: 'GET',
   })
 }
