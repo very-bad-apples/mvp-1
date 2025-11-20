@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -245,15 +245,20 @@ export default function QuickGenPage() {
 
     if (jobData.characterReferenceImageId) {
       fetchCharacterImage(jobData.characterReferenceImageId)
+    } else {
+      // Clear image URL if no reference image ID
+      setCharacterImageUrl(null)
     }
+  }, [jobData.characterReferenceImageId])
 
-    // Cleanup function to revoke object URLs
+  // Cleanup effect for character image object URLs
+  useEffect(() => {
     return () => {
       if (characterImageUrl && characterImageUrl.startsWith('blob:')) {
         URL.revokeObjectURL(characterImageUrl)
       }
     }
-  }, [jobData.characterReferenceImageId])
+  }, [characterImageUrl])
 
   // Initialize placeholder cards and start scene generation
   useEffect(() => {
@@ -283,6 +288,7 @@ export default function QuickGenPage() {
 
     // Start scene generation
     generateScenes()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobData])
 
   // Start video generation when all scenes are ready
@@ -296,6 +302,7 @@ export default function QuickGenPage() {
       hasStartedVideoGenRef.current = true
       generateVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates])
 
   // Start video stitching when all videos complete
@@ -317,6 +324,7 @@ export default function QuickGenPage() {
       hasStartedStitchingRef.current = true
       stitchVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates, stitchingStatus])
 
   // Auto-scroll to stitched video when completed
@@ -341,9 +349,9 @@ export default function QuickGenPage() {
         setIsInputDataExpanded(false)
       }, 500)
     }
-  }, [sceneVideoStates])
+  }, [sceneVideoStates, isInputDataExpanded])
 
-  const generateScenes = async () => {
+  const generateScenes = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/mv/create_scenes`, {
         method: 'POST',
@@ -397,7 +405,7 @@ export default function QuickGenPage() {
         }))
       )
     }
-  }
+  }, [jobData.videoDescription, jobData.characterDescription, configFlavor])
 
   const startTeletypeAnimations = (scenes: Scene[]) => {
     // Calculate total characters across all scenes
@@ -441,24 +449,7 @@ export default function QuickGenPage() {
     }))
   }
 
-  const generateVideos = async () => {
-    // Set all videos to loading
-    setSceneVideoStates(prev =>
-      prev.map(s => ({
-        ...s,
-        video: { ...s.video, status: 'loading' },
-      }))
-    )
-
-    // Generate videos in parallel
-    const videoPromises = sceneVideoStates.map((state) =>
-      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
-    )
-
-    await Promise.allSettled(videoPromises)
-  }
-
-  const generateSingleVideo = async (
+  const generateSingleVideo = useCallback(async (
     prompt: string,
     negativePrompt: string,
     sceneIndex: number
@@ -533,7 +524,24 @@ export default function QuickGenPage() {
         )
       )
     }
-  }
+  }, [jobData.characterReferenceImageId, configFlavor])
+
+  const generateVideos = useCallback(async () => {
+    // Set all videos to loading
+    setSceneVideoStates(prev =>
+      prev.map(s => ({
+        ...s,
+        video: { ...s.video, status: 'loading' },
+      }))
+    )
+
+    // Generate videos in parallel
+    const videoPromises = sceneVideoStates.map((state) =>
+      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
+    )
+
+    await Promise.allSettled(videoPromises)
+  }, [sceneVideoStates, generateSingleVideo])
 
   const regenerateScene = async (sceneIndex: number) => {
     // Set scene to loading
@@ -830,7 +838,7 @@ export default function QuickGenPage() {
     )
   }
 
-  const stitchVideos = async () => {
+  const stitchVideos = useCallback(async () => {
     const successfulVideoIds = sceneVideoStates
       .filter(s => s.video.status === 'completed' && s.video.videoId)
       .sort((a, b) => a.sceneIndex - b.sceneIndex)
@@ -892,7 +900,7 @@ export default function QuickGenPage() {
       setStitchingStatus('error')
       console.error('Video stitching error:', err)
     }
-  }
+  }, [sceneVideoStates, jobData.audioId])
 
   const retryStitching = () => {
     hasStartedStitchingRef.current = false
