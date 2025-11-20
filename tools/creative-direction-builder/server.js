@@ -3,12 +3,17 @@ const fs = require('fs').promises;
 const path = require('path');
 const yaml = require('js-yaml');
 
-const PORT = 3000;
-const OUTPUT_DIR = path.join(__dirname, '../../backend/mv/director/configs');
+const PORT = 3002;
+const OUTPUT_DIR = path.resolve(__dirname, '../../backend/mv/director/configs');
+const MAX_BODY_SIZE = 1 * 1024 * 1024; // 1MB limit
+const ALLOWED_ORIGINS = ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://localhost:3000', 'http://127.0.0.1:3000'];
 
 const server = http.createServer(async (req, res) => {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS headers - restrict to localhost origins
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -20,8 +25,14 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && req.url === '/save') {
     let body = '';
+    let bodySize = 0;
 
     req.on('data', chunk => {
+      bodySize += chunk.length;
+      if (bodySize > MAX_BODY_SIZE) {
+        req.connection.destroy();
+        return;
+      }
       body += chunk.toString();
     });
 
@@ -36,6 +47,9 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
+        // Sanitize template name to prevent path traversal
+        const safeName = path.basename(templateName);
+
         // Generate content
         const ext = format === 'json' ? 'json' : 'yaml';
         const content = format === 'json'
@@ -45,8 +59,8 @@ const server = http.createServer(async (req, res) => {
         // Ensure output directory exists
         await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
-        // Save file
-        const filename = `${templateName}.${ext}`;
+        // Save file (using sanitized name to prevent path traversal)
+        const filename = `${safeName}.${ext}`;
         const filepath = path.join(OUTPUT_DIR, filename);
         await fs.writeFile(filepath, content, 'utf-8');
 
