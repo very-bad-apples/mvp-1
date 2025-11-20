@@ -8,12 +8,15 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:server": "node server.js",
     "start:http": "npx http-server -p 8080 --cors",
-    "start": "echo \"Starting both servers...\" && echo \"Save server: http://localhost:3002\" && echo \"HTTP server: http://localhost:8080\" && echo \"Run 'pnpm start:server' in one terminal and 'pnpm start:http' in another\""
+    "start": "concurrently -n \"server,http\" -c \"blue,green\" \"pnpm start:server\" \"pnpm start:http\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

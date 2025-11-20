@@ -14,7 +14,23 @@ pnpm install
 
 ### Quick Start
 
-Start both servers (in separate terminals):
+Start both servers with a single command:
+
+```bash
+pnpm start
+```
+
+This starts:
+- Save server on http://localhost:3002
+- HTTP server on http://localhost:8080
+
+Then open `http://localhost:8080` in your browser.
+
+**Note:** Press `Ctrl+C` to stop both servers.
+
+### Start Servers Separately
+
+If you prefer to run servers in separate terminals:
 
 **Terminal 1 - Save Server:**
 ```bash
@@ -27,8 +43,6 @@ pnpm start:server
 pnpm start:http
 # Server runs on http://localhost:8080
 ```
-
-Then open `http://localhost:8080` in your browser.
 
 ### Manual Start
 
