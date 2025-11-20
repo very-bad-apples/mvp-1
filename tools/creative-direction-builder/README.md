@@ -12,22 +12,43 @@ pnpm install
 
 ## Usage
 
+### Quick Start
+
+Start both servers (in separate terminals):
+
+**Terminal 1 - Save Server:**
+```bash
+pnpm start:server
+# Server runs on http://localhost:3002
+```
+
+**Terminal 2 - HTTP Server:**
+```bash
+pnpm start:http
+# Server runs on http://localhost:8080
+```
+
+Then open `http://localhost:8080` in your browser.
+
+### Manual Start
+
+Alternatively, start servers manually:
+
 1. Start the save server:
 ```bash
 node server.js
+# Or: pnpm start:server
 ```
 
-2. Open `index.html` in your browser (or use a local server):
+2. Start the HTTP server (in another terminal):
 ```bash
-# Option 1: Direct file
-open index.html
-
-# Option 2: Local server
-npx http-server -p 8080
-# Then visit http://localhost:8080
+npx http-server -p 8080 --cors
+# Or: pnpm start:http
 ```
 
-3. Fill in parameters, preview YAML/JSON, and save
+3. Open `http://localhost:8080` in your browser
+
+4. Fill in parameters, preview YAML/JSON, and save
 
 ## Output
 
@@ -40,7 +61,7 @@ Format: `template-name.yaml` or `template-name.json`
 - `index.html` - Main UI
 - `app.js` - Application logic
 - `parameters.js` - Parameter definitions from AI_VIDEO_PROMPTING_GUIDE.md
-- `server.js` - Save endpoint (runs on port 3000)
+- `server.js` - Save endpoint (runs on port 3002)
 - `package.json` - Dependencies
 
 ## Testing Checklist
