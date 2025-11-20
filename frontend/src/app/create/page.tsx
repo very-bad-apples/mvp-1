@@ -17,7 +17,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
-import { createProject, getConfigFlavors, generateCharacterReference } from '@/lib/api/client'
+import { createProject, getConfigFlavors, getDirectorConfigs, generateCharacterReference } from '@/lib/api/client'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 type Mode = 'ad-creative' | 'music-video'
 
@@ -47,6 +50,11 @@ export default function CreatePage() {
   const [availableFlavors, setAvailableFlavors] = useState<string[]>(['default'])
   const [isFetchingFlavors, setIsFetchingFlavors] = useState(false)
 
+  // Director config state
+  const [directorConfig, setDirectorConfig] = useState<string>('')
+  const [availableDirectorConfigs, setAvailableDirectorConfigs] = useState<string[]>([])
+  const [isFetchingDirectorConfigs, setIsFetchingDirectorConfigs] = useState(false)
+
   // Fetch available config flavors on mount
   useEffect(() => {
     const fetchConfigFlavors = async () => {
@@ -65,6 +73,26 @@ export default function CreatePage() {
     }
 
     fetchConfigFlavors()
+  }, [])
+
+  // Fetch available director configs on mount
+  useEffect(() => {
+    const fetchDirectorConfigs = async () => {
+      setIsFetchingDirectorConfigs(true)
+      try {
+        const data = await getDirectorConfigs()
+        if (data.configs && Array.isArray(data.configs)) {
+          setAvailableDirectorConfigs(data.configs)
+        }
+      } catch (error) {
+        console.error('Failed to fetch director configs:', error)
+        // Keep empty array as fallback
+      } finally {
+        setIsFetchingDirectorConfigs(false)
+      }
+    }
+
+    fetchDirectorConfigs()
   }, [])
 
   // Cleanup blob URLs on unmount to prevent memory leaks
@@ -154,12 +182,49 @@ export default function CreatePage() {
         ? generatedImageIds[selectedImageIndex]
         : null
 
+      // Prepare files for upload
+      let audioFile: File | undefined = undefined
+
+      if (mode === 'music-video') {
+        if (audioSource === 'upload' && uploadedAudio) {
+          // Use uploaded audio file directly
+          audioFile = uploadedAudio
+        } else if (audioSource === 'youtube' && downloadedAudioId) {
+          // Fetch YouTube audio file from backend and convert to File
+          try {
+            const audioResponse = await fetch(`${API_URL}/api/audio/get/${downloadedAudioId}`, {
+              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+            })
+
+            if (!audioResponse.ok) {
+              throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`)
+            }
+
+            const audioBlob = await audioResponse.blob()
+            // Create a File from the blob with a proper filename
+            audioFile = new File([audioBlob], `${downloadedAudioId}.mp3`, { type: 'audio/mpeg' })
+          } catch (error) {
+            console.error('Error fetching YouTube audio:', error)
+            toast({
+              title: "Error",
+              description: "Failed to fetch audio file. Please try again.",
+              variant: "destructive",
+            })
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
+
       // Call the createProject API
       const response = await createProject({
         mode,
         prompt: prompt.trim(),
-        characterDescription: characterDescription.trim(),
+        characterDescription: characterDescription.trim() || 'No character description provided',
         characterReferenceImageId,
+        directorConfig: directorConfig || undefined,
+        images: mode === 'ad-creative' ? uploadedImages : undefined,
+        audio: audioFile,
       })
 
       toast({
@@ -196,6 +261,7 @@ export default function CreatePage() {
       audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
       audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
       configFlavor: configFlavor,
+      directorConfig: directorConfig || undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
@@ -230,32 +296,65 @@ export default function CreatePage() {
         num_images: 4, // Request 4 images for selection
       })
 
-      // Convert each base64 image to blob URL for better performance
+      // Fetch images using their IDs (backend no longer returns base64 for performance)
       const blobUrls: string[] = []
       const imageIds: string[] = []
 
       for (const image of data.images) {
-        const base64Image = image.base64
-        const byteCharacters = atob(base64Image)
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i)
-        }
-        const byteArray = new Uint8Array(byteNumbers)
-        const blob = new Blob([byteArray], { type: 'image/png' })
-        const blobUrl = URL.createObjectURL(blob)
-
-        blobUrls.push(blobUrl)
         imageIds.push(image.id)
+        
+        // If cloud_url is available, use it directly
+        if (image.cloud_url) {
+          blobUrls.push(image.cloud_url)
+        } else {
+          // Otherwise, fetch the image from the backend
+          try {
+            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
+              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+            })
+
+            if (!response.ok) {
+              throw new Error(`Failed to fetch image ${image.id}`)
+            }
+
+            const contentType = response.headers.get('content-type')
+            
+            if (contentType?.includes('application/json')) {
+              // Cloud storage mode - get presigned URL from JSON
+              const jsonData = await response.json()
+              blobUrls.push(jsonData.image_url || jsonData.video_url)
+            } else {
+              // Local storage mode - create object URL from blob
+              const blob = await response.blob()
+              const objectUrl = URL.createObjectURL(blob)
+              blobUrls.push(objectUrl)
+            }
+          } catch (fetchError) {
+            console.error(`Failed to fetch image ${image.id}:`, fetchError)
+            // Continue with other images, but this one will be missing
+            blobUrls.push('') // Placeholder to maintain array index alignment
+          }
+        }
       }
 
-      setGeneratedImages(blobUrls)
-      setGeneratedImageIds(imageIds)
+      // Filter out any failed image fetches
+      const validPairs = imageIds.map((id, index) => ({ id, url: blobUrls[index] }))
+        .filter(pair => pair.url)
+      
+      const validIds = validPairs.map(pair => pair.id)
+      const validUrls = validPairs.map(pair => pair.url)
+
+      if (validIds.length === 0) {
+        throw new Error('Failed to fetch any character reference images')
+      }
+
+      setGeneratedImages(validUrls)
+      setGeneratedImageIds(validIds)
       setGenerationAttempts(prev => prev + 1)
 
       toast({
         title: "Character Images Generated",
-        description: `${blobUrls.length} character references ready. Click to select one.`,
+        description: `${validIds.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)
@@ -384,6 +483,49 @@ export default function CreatePage() {
                       </Select>
                       <p className="text-xs text-gray-400">
                         Choose the configuration profile for video generation
+                      </p>
+                    </div>
+
+                    {/* Director Config Selector */}
+                    <div className="space-y-2">
+                      <Label htmlFor="director-config" className="text-sm font-medium text-white">
+                        Director Config (Optional)
+                      </Label>
+                      <Select
+                        value={directorConfig || undefined}
+                        onValueChange={(value) => setDirectorConfig(value || '')}
+                        disabled={isFetchingDirectorConfigs}
+                      >
+                        <SelectTrigger
+                          id="director-config"
+                          className="w-full bg-gray-800 border-gray-600 text-white"
+                        >
+                          <SelectValue placeholder={isFetchingDirectorConfigs ? "Loading..." : "None (optional)"} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          {availableDirectorConfigs.length > 0 ? (
+                            availableDirectorConfigs.map((config) => (
+                              <SelectItem
+                                key={config}
+                                value={config}
+                                className="text-white hover:bg-gray-700"
+                              >
+                                {config}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem
+                              value="no-configs"
+                              disabled
+                              className="text-gray-500"
+                            >
+                              No configs available
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400">
+                        Choose a creative direction template (e.g., Wes-Anderson, David-Lynch)
                       </p>
                     </div>
                   </div>

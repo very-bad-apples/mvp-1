@@ -96,6 +96,7 @@ class MVProjectItem(BaseDynamoModel):
     productImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     audioBackingTrackS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     finalOutputS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    directorConfig = UnicodeAttribute(null=True)  # Director config name (e.g., "Wes-Anderson")
     sceneCount = NumberAttribute(null=True, default=0)
     completedScenes = NumberAttribute(null=True, default=0)
     failedScenes = NumberAttribute(null=True, default=0)
@@ -154,6 +155,7 @@ class MVProjectItem(BaseDynamoModel):
                 "productImageS3Key": self.productImageS3Key,
                 "audioBackingTrackS3Key": self.audioBackingTrackS3Key,
                 "finalOutputS3Key": self.finalOutputS3Key,
+                "directorConfig": self.directorConfig,
                 "sceneCount": self.sceneCount,
                 "completedScenes": self.completedScenes,
                 "failedScenes": self.failedScenes,
@@ -186,6 +188,7 @@ def create_project_metadata(
     character_image_s3_key: Optional[str] = None,
     product_image_s3_key: Optional[str] = None,
     audio_backing_track_s3_key: Optional[str] = None,
+    director_config: Optional[str] = None,
 ) -> MVProjectItem:
     """
     Create a new project metadata item.
@@ -223,6 +226,7 @@ def create_project_metadata(
     item.characterImageS3Key = validate_s3_key(character_image_s3_key, "character_image_s3_key")
     item.productImageS3Key = validate_s3_key(product_image_s3_key, "product_image_s3_key")
     item.audioBackingTrackS3Key = validate_s3_key(audio_backing_track_s3_key, "audio_backing_track_s3_key")
+    item.directorConfig = director_config
     item.sceneCount = 0
     item.completedScenes = 0
     item.failedScenes = 0

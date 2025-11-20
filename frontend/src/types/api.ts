@@ -55,7 +55,7 @@ export interface GenerateCharacterReferenceRequest {
 export interface CharacterReferenceImage {
   id: string
   path: string
-  base64: string
+  cloud_url?: string | null
 }
 
 export interface GenerateCharacterReferenceResponse {

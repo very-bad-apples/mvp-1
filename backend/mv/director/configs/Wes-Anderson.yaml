@@ -1,0 +1,52 @@
+# Wes Anderson Director Configuration
+# Signature Style: Symmetrical compositions, pastel color palettes, planimetric framing, whimsical precision
+
+camera:
+  shotType: medium_shot
+  movement: dolly  # Precise tracking shots and smooth dollies are signature
+  lens: standard  # 50mm for natural, centered perspective
+  angle: eye_level  # Perpendicular to scene elements for planimetric composition
+
+lighting:
+  type: soft
+  direction: side  # Often one side of face for contrast while maintaining softness
+
+style:
+  visualStyle: cinematic
+  mood: peaceful  # Whimsical, nostalgic, measured tone
+  colorGrading: warm_tones  # Signature dusty pastels and warm vintage hues
+
+motion:
+  intensity: 0.3  # Low motion for controlled, deliberate movements
+  guidanceScale: 12  # High adherence to precise framing and composition
+  cfgScale: 9  # Strong guidance for symmetrical aesthetics
+
+audio:
+  music:
+    style: orchestral  # Often uses classical or vintage-inspired soundtracks
+    mood: uplifting  # Nostalgic and whimsical
+    intensity: moderate
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - distorted
+    - watermarks
+    - asymmetric composition
+    - chaotic framing
+    - handheld shake
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: hard_cut  # Precise, compass-point editing with whip pans at 90-degree increments
+
+# Additional Anderson Characteristics:
+# - Perfect symmetry (dead-center framing)
+# - Planimetric composition (2D appearance)
+# - Horizontal/vertical character movement
+# - Long takes with choreographed precision
+# - Meticulous production design with curated color palettes
+# - Dusty pastel color schemes that feel timeless
+# - Collaboration with DP Robert Yeoman (stark flatness)
+# - Whip pans at 90-degree angles

@@ -57,6 +57,7 @@ class ProjectCreateRequest(BaseModel):
     characterDescription: str = Field(..., min_length=1, description="Character description")
     characterReferenceImageId: Optional[str] = Field(None, description="UUID of selected character image")
     productDescription: Optional[str] = Field(None, description="Product description (for ad-creative mode)")
+    directorConfig: Optional[str] = Field(None, description="Director config name (e.g., 'Wes-Anderson')")
 
     @field_validator('mode')
     @classmethod
@@ -110,6 +111,7 @@ class ProjectResponse(BaseModel):
     productImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for product image (expires after configured time)")
     audioBackingTrackUrl: Optional[str] = Field(None, description="Presigned S3 URL for audio backing track (expires after configured time)")
     finalOutputUrl: Optional[str] = Field(None, description="Presigned S3 URL for final composed video (expires after configured time)")
+    directorConfig: Optional[str] = Field(None, description="Director config name used for this project")
     sceneCount: int
     completedScenes: int
     failedScenes: int
