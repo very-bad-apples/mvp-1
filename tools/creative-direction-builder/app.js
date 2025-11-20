@@ -5,6 +5,7 @@ window.addEventListener('DOMContentLoaded', () => {
   populateDropdowns();
   attachEventListeners();
   updatePreview();
+  updatePreviewTitle();
 });
 
 function populateDropdowns() {
@@ -59,6 +60,21 @@ function attachEventListeners() {
     input.addEventListener('change', updatePreview);
     input.addEventListener('input', updatePreview);
   });
+  
+  // Update preview title when template name changes
+  const templateNameInput = document.getElementById('templateName');
+  templateNameInput.addEventListener('input', updatePreviewTitle);
+  templateNameInput.addEventListener('change', updatePreviewTitle);
+}
+
+function updatePreviewTitle() {
+  const templateName = document.getElementById('templateName').value.trim();
+  const previewTitle = document.getElementById('previewTitle');
+  if (templateName) {
+    previewTitle.textContent = `Preview - ${templateName}`;
+  } else {
+    previewTitle.textContent = 'Preview';
+  }
 }
 
 function getTemplateData() {
