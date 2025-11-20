@@ -464,18 +464,31 @@ export default function QuickGenPage() {
     sceneIndex: number
   ) => {
     try {
+      // Build request body, conditionally including character_reference_id only if it's a non-empty string
+      const requestBody: {
+        prompt: string
+        negative_prompt: string
+        character_reference_id?: string
+        config_flavor: string
+      } = {
+        prompt,
+        negative_prompt: negativePrompt,
+        config_flavor: configFlavor,
+      }
+
+      // Only include character_reference_id if it's a valid non-empty string
+      if (jobData.characterReferenceImageId && jobData.characterReferenceImageId.trim()) {
+        requestBody.character_reference_id = jobData.characterReferenceImageId.trim()
+        console.log(`[Scene ${sceneIndex + 1}] Using character reference image: ${requestBody.character_reference_id}`)
+      }
+
       const response = await fetch(`${API_URL}/api/mv/generate_video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': API_KEY,
         },
-        body: JSON.stringify({
-          prompt,
-          negative_prompt: negativePrompt,
-          character_reference_id: jobData.characterReferenceImageId,
-          config_flavor: configFlavor,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
