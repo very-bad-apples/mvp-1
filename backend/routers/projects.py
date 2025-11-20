@@ -81,6 +81,7 @@ async def create_project(
     characterDescription: str = Form(...),
     characterReferenceImageId: Optional[str] = Form(None),
     productDescription: Optional[str] = Form(None),
+    configFlavor: Optional[str] = Form(None),
     images: Optional[List[UploadFile]] = File(None),
     audio: Optional[UploadFile] = File(None)
 ):
@@ -93,6 +94,7 @@ async def create_project(
         characterDescription: Character description
         characterReferenceImageId: Optional pre-generated character image UUID
         productDescription: Optional product description
+        configFlavor: Optional config flavor for scene generation
         images: Optional list of product images
         audio: Optional audio file
 
@@ -406,6 +408,7 @@ async def create_project(
             concept_prompt=prompt,
             character_description=characterDescription,
             product_description=productDescription,
+            config_flavor=configFlavor,
             character_image_s3_key=character_image_s3_key,
             product_image_s3_key=product_image_s3_key,
             audio_backing_track_s3_key=audio_s3_key

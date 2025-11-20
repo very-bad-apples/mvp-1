@@ -146,11 +146,18 @@ export default function CreatePage() {
         formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
       }
 
-      // Call the proxy route (API key handled server-side)
-      const response = await fetch(`${API_BASE}/projects`, {
-        method: 'POST',
-        body: formData,
+      // Call the createProject API
+      const response = await createProject({
+        mode,
+        prompt: prompt.trim(),
+        characterDescription: characterDescription.trim() || 'No character description provided',
+        characterReferenceImageId,
+        directorConfig: directorConfig || undefined,
+        configFlavor,
+        images: mode === 'ad-creative' ? uploadedImages : undefined,
+        audio: audioFile,
       })
+      
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
@@ -166,8 +173,8 @@ export default function CreatePage() {
         description: `Project ID: ${projectId}`,
       })
 
-      // Navigate to the project result page
-      router.push(`/result/${projectId}`)
+      // Navigate to the edit page
+      router.push(`/edit/${response.projectId}`)
     } catch (error) {
       console.error('Error submitting form:', error)
       toast({

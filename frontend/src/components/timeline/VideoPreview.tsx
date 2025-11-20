@@ -3,9 +3,12 @@
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Play, Pause, SkipBack, SkipForward, Volume2, Maximize } from 'lucide-react'
+import { Project } from '@/types/project'
+import { Badge } from '@/components/ui/badge'
 
 interface VideoPreviewProps {
   jobId: string
+  project: Project
   currentTime: number
   duration: number
   isPlaying: boolean
@@ -15,6 +18,7 @@ interface VideoPreviewProps {
 
 export function VideoPreview({
   jobId,
+  project,
   currentTime,
   duration,
   isPlaying,
@@ -27,19 +31,47 @@ export function VideoPreview({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500/10 text-green-400 border-green-500/20'
+      case 'processing':
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      case 'failed':
+        return 'bg-red-500/10 text-red-400 border-red-500/20'
+      default:
+        return 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+    }
+  }
+
   return (
     <div className="flex w-full max-w-5xl flex-col gap-4">
       {/* Video Player */}
       <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-900">
         {/* Placeholder video preview - will be replaced with actual canvas */}
         <div className="flex h-full items-center justify-center">
-          <div className="text-center">
+          <div className="text-center space-y-4">
             <div className="mb-2 text-gray-400">Video Preview</div>
             <div className="text-4xl font-mono text-blue-400">
               {formatTime(currentTime)}
             </div>
-            <div className="mt-4 text-sm text-gray-500">
-              Job ID: {jobId}
+            <div className="space-y-2">
+              <div className="text-sm text-gray-400 max-w-md mx-auto">
+                {project.conceptPrompt}
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Badge variant="outline" className={getStatusColor(project.status)}>
+                  {project.status}
+                </Badge>
+                <Badge variant="outline" className="bg-gray-500/10 text-gray-400 border-gray-500/20">
+                  {project.scenes.length} scenes
+                </Badge>
+                {project.progress !== undefined && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    {project.progress}% complete
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
         </div>

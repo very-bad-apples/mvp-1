@@ -1,17 +1,132 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Video, ChevronLeft } from 'lucide-react'
+import { Video, ChevronLeft, Loader2 } from 'lucide-react'
 import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { Timeline } from '@/components/timeline/Timeline'
+import { useProjectPolling } from '@/hooks/useProjectPolling'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { generateScenes } from '@/lib/api/client'
+import { useToast } from '@/hooks/useToast'
 
 export default function EditPage({ params }: { params: { id: string } }) {
   const [currentTime, setCurrentTime] = useState(0)
-  const [duration] = useState(180) // Total duration: 5 segments × 36 seconds = 180 seconds
   const [isPlaying, setIsPlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false)
+  const sceneGenerationTriggered = useRef(false)
+  const { toast } = useToast()
+
+  // Fetch project data using the API client hook
+  const { project, loading, error, refetch, isPolling } = useProjectPolling(params.id)
+
+  // Calculate total duration from scenes
+  const duration = useMemo(() => {
+    if (!project?.scenes || project.scenes.length === 0) {
+      return 180 // Default 3 minutes if no scenes yet
+    }
+    // Sum up all scene durations
+    return project.scenes.reduce((total, scene) => total + (scene.duration || 0), 0)
+  }, [project?.scenes])
+
+  // Auto-trigger scene generation for new projects
+  useEffect(() => {
+    const triggerSceneGeneration = async () => {
+      // Only trigger if:
+      // 1. Project is loaded
+      // 2. Project has no scenes
+      // 3. We haven't already triggered generation
+      // 4. Not currently loading or generating
+      if (
+        project &&
+        project.scenes.length === 0 &&
+        !sceneGenerationTriggered.current &&
+        !loading &&
+        !isGeneratingScenes
+      ) {
+        sceneGenerationTriggered.current = true
+        setIsGeneratingScenes(true)
+
+        toast({
+          title: "Generating Scenes",
+          description: "Creating scene descriptions for your project...",
+        })
+
+        try {
+          await generateScenes({
+            idea: project.conceptPrompt,
+            character_description: project.characterDescription,
+            config_flavor: project.configFlavor || 'default',
+            project_id: params.id,
+          })
+
+          toast({
+            title: "Scenes Generated!",
+            description: "Scene descriptions have been created. Refreshing project...",
+          })
+
+          // Refresh project data to get the new scenes
+          await refetch()
+        } catch (err) {
+          console.error('Scene generation error:', err)
+          toast({
+            title: "Scene Generation Failed",
+            description: err instanceof Error ? err.message : "Failed to generate scenes",
+            variant: "destructive",
+          })
+          sceneGenerationTriggered.current = false // Allow retry
+        } finally {
+          setIsGeneratingScenes(false)
+        }
+      }
+    }
+
+    triggerSceneGeneration()
+  }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
+
+  // Loading state
+  if (loading && !project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+          <p className="text-white text-lg">Loading project...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error && !project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertDescription className="flex flex-col gap-4">
+            <p>{error}</p>
+            <Button onClick={refetch} variant="outline">
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  // Project not found
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-white text-lg mb-4">Project not found</p>
+          <Link href="/create">
+            <Button>Create New Project</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -46,6 +161,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
         <div className="h-[60%] flex items-center justify-center border-b border-gray-700 bg-gray-800/50 p-6">
           <VideoPreview
             jobId={params.id}
+            project={project}
             currentTime={currentTime}
             duration={duration}
             isPlaying={isPlaying}
@@ -58,6 +174,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
         <div className="h-[40%] overflow-hidden bg-gray-900">
           <Timeline
             jobId={params.id}
+            project={project}
             currentTime={currentTime}
             duration={duration}
             zoom={zoom}

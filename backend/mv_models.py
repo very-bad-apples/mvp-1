@@ -93,6 +93,7 @@ class MVProjectItem(BaseDynamoModel):
     characterDescription = UnicodeAttribute(null=True)
     characterImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     productDescription = UnicodeAttribute(null=True)
+    configFlavor = UnicodeAttribute(null=True)  # Config flavor for scene generation
     productImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     audioBackingTrackS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     finalOutputS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
@@ -151,6 +152,7 @@ class MVProjectItem(BaseDynamoModel):
                 "characterDescription": self.characterDescription,
                 "characterImageS3Key": self.characterImageS3Key,
                 "productDescription": self.productDescription,
+                "configFlavor": self.configFlavor,
                 "productImageS3Key": self.productImageS3Key,
                 "audioBackingTrackS3Key": self.audioBackingTrackS3Key,
                 "finalOutputS3Key": self.finalOutputS3Key,
@@ -183,6 +185,7 @@ def create_project_metadata(
     concept_prompt: str,
     character_description: str,
     product_description: Optional[str] = None,
+    config_flavor: Optional[str] = None,
     character_image_s3_key: Optional[str] = None,
     product_image_s3_key: Optional[str] = None,
     audio_backing_track_s3_key: Optional[str] = None,
@@ -219,6 +222,7 @@ def create_project_metadata(
     item.conceptPrompt = concept_prompt
     item.characterDescription = character_description
     item.productDescription = product_description
+    item.configFlavor = config_flavor or "default"
     # Validate S3 keys to ensure they're keys, not URLs
     item.characterImageS3Key = validate_s3_key(character_image_s3_key, "character_image_s3_key")
     item.productImageS3Key = validate_s3_key(product_image_s3_key, "product_image_s3_key")
