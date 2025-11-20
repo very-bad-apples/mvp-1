@@ -463,3 +463,373 @@ async def get_config_flavors():
 - [ ] Error handling for missing/invalid flavors
 - [ ] UI matches existing dark theme styling
 - [ ] All manual tests pass
+
+---
+
+# v3: Lipsync Integration with Quick-Gen Page
+
+## Overview
+Integrate lipsync capability with the quick-gen-page, allowing users to regenerate individual video clips with lipsync applied using the audio from the original YouTube video.
+
+## Task List
+
+### Backend Tasks
+
+#### Task 1: Update Lipsync API Endpoint
+**File**: `backend/routers/mv.py`
+
+- [ ] 1.1: Make `video_url` and `audio_url` optional parameters in lipsync endpoint
+- [ ] 1.2: Add optional `video_id` parameter to lipsync request schema
+- [ ] 1.3: Add optional `audio_id` parameter to lipsync request schema
+- [ ] 1.4: Add optional `start_time` parameter (float) to lipsync request schema
+- [ ] 1.5: Add optional `end_time` parameter (float) to lipsync request schema
+- [ ] 1.6: Implement URL lookup logic for `video_id` (similar to `/api/mv/get_video/{id}`)
+- [ ] 1.7: Implement URL lookup logic for `audio_id` (similar to `/api/audio/get/{id}`)
+- [ ] 1.8: Implement audio clipping logic using start_time and end_time before Replicate API call
+- [ ] 1.9: Update lipsync endpoint to use looked-up URLs when IDs are provided
+- [ ] 1.10: Ensure backwards compatibility (direct URLs still work)
+- [ ] 1.11: Add error handling for invalid IDs
+- [ ] 1.12: Add error handling for audio clipping failures
+
+**Notes**:
+- The endpoint should prioritize IDs over URLs if both are provided
+- Use existing patterns from `get_video` and `get_audio` endpoints for URL lookup
+- Audio comes from the clipped version of YouTube audio attached to this generation
+
+#### Task 2: Verify Video/Audio Retrieval Endpoints
+**Files**: `backend/routers/mv.py`, `backend/routers/audio.py`
+
+- [ ] 2.1: Verify `/api/mv/get_video/{id}` returns correct URL format
+- [ ] 2.2: Verify `/api/audio/get/{id}` returns correct URL format
+- [ ] 2.3: Document the ID-to-URL lookup pattern for consistency
+
+### Frontend Tasks
+
+#### Task 3: Add Lipsync UI to Video Cards
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 3.1: Add `lipsyncEnabled` state array (one boolean per video index)
+- [ ] 3.2: Add checkbox component next to each video's "Regenerate" button (NOT scene regenerate)
+- [ ] 3.3: Update button text to "Regenerate with lipsync" when checkbox is checked
+- [ ] 3.4: Keep regular "Regenerate" text when checkbox is unchecked
+- [ ] 3.5: Style checkbox to be visually aligned with regenerate button
+- [ ] 3.6: Ensure checkbox only appears for video regenerate, NOT scene regenerate
+
+**Notes**:
+- This applies ONLY to the video regenerate buttons in the video section of each card
+- Each video card needs its own checkbox state
+- The checkbox should be clearly associated with the regenerate button
+
+#### Task 4: Implement Lipsync Request Flow
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 4.1: Create `handleLipsyncRegenerate` function
+- [ ] 4.2: Determine which video_id to use (from current scene's video_ids array)
+- [ ] 4.3: Determine which audio_id to use (from jobData.audioId)
+- [ ] 4.4: Calculate start_time based on scene position (scene_index * 8 seconds)
+- [ ] 4.5: Calculate end_time based on scene position (start_time + 8 seconds)
+- [ ] 4.6: Call `/api/mv/lipsync` endpoint with video_id, audio_id, start_time, and end_time
+- [ ] 4.7: Handle lipsync API response (get new video ID)
+- [ ] 4.8: Replace the current video clip with lipsynced version in UI
+- [ ] 4.9: Update the scene's video_ids array with new lipsynced video ID
+- [ ] 4.10: Update video URL/source in UI to display lipsynced video
+- [ ] 4.11: Auto-trigger stitch-video with all current video IDs after lipsync completes
+- [ ] 4.12: Update final stitched video in UI
+- [ ] 4.13: Add error handling and user feedback for failed lipsync
+- [ ] 4.14: Add error handling for failed auto-restitch
+
+**Notes**:
+- Audio comes from jobData.audioId (the clipped YouTube audio)
+- The lipsynced video replaces the existing video in both UI and state
+- video_ids array must be updated to track the latest version
+- Each clip is assumed to be 8 seconds long starting at time 0
+- start_time = scene_index * 8, end_time = start_time + 8
+- After lipsync completes, automatically trigger re-stitch with all current video IDs
+
+#### Task 5: Add Lipsync Processing Status
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 5.1: Add `lipsyncProcessing` state array (one boolean per video index)
+- [ ] 5.2: Show processing spinner/status while lipsync is in progress
+- [ ] 5.3: Disable regenerate button and checkbox while lipsync is processing
+- [ ] 5.4: Show completion message when lipsync finishes successfully
+- [ ] 5.5: Show error message if lipsync fails
+- [ ] 5.6: Clear processing status after completion/error
+- [ ] 5.7: Update status text to indicate "Lipsyncing..." or similar
+
+**Notes**:
+- Similar pattern to existing video generation processing status
+- Should provide clear feedback during the async lipsync operation
+- Prevent multiple concurrent lipsync operations on same video
+
+#### Task 6: Add Re-stitch Button to Final Video Section
+**File**: `frontend/src/app/quick-gen-page/page.tsx`
+
+- [ ] 6.1: Add "Re-stitch with current clips" button to final video card
+- [ ] 6.2: Position button appropriately in the final video section
+- [ ] 6.3: Create `handleRestitch` function
+- [ ] 6.4: Collect current/latest video IDs from all scenes (use latest from video_ids arrays)
+- [ ] 6.5: Call `/api/mv/stitch_video` endpoint with collected video IDs
+- [ ] 6.6: Add processing status for re-stitch operation
+- [ ] 6.7: Update final video display with newly stitched video
+- [ ] 6.8: Update final video ID in state
+- [ ] 6.9: Add error handling for failed re-stitch
+
+**Notes**:
+- Use the latest version of each scene's video (including lipsynced versions)
+- This triggers a fresh stitch of all current clips
+- Should use the most recent video ID from each scene's video_ids array
+
+### Testing Tasks
+
+#### Task 7: Integration Testing
+
+- [ ] 7.1: Test lipsync endpoint with valid video_id and audio_id
+- [ ] 7.2: Test lipsync endpoint with invalid IDs (error handling)
+- [ ] 7.3: Test backwards compatibility with direct URLs (video_url/audio_url)
+- [ ] 7.4: Test video replacement in UI after successful lipsync
+- [ ] 7.5: Test video_ids array updates correctly with new lipsynced video ID
+- [ ] 7.6: Test re-stitch with mix of original and lipsynced videos
+- [ ] 7.7: Test processing status displays correctly during lipsync
+- [ ] 7.8: Test checkbox toggle behavior (enabled/disabled states)
+- [ ] 7.9: Test button text changes with checkbox state
+- [ ] 7.10: Test that checkbox only appears on video regenerate (not scene regenerate)
+
+#### Task 8: End-to-End Testing
+
+- [ ] 8.1: Create full video generation with YouTube audio
+- [ ] 8.2: Apply lipsync to one video clip
+- [ ] 8.3: Verify lipsynced video replaces original in UI
+- [ ] 8.4: Apply lipsync to multiple clips
+- [ ] 8.5: Use re-stitch button to create new final video
+- [ ] 8.6: Verify final video uses lipsynced versions where applied
+- [ ] 8.7: Test error scenarios (network failures, invalid data, missing audio)
+- [ ] 8.8: Test workflow without YouTube audio (ensure graceful handling)
+
+## Dependencies
+
+- Task 3 depends on Task 1 (backend API must support video_id/audio_id)
+- Task 4 depends on Task 3 (UI elements must exist)
+- Task 5 can be done in parallel with Task 4
+- Task 6 depends on Tasks 1-5 (re-stitch uses updated video IDs from lipsync operations)
+- Task 7 depends on Tasks 1-6 (all features implemented)
+- Task 8 depends on Task 7 (integration tests pass)
+
+## Technical Notes
+
+### API Endpoints Used
+- `POST /api/mv/lipsync` - Updated with video_id/audio_id/timing support
+  - Accepts either (video_url + audio_url) OR (video_id + audio_id)
+  - Accepts optional start_time and end_time for audio clipping
+  - Clips audio segment before passing to Replicate API
+  - Returns new lipsynced video ID
+- `GET /api/mv/get_video/{id}` - For video ID to URL lookup
+- `GET /api/audio/get/{id}` - For audio ID to URL lookup
+- `POST /api/mv/stitch_video` - For re-stitching with current clips
+  - Accepts array of video IDs
+  - Returns new stitched video ID
+  - Triggered automatically after lipsync OR manually via "Re-stitch" button
+
+### State Management
+- Track lipsync checkbox state per video: `lipsyncEnabled[sceneIndex]`
+- Track lipsync processing state per video: `lipsyncProcessing[sceneIndex]`
+- Update video_ids array when lipsync completes: `scenes[i].video_ids.push(newVideoId)`
+- Maintain latest video IDs for re-stitch operation (use last element of video_ids arrays)
+
+### Data Flow
+1. User checks lipsync checkbox for a video
+2. User clicks "Regenerate with lipsync" button
+3. Frontend extracts:
+   - `video_id`: Current video ID from scene.video_ids[scene.video_ids.length - 1]
+   - `audio_id`: From jobData.audioId (YouTube audio clip)
+   - `start_time`: scene_index * 8 (assuming 8 seconds per clip)
+   - `end_time`: (scene_index * 8) + 8
+4. Frontend calls `/api/mv/lipsync` with video_id, audio_id, start_time, end_time
+5. Backend looks up URLs, clips audio segment, and calls Replicate lipsync API
+6. Backend returns new lipsynced video ID
+7. Frontend updates scene.video_ids array and displays new video
+8. Frontend auto-triggers `/api/mv/stitch_video` with all current video IDs
+9. Frontend updates final stitched video display
+10. User can also manually click "Re-stitch with current clips" to re-stitch without regenerating
+
+### UI/UX Considerations
+- Clear visual indication of lipsync option (checkbox next to regenerate)
+- Processing feedback during async lipsync operations
+- Error messages for failed operations (network, API errors)
+- Button state management (disabled during processing)
+- Smooth replacement of video clips in UI
+- Re-stitch button clearly indicates it uses "current clips"
+- Only show lipsync checkbox on video regenerate buttons, NOT scene regenerate buttons
+
+### Edge Cases to Handle
+- Missing audio_id (no YouTube audio attached to generation)
+  - Hide lipsync checkbox or disable it with tooltip
+- Invalid video_id or audio_id
+  - Show error message, don't crash
+- Multiple lipsync operations on same video
+  - Keep history in video_ids array (array of all versions)
+- Re-stitch with incomplete scenes
+  - Only use scenes that have at least one video
+- Lipsync operation takes very long
+  - Show meaningful progress indicator
+  - Consider timeout handling
+
+## Success Criteria
+
+- [ ] Users can check a box next to video regenerate button to enable lipsync
+- [ ] Button text changes to "Regenerate with lipsync" when checked
+- [ ] Lipsync operation uses video_id and audio_id from current generation
+- [ ] Processing status shows clearly during lipsync operation
+- [ ] Video clip is replaced with lipsynced version on success
+- [ ] video_ids array tracks all versions (original + lipsynced)
+- [ ] Re-stitch button creates new final video using latest clips
+- [ ] Re-stitch correctly uses lipsynced videos where applied
+- [ ] All error cases handled gracefully with user feedback
+- [ ] Feature works end-to-end in production environment
+- [ ] Lipsync checkbox only appears on video regenerate, not scene regenerate
+- [ ] UI clearly distinguishes between original and lipsynced videos (optional enhancement)
+
+---
+
+# v3.1: S3 Upload for Lipsynced Videos
+
+## Overview
+Add S3 cloud storage upload for lipsynced videos to match the pattern used in video_generator.py, ensuring videos are accessible via presigned URLs with graceful fallback to local storage.
+
+## Task List
+
+### Backend Implementation
+
+#### Task 1: Add Required Imports
+**File**: `backend/mv/lipsync.py`
+
+- [ ] 1.1: Add `import asyncio` at top of file
+- [ ] 1.2: Add `import concurrent.futures` at top of file
+- [ ] 1.3: Verify `get_storage_backend` import already exists (should be present)
+
+**Notes**:
+- These imports are needed for async S3 upload from sync context
+- `get_storage_backend` was already added in v3 implementation
+
+#### Task 2: Implement S3 Upload Logic
+**File**: `backend/mv/lipsync.py` (in `generate_lipsync()` function, after video is saved locally)
+
+- [ ] 2.1: Initialize `cloud_urls = {}` before upload attempt
+- [ ] 2.2: Add conditional check: `if settings.STORAGE_BUCKET:`
+- [ ] 2.3: Define nested async function `upload_job_to_cloud()`:
+  - Initialize storage backend
+  - Upload video to `f"mv/jobs/{output_video_id}/video.mp4"`
+  - Return dict with "video" key containing presigned URL
+- [ ] 2.4: Implement ThreadPoolExecutor pattern:
+  - Define `run_upload()` function that calls `asyncio.run(upload_job_to_cloud())`
+  - Create ThreadPoolExecutor context
+  - Submit upload job with 300-second timeout
+  - Capture result in `cloud_urls`
+- [ ] 2.5: Add try-except wrapper around upload block
+- [ ] 2.6: Log success with `logger.info()`
+- [ ] 2.7: Catch exceptions and log with `logger.warning()` (non-fatal)
+- [ ] 2.8: Add comment: `# Continue without cloud upload - local files are still available`
+
+**Notes**:
+- Follow exact pattern from video_generator.py lines 394-453
+- Upload failures should not crash lipsync operation
+- Local files remain available as fallback
+
+#### Task 3: Enhance Metadata and Return Values
+**File**: `backend/mv/lipsync.py` (in `generate_lipsync()` function, before return statement)
+
+- [ ] 3.1: Add `metadata["cloud_urls"] = cloud_urls` if upload succeeded
+- [ ] 3.2: Add `metadata["cloud_url"] = cloud_urls.get("video")` for backward compatibility
+- [ ] 3.3: Add `metadata["local_video_url"] = f"/api/mv/get_video/{output_video_id}"` always
+- [ ] 3.4: Update `video_url_path` conditional:
+  - Use `cloud_urls.get("video")` if cloud upload succeeded
+  - Otherwise use `f"/api/mv/get_video/{output_video_id}"`
+
+**Notes**:
+- Maintains backward compatibility with existing API consumers
+- Cloud URL is preferred but local URL is always available
+
+### Testing Tasks
+
+#### Task 4: Integration Testing
+
+- [ ] 4.1: Test lipsync with cloud storage configured (STORAGE_BUCKET set)
+- [ ] 4.2: Verify video uploads to S3 at correct path `mv/jobs/{id}/video.mp4`
+- [ ] 4.3: Verify presigned URL is returned in response
+- [ ] 4.4: Verify metadata includes all URL fields (cloud_urls, cloud_url, local_video_url)
+- [ ] 4.5: Test lipsync without cloud storage configured (STORAGE_BUCKET empty)
+- [ ] 4.6: Verify local file path is returned as fallback
+- [ ] 4.7: Test S3 upload failure scenario (invalid credentials)
+- [ ] 4.8: Verify operation continues successfully with local fallback
+- [ ] 4.9: Verify warning is logged on upload failure (not error)
+- [ ] 4.10: Verify `/api/mv/get_video/{id}` serves S3 URL for lipsynced videos
+
+## Dependencies
+
+- Task 2 depends on Task 1 (imports must be added first)
+- Task 3 depends on Task 2 (upload logic must exist)
+- Task 4 depends on Tasks 1-3 (all implementation complete)
+
+## Technical Notes
+
+### S3 Path Pattern
+```
+mv/jobs/{video_id}/video.mp4
+```
+Example: `mv/jobs/177adfe0-88fa-41d5-b18f-ba9a4455862f/video.mp4`
+
+### Upload Pattern (from video_generator.py)
+```python
+cloud_urls = {}
+try:
+    if settings.STORAGE_BUCKET:
+        from services.storage_backend import get_storage_backend
+
+        async def upload_job_to_cloud():
+            storage = get_storage_backend()
+            urls = {}
+            urls["video"] = await storage.upload_file(
+                str(video_path),
+                f"mv/jobs/{video_id}/video.mp4"
+            )
+            return urls
+
+        def run_upload():
+            return asyncio.run(upload_job_to_cloud())
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_upload)
+            cloud_urls = future.result(timeout=300)
+
+        logger.info(f"Uploaded lipsync job {video_id} to cloud storage")
+except Exception as e:
+    logger.warning(f"Failed to upload lipsync job {video_id} to cloud storage: {e}")
+    # Continue without cloud upload - local files are still available
+```
+
+### Metadata Enhancement
+```python
+# If upload succeeded:
+metadata["cloud_urls"] = {"video": "https://presigned-url..."}
+metadata["cloud_url"] = "https://presigned-url..."  # Backward compat
+metadata["local_video_url"] = "/api/mv/get_video/123..."  # Always present
+
+# Set return URL:
+video_url_path = cloud_urls.get("video") if cloud_urls else f"/api/mv/get_video/{output_video_id}"
+```
+
+### Error Handling Strategy
+- **Non-fatal failures**: Upload errors are logged as warnings
+- **Graceful degradation**: Operation continues with local files
+- **No retries**: Single upload attempt (as specified)
+- **No cleanup**: Local files kept even after successful upload
+
+## Success Criteria
+
+- [ ] Lipsynced videos upload to S3 path: `mv/jobs/{video_id}/video.mp4`
+- [ ] Metadata includes `cloud_urls`, `cloud_url`, and `local_video_url` fields
+- [ ] Upload failures gracefully handled with local fallback
+- [ ] Logging matches video_generator pattern (info on success, warning on failure)
+- [ ] No breaking changes to API response structure
+- [ ] `/api/mv/get_video/{id}` endpoint serves S3 URLs for lipsynced videos
+- [ ] Feature works in both cloud-enabled and local-only configurations
