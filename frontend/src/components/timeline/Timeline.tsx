@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { ZoomIn, ZoomOut, RefreshCw, Edit3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { TimelineItemSheet, TimelineItem } from './TimelineItemSheet'
+import { Project } from '@/types/project'
 
 interface TimelineProps {
   jobId: string
+  project: Project
   currentTime: number
   duration: number
   zoom: number
@@ -92,8 +94,21 @@ const generateMockSegments = (): VideoSegment[] => {
 
 const mockSegments: VideoSegment[] = generateMockSegments()
 
+// Color palette for scenes
+const sceneColors = [
+  'from-blue-500/20 to-blue-600/20',
+  'from-purple-500/20 to-purple-600/20',
+  'from-cyan-500/20 to-cyan-600/20',
+  'from-green-500/20 to-green-600/20',
+  'from-red-500/20 to-red-600/20',
+  'from-orange-500/20 to-orange-600/20',
+  'from-pink-500/20 to-pink-600/20',
+  'from-yellow-500/20 to-yellow-600/20',
+]
+
 export function Timeline({
   jobId,
+  project,
   currentTime,
   duration,
   zoom,
@@ -101,12 +116,36 @@ export function Timeline({
   onZoomChange,
 }: TimelineProps) {
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
-  const [segments, setSegments] = useState<VideoSegment[]>(mockSegments)
   const [isRegenerating, setIsRegenerating] = useState<string | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const { toast } = useToast()
+
+  // Convert project scenes to VideoSegments
+  const segments = useMemo(() => {
+    if (!project.scenes || project.scenes.length === 0) {
+      return mockSegments // Fallback to mock data if no scenes
+    }
+
+    let cumulativeTime = 0
+    return project.scenes
+      .sort((a, b) => a.sequence - b.sequence) // Ensure scenes are in order
+      .map((scene, index) => {
+        const segment: VideoSegment = {
+          id: `scene-${scene.sequence}`,
+          sceneNumber: scene.sequence,
+          startTime: cumulativeTime,
+          duration: scene.duration || 0,
+          url: scene.lipSyncedVideoClipUrl || scene.videoClipUrl || '',
+          thumbnail: scene.videoClipUrl || `https://placehold.co/120x80/666/fff?text=Scene+${scene.sequence}`,
+          color: sceneColors[index % sceneColors.length],
+          prompt: scene.prompt,
+        }
+        cumulativeTime += scene.duration || 0
+        return segment
+      })
+  }, [project.scenes])
 
   const pixelsPerSecond = 10 * zoom
   const timelineWidth = duration * pixelsPerSecond
@@ -125,26 +164,10 @@ export function Timeline({
   }
 
   const handleRegenerateSegment = async (segmentId: string) => {
-    setIsRegenerating(segmentId)
+    // TODO: Implement API call to regenerate scene
     toast({
-      title: "Regenerating Scene",
-      description: "Creating new version of this scene...",
-    })
-
-    // Simulate API call to regenerate scene
-    await new Promise(resolve => setTimeout(resolve, 3000))
-
-    // Update segment with new data (in production, this would come from API)
-    setSegments(prev => prev.map(seg =>
-      seg.id === segmentId
-        ? { ...seg, thumbnail: seg.thumbnail + '&v=' + Date.now() }
-        : seg
-    ))
-
-    setIsRegenerating(null)
-    toast({
-      title: "Scene Regenerated",
-      description: "New version has been created successfully!",
+      title: "Coming Soon",
+      description: "Scene regeneration will be available soon!",
     })
   }
 
@@ -160,23 +183,18 @@ export function Timeline({
   }
 
   const handleSaveSegment = (segmentId: string, updates: Partial<TimelineItem>) => {
-    setSegments(prev => prev.map(seg =>
-      seg.id === segmentId
-        ? { ...seg, ...updates }
-        : seg
-    ))
+    // TODO: Implement API call to update scene
     toast({
-      title: "Changes Saved",
-      description: "Scene has been updated successfully!",
+      title: "Coming Soon",
+      description: "Scene editing will be available soon!",
     })
   }
 
   const handleDeleteSegment = (segmentId: string) => {
-    setSegments(prev => prev.filter(seg => seg.id !== segmentId))
+    // TODO: Implement API call to delete scene
     toast({
-      title: "Scene Deleted",
-      description: "The scene has been removed from the timeline.",
-      variant: "destructive",
+      title: "Coming Soon",
+      description: "Scene deletion will be available soon!",
     })
   }
 

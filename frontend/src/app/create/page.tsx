@@ -95,14 +95,10 @@ export default function CreatePage() {
     fetchDirectorConfigs()
   }, [])
 
-  // Cleanup blob URLs on unmount to prevent memory leaks
+  // Cleanup on unmount (no-op for cloud URLs, kept for future compatibility)
   useEffect(() => {
     return () => {
-      generatedImages.forEach(url => {
-        if (url.startsWith('blob:')) {
-          URL.revokeObjectURL(url)
-        }
-      })
+      // No cleanup needed for cloud URLs
     }
   }, [generatedImages])
 
@@ -223,6 +219,7 @@ export default function CreatePage() {
         characterDescription: characterDescription.trim() || 'No character description provided',
         characterReferenceImageId,
         directorConfig: directorConfig || undefined,
+        configFlavor,
         images: mode === 'ad-creative' ? uploadedImages : undefined,
         audio: audioFile,
       })
@@ -232,8 +229,8 @@ export default function CreatePage() {
         description: response.message,
       })
 
-      // Navigate to the project page
-      router.push(`/project/${response.projectId}`)
+      // Navigate to the edit page
+      router.push(`/edit/${response.projectId}`)
     } catch (error) {
       console.error('Error submitting form:', error)
       toast({
@@ -281,12 +278,7 @@ export default function CreatePage() {
     setSelectedImageIndex(null) // Reset selection
     setImageGenerationError(null) // Clear previous errors
 
-    // Clean up previous blob URLs to prevent memory leaks
-    generatedImages.forEach(url => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url)
-      }
-    })
+    // Clear previous images
     setGeneratedImages([])
     setGeneratedImageIds([])
 
@@ -296,65 +288,25 @@ export default function CreatePage() {
         num_images: 4, // Request 4 images for selection
       })
 
-      // Fetch images using their IDs (backend no longer returns base64 for performance)
-      const blobUrls: string[] = []
+      // Use cloud URLs directly from the backend response
+      const imageUrls: string[] = []
       const imageIds: string[] = []
 
       for (const image of data.images) {
+        // Use cloud_url if available, otherwise fall back to get_character_reference endpoint
+        const imageUrl = image.cloud_url || `${process.env.NEXT_PUBLIC_API_URL}/api/mv/get_character_reference/${image.id}`
+
+        imageUrls.push(imageUrl)
         imageIds.push(image.id)
-        
-        // If cloud_url is available, use it directly
-        if (image.cloud_url) {
-          blobUrls.push(image.cloud_url)
-        } else {
-          // Otherwise, fetch the image from the backend
-          try {
-            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
-              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-            })
-
-            if (!response.ok) {
-              throw new Error(`Failed to fetch image ${image.id}`)
-            }
-
-            const contentType = response.headers.get('content-type')
-            
-            if (contentType?.includes('application/json')) {
-              // Cloud storage mode - get presigned URL from JSON
-              const jsonData = await response.json()
-              blobUrls.push(jsonData.image_url || jsonData.video_url)
-            } else {
-              // Local storage mode - create object URL from blob
-              const blob = await response.blob()
-              const objectUrl = URL.createObjectURL(blob)
-              blobUrls.push(objectUrl)
-            }
-          } catch (fetchError) {
-            console.error(`Failed to fetch image ${image.id}:`, fetchError)
-            // Continue with other images, but this one will be missing
-            blobUrls.push('') // Placeholder to maintain array index alignment
-          }
-        }
       }
 
-      // Filter out any failed image fetches
-      const validPairs = imageIds.map((id, index) => ({ id, url: blobUrls[index] }))
-        .filter(pair => pair.url)
-      
-      const validIds = validPairs.map(pair => pair.id)
-      const validUrls = validPairs.map(pair => pair.url)
-
-      if (validIds.length === 0) {
-        throw new Error('Failed to fetch any character reference images')
-      }
-
-      setGeneratedImages(validUrls)
-      setGeneratedImageIds(validIds)
+      setGeneratedImages(imageUrls)
+      setGeneratedImageIds(imageIds)
       setGenerationAttempts(prev => prev + 1)
 
       toast({
         title: "Character Images Generated",
-        description: `${validIds.length} character references ready. Click to select one.`,
+        description: `${imageUrls.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)

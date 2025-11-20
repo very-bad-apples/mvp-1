@@ -187,12 +187,34 @@ export async function startFullGeneration(
 
     let project = projectResponse
 
-    // Phase 1: Generate all scenes (parallel)
-    opts.onProgress('scenes', 0, project.scenes.length, 'Starting scene generation...')
+    // Phase 1: Generate all scenes
+    opts.onProgress('scenes', 0, 1, 'Starting scene generation...')
     await updateProject(projectId, { status: 'processing' })
 
-    // Assuming scenes are already generated from the initial project creation
-    // If we need to regenerate scenes, we can add that logic here
+    // Check if scenes need to be generated
+    if (project.scenes.length === 0) {
+      const scenesRequest: CreateScenesRequest = {
+        idea: project.conceptPrompt,
+        character_description: project.characterDescription,
+        config_flavor: project.configFlavor || 'default',
+        project_id: projectId, // Link scenes to this project in DB
+      }
+
+      const scenesResponse = await retryWithBackoff(
+        () => generateScenes(scenesRequest),
+        'Generate scenes',
+        opts,
+        'scenes',
+        0
+      )
+
+      // Fetch updated project with scenes
+      project = await getProject(projectId)
+
+      opts.onProgress('scenes', 1, 1, `Generated ${project.scenes.length} scenes`)
+    } else {
+      opts.onProgress('scenes', 1, 1, `Using existing ${project.scenes.length} scenes`)
+    }
 
     // Phase 2: Generate all character reference images (parallel)
     opts.onProgress('images', 0, project.scenes.length, 'Starting image generation...')

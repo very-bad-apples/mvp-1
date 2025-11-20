@@ -13,6 +13,8 @@ export interface CreateScenesRequest {
   video_type?: string
   video_characteristics?: string
   camera_angle?: string
+  config_flavor?: string
+  project_id?: string
 }
 
 export interface SceneDescription {
@@ -55,7 +57,7 @@ export interface GenerateCharacterReferenceRequest {
 export interface CharacterReferenceImage {
   id: string
   path: string
-  cloud_url?: string | null
+  cloud_url: string | null
 }
 
 export interface GenerateCharacterReferenceResponse {

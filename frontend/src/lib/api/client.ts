@@ -318,6 +318,10 @@ export async function createProject(
     formData.append('directorConfig', data.directorConfig)
   }
 
+  if (data.configFlavor) {
+    formData.append('configFlavor', data.configFlavor)
+  }
+
   // Add product images if provided (for ad-creative mode)
   if (data.images && data.images.length > 0) {
     data.images.forEach((image) => {
