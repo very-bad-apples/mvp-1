@@ -196,7 +196,7 @@ export async function startFullGeneration(
       const scenesRequest: CreateScenesRequest = {
         idea: project.conceptPrompt,
         character_description: project.characterDescription,
-        config_flavor: project.configFlavor || 'default',
+        config_flavor: 'default',
         project_id: projectId, // Link scenes to this project in DB
       }
 

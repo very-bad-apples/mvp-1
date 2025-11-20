@@ -10,13 +10,16 @@ import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { generateScenes } from '@/lib/api/client'
 import { useToast } from '@/hooks/useToast'
+import { SceneGenerationOverlay } from '@/components/SceneGenerationOverlay'
 
 export default function EditPage({ params }: { params: { id: string } }) {
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false)
+  const [showOverlay, setShowOverlay] = useState(false)
   const sceneGenerationTriggered = useRef(false)
+  const overlayDismissed = useRef(false)
   const { toast } = useToast()
 
   // Fetch project data using the API client hook
@@ -30,6 +33,19 @@ export default function EditPage({ params }: { params: { id: string } }) {
     // Sum up all scene durations
     return project.scenes.reduce((total, scene) => total + (scene.duration || 0), 0)
   }, [project?.scenes])
+
+  // Check if all scenes are complete
+  const allScenesComplete = useMemo(() => {
+    if (!project?.scenes || project.scenes.length === 0) return false
+    return project.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+  }, [project?.scenes])
+
+  // Handle overlay visibility - show only for new projects that haven't dismissed it
+  useEffect(() => {
+    if (project && project.scenes.length > 0 && !overlayDismissed.current && isGeneratingScenes) {
+      setShowOverlay(true)
+    }
+  }, [project, isGeneratingScenes])
 
   // Auto-trigger scene generation for new projects
   useEffect(() => {
@@ -48,6 +64,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
       ) {
         sceneGenerationTriggered.current = true
         setIsGeneratingScenes(true)
+        setShowOverlay(true)
 
         toast({
           title: "Generating Scenes",
@@ -58,7 +75,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
           await generateScenes({
             idea: project.conceptPrompt,
             character_description: project.characterDescription,
-            config_flavor: project.configFlavor || 'default',
+            config_flavor: 'default',
             project_id: params.id,
           })
 
@@ -85,6 +102,13 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     triggerSceneGeneration()
   }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
+
+  // Handle Continue button click
+  const handleContinue = () => {
+    setShowOverlay(false)
+    overlayDismissed.current = true
+    setIsGeneratingScenes(false)
+  }
 
   // Loading state
   if (loading && !project) {
@@ -183,6 +207,15 @@ export default function EditPage({ params }: { params: { id: string } }) {
           />
         </div>
       </div>
+
+      {/* Scene Generation Overlay */}
+      <SceneGenerationOverlay
+        isVisible={showOverlay}
+        scenes={project.scenes}
+        totalScenes={project.sceneCount || project.scenes.length}
+        onContinue={handleContinue}
+        isComplete={allScenesComplete}
+      />
     </div>
   )
 }

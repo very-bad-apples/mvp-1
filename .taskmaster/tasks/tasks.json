@@ -1470,6 +1470,508 @@
             "parentTaskId": 40
           }
         ]
+      },
+      {
+        "id": 39,
+        "title": "Fix Character Image Generation to Use Cloud URLs",
+        "description": "Update character image generation to use cloud URLs instead of base64 encoding for better performance and scalability.",
+        "details": "Modify the character reference image generation to store images in cloud storage and return cloud URLs instead of base64 strings. This improves performance and reduces payload sizes.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 40,
+        "title": "Update CharacterReferenceImage Type for Cloud URLs",
+        "description": "Update TypeScript CharacterReferenceImage type to use cloud_url field instead of base64 data.",
+        "details": "Modify the CharacterReferenceImage interface in frontend/src/types/ to include a cloud_url field and remove or deprecate the base64 field. Ensure all components using this type are updated accordingly.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 41,
+        "title": "Update Create Page Redirect to /edit",
+        "description": "Change redirect after project creation from /project to /edit page.",
+        "details": "Update the redirect logic in frontend/src/app/create/page.tsx to redirect to /edit/[id] instead of /project/[id] after successful project creation.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 42,
+        "title": "Integrate useProjectPolling Hook in Edit Page",
+        "description": "Integrate the existing useProjectPolling hook into the edit page for real-time project updates.",
+        "details": "Import and use the useProjectPolling hook from frontend/src/hooks/useProjectPolling.ts in the edit page to enable automatic polling and real-time updates of project status and scene generation.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 43,
+        "title": "Add Loading, Error, and Not-Found States to Edit Page",
+        "description": "Implement proper loading, error, and not-found states for the edit page.",
+        "details": "Add loading skeletons, error boundaries, and 404 not-found states to the edit page. Use the loading and error states from useProjectPolling hook and implement proper UI feedback for each state.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 44,
+        "title": "Connect Timeline Component to Real Project Scenes Data",
+        "description": "Update Timeline component to display real project.scenes data from the API.",
+        "details": "Connect the Timeline component in the edit page to the actual project.scenes array from the useProjectPolling hook. Ensure scenes display with proper status, thumbnails, and metadata.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 45,
+        "title": "Update VideoPreview to Display Project Metadata",
+        "description": "Enhance VideoPreview component to show project status, progress, and scene information.",
+        "details": "Update the VideoPreview component to display project metadata including status, overall progress, number of scenes, and current generation phase. Use data from the useProjectPolling hook.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 46,
+        "title": "Auto-Trigger Scene Generation for New Projects",
+        "description": "Implement automatic scene generation when a new project is created with no scenes.",
+        "details": "Add logic to the edit page to automatically trigger scene generation when project.scenes.length === 0. This should happen once when the page loads for a new project.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 47,
+        "title": "Implement Scene Generation with Retry Logic",
+        "description": "Add scene generation function in orchestration.ts with proper retry logic and error handling.",
+        "details": "Implement a generateScenes function in frontend/src/lib/orchestration.ts that calls the backend scene generation endpoint with retry logic, exponential backoff, and comprehensive error handling.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 48,
+        "title": "Fix Project Creation to Send Config-Specific Data",
+        "description": "Update project creation to send images for ad-creative and audio for music-video configs.",
+        "details": "Modify the project creation logic to conditionally send images when config_flavor is 'ad-creative' and audio files when config_flavor is 'music-video'. Ensure proper validation and error handling.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 49,
+        "title": "Update CreateScenesRequest Type with Required Fields",
+        "description": "Add config_flavor and project_id fields to CreateScenesRequest type definition.",
+        "details": "Update the CreateScenesRequest TypeScript interface to include config_flavor and project_id as required fields. Ensure all API calls using this type are updated accordingly.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 50,
+        "title": "Design Cinematic Overlay Component Using v0, Kibo UI, and Context7",
+        "description": "Design a cinematic scene generation overlay component using v0 for layout, Kibo UI for components, and Context7 for best practices.",
+        "details": "Use v0 MCP to generate the initial layout for a cinematic overlay that displays scene generation progress. Use Kibo UI MCP to select appropriate shadcn/ui components (Card, Badge, Progress, Dialog). Use Context7 MCP to research best practices for animation libraries and overlay patterns in React. The overlay should have a dramatic, cinematic feel with smooth animations.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Generate Initial Layout Using v0 MCP",
+            "description": "Create the initial layout for the cinematic overlay using v0 MCP.",
+            "dependencies": [],
+            "details": "Utilize v0 MCP to design the basic structure of the overlay, ensuring it accommodates all necessary components like progress display.",
+            "status": "done",
+            "testStrategy": "Verify layout structure matches design specifications."
+          },
+          {
+            "id": 2,
+            "title": "Select Kibo UI Components",
+            "description": "Choose appropriate Kibo UI components for the overlay.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Kibo UI MCP to select components such as Card, Badge, Progress, and Dialog for the overlay.",
+            "status": "done",
+            "testStrategy": "Ensure selected components integrate seamlessly with the layout."
+          },
+          {
+            "id": 3,
+            "title": "Research Best Practices with Context7",
+            "description": "Investigate best practices for animations and overlay patterns using Context7.",
+            "dependencies": [],
+            "details": "Leverage Context7 MCP to explore animation libraries and overlay design patterns in React for a cinematic effect.",
+            "status": "done",
+            "testStrategy": "Compile a report on best practices and validate against project requirements."
+          },
+          {
+            "id": 4,
+            "title": "Implement Smooth Animations",
+            "description": "Develop smooth animations for the overlay to enhance its cinematic feel.",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Integrate animation libraries and apply best practices to create smooth transitions and effects.",
+            "status": "done",
+            "testStrategy": "Test animations for smoothness and performance across different devices."
+          }
+        ]
+      },
+      {
+        "id": 51,
+        "title": "Implement SceneGenerationOverlay with Bottom-Up Animation",
+        "description": "Create SceneGenerationOverlay component with bottom-up reveal animation starting from Scene 1.",
+        "details": "Implement the SceneGenerationOverlay component in frontend/src/components/SceneGenerationOverlay.tsx. The overlay should animate from bottom to top, with Scene 1 appearing first at the bottom. Use Framer Motion or similar animation library for smooth transitions. Include scene cards that reveal one by one as they are generated.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set Up SceneGenerationOverlay Component",
+            "description": "Create the initial structure for the SceneGenerationOverlay component in the specified directory.",
+            "dependencies": [],
+            "details": "Implement the SceneGenerationOverlay component in frontend/src/components/SceneGenerationOverlay.tsx with a basic structure.",
+            "status": "done",
+            "testStrategy": "Verify component renders without errors."
+          },
+          {
+            "id": 2,
+            "title": "Integrate Framer Motion for Animation",
+            "description": "Incorporate Framer Motion to handle bottom-up animations for the overlay.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Framer Motion to animate the overlay from bottom to top, ensuring smooth transitions.",
+            "status": "done",
+            "testStrategy": "Test animation smoothness and performance."
+          },
+          {
+            "id": 3,
+            "title": "Implement Scene Card Generation Logic",
+            "description": "Develop logic to generate and display scene cards one by one.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create a function to generate scene cards dynamically and reveal them sequentially.",
+            "status": "done",
+            "testStrategy": "Check if scene cards appear in the correct order."
+          },
+          {
+            "id": 4,
+            "title": "Design Scene Card Layout",
+            "description": "Design the layout for individual scene cards within the overlay.",
+            "dependencies": [
+              3
+            ],
+            "details": "Ensure each scene card has a consistent and visually appealing design.",
+            "status": "done",
+            "testStrategy": "Validate layout consistency across different screen sizes."
+          },
+          {
+            "id": 5,
+            "title": "Finalize and Test SceneGenerationOverlay",
+            "description": "Conduct final testing and refinements on the SceneGenerationOverlay component.",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "Perform comprehensive testing to ensure all elements function as expected.",
+            "status": "done",
+            "testStrategy": "Conduct end-to-end testing, focusing on animation and card generation."
+          }
+        ]
+      },
+      {
+        "id": 52,
+        "title": "Add Continue Button Requirement for Overlay Dismissal",
+        "description": "Implement a Continue button that users must click to dismiss the scene generation overlay.",
+        "details": "Add a Continue button to the SceneGenerationOverlay that only becomes enabled after all scenes are generated. The button should be prominently displayed and visually indicate when it becomes active. Clicking the button should smoothly dismiss the overlay and reveal the timeline below.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Continue Button for Overlay",
+            "description": "Design a Continue button for the SceneGenerationOverlay that becomes enabled after all scenes are generated.",
+            "dependencies": [],
+            "details": "Create a button design that is visually distinct and indicates when it becomes active. Ensure it fits within the existing overlay design.",
+            "status": "done",
+            "testStrategy": "Verify button visibility and activation state."
+          },
+          {
+            "id": 2,
+            "title": "Implement Continue Button Activation Logic",
+            "description": "Develop the logic to enable the Continue button only after all scenes are generated.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use state management to track scene generation progress and enable the button once all scenes are complete.",
+            "status": "done",
+            "testStrategy": "Test with various scene generation scenarios to ensure correct button activation."
+          },
+          {
+            "id": 3,
+            "title": "Integrate Button with Overlay Dismissal",
+            "description": "Connect the Continue button to the overlay dismissal functionality, ensuring a smooth transition.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement the button click handler to dismiss the overlay and reveal the timeline below using smooth animations.",
+            "status": "done",
+            "testStrategy": "Test the dismissal process for smoothness and correctness."
+          }
+        ]
+      },
+      {
+        "id": 53,
+        "title": "Add Scene-by-Scene Reveal Animation",
+        "description": "Implement individual scene reveal animations that show scenes appearing one by one from bottom to top.",
+        "details": "Create staggered animations for each scene card in the overlay. Scene 1 should appear at the bottom first, then Scene 2 above it, and so on. Each scene should have a fade-in and slide-up animation with appropriate timing delays. Use Framer Motion variants or similar for coordinated animations.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define Animation Variants for Scene Cards",
+            "description": "Create animation variants for scene cards using Framer Motion.",
+            "dependencies": [],
+            "details": "Develop fade-in and slide-up variants for scene cards. Ensure each variant has customizable timing delays.",
+            "status": "done",
+            "testStrategy": "Verify animations trigger correctly with mock data."
+          },
+          {
+            "id": 2,
+            "title": "Implement Staggered Animation Logic",
+            "description": "Develop logic to stagger animations for each scene card.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Framer Motion's staggerChildren property to control the sequence of animations for each scene card.",
+            "status": "done",
+            "testStrategy": "Check that animations play in the correct order with appropriate delays."
+          },
+          {
+            "id": 3,
+            "title": "Integrate Animation into SceneGenerationOverlay",
+            "description": "Integrate the defined animations into the SceneGenerationOverlay component.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Apply the animation variants and stagger logic to the SceneGenerationOverlay component in the codebase.",
+            "status": "done",
+            "testStrategy": "Ensure the overlay animates scenes from bottom to top as expected."
+          },
+          {
+            "id": 4,
+            "title": "Test and Optimize Animation Performance",
+            "description": "Test the performance of animations and optimize for smoothness.",
+            "dependencies": [
+              3
+            ],
+            "details": "Run performance tests to ensure animations are smooth and do not cause jank. Optimize timing and easing functions as needed.",
+            "status": "done",
+            "testStrategy": "Use browser dev tools to monitor performance and adjust animations for optimal smoothness."
+          }
+        ]
+      },
+      {
+        "id": 54,
+        "title": "Display Overlay Only for New Projects",
+        "description": "Implement logic to show the scene generation overlay only when scenes.length === 0.",
+        "details": "Add conditional rendering logic to the edit page to display the SceneGenerationOverlay only for new projects where project.scenes.length === 0. Once scenes are generated and the overlay is dismissed, it should not appear again for that project. Consider using local storage or project metadata to track overlay dismissal.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Conditional Rendering for SceneGenerationOverlay",
+            "description": "Add logic to conditionally render the SceneGenerationOverlay only when project.scenes.length === 0.",
+            "dependencies": [],
+            "details": "Modify the edit page component to include a conditional check for project.scenes.length. If it equals zero, render the SceneGenerationOverlay component.",
+            "status": "done",
+            "testStrategy": "Verify overlay appears only for new projects with no scenes."
+          },
+          {
+            "id": 2,
+            "title": "Track Overlay Dismissal Using Local Storage",
+            "description": "Implement functionality to track if the SceneGenerationOverlay has been dismissed using local storage.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use local storage to store a flag indicating whether the overlay has been dismissed for a project. Check this flag before rendering the overlay.",
+            "status": "done",
+            "testStrategy": "Test by dismissing the overlay and refreshing the page to ensure it does not reappear."
+          },
+          {
+            "id": 3,
+            "title": "Update Project Metadata to Track Overlay Status",
+            "description": "Modify project metadata to include a field for tracking the overlay dismissal status.",
+            "dependencies": [
+              1
+            ],
+            "details": "Add a new field in the project metadata to store the overlay dismissal status. Update this field when the overlay is dismissed.",
+            "status": "done",
+            "testStrategy": "Ensure metadata updates correctly and prevents overlay from reappearing."
+          }
+        ]
+      },
+      {
+        "id": 55,
+        "title": "Integrate Scene Generation Progress Tracking",
+        "description": "Connect the overlay to the orchestration layer to track real-time scene generation progress.",
+        "details": "Integrate the SceneGenerationOverlay with the scene generation function in orchestration.ts. Use the useProjectPolling hook to get real-time updates on scene generation progress. Update the overlay UI to reflect which scenes are being generated, completed, or errored. Show progress indicators and status for each scene.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate SceneGenerationOverlay with orchestration.ts",
+            "description": "Connect the SceneGenerationOverlay component to the scene generation function in orchestration.ts.",
+            "dependencies": [],
+            "details": "Modify orchestration.ts to include the SceneGenerationOverlay component. Ensure the component receives necessary props for displaying scene progress.",
+            "status": "done",
+            "testStrategy": "Verify the overlay receives correct data from orchestration.ts."
+          },
+          {
+            "id": 2,
+            "title": "Implement useProjectPolling for real-time updates",
+            "description": "Use the useProjectPolling hook to fetch real-time updates on scene generation progress.",
+            "dependencies": [
+              1
+            ],
+            "details": "Import useProjectPolling from the hooks directory and integrate it within the SceneGenerationOverlay to poll for scene status updates.",
+            "status": "done",
+            "testStrategy": "Simulate scene generation and verify real-time updates are reflected in the overlay."
+          },
+          {
+            "id": 3,
+            "title": "Update overlay UI for scene status display",
+            "description": "Enhance the overlay UI to show which scenes are being generated, completed, or errored.",
+            "dependencies": [
+              2
+            ],
+            "details": "Design and implement UI elements within the overlay to display scene status, including progress indicators and error messages.",
+            "status": "done",
+            "testStrategy": "Check UI responsiveness and accuracy in displaying scene statuses during generation."
+          },
+          {
+            "id": 4,
+            "title": "Add progress indicators to overlay",
+            "description": "Incorporate visual progress indicators for each scene within the overlay.",
+            "dependencies": [
+              3
+            ],
+            "details": "Develop progress bars or similar indicators to visually represent the progress of each scene's generation.",
+            "status": "done",
+            "testStrategy": "Ensure progress indicators accurately reflect the real-time progress of scene generation."
+          }
+        ]
+      },
+      {
+        "id": 56,
+        "title": "Test Complete Flow: Create → Edit → Auto-Scenes → Overlay → Timeline",
+        "description": "Perform end-to-end testing of the complete user flow from project creation to timeline display.",
+        "details": "Test the complete flow: 1) Create a new project on /create page, 2) Redirect to /edit/[id], 3) Auto-trigger scene generation, 4) Display cinematic overlay with bottom-up animations, 5) Show scene-by-scene reveals as they generate, 6) Enable Continue button when complete, 7) Dismiss overlay and display timeline. Verify all states (loading, error, success) and ensure smooth transitions throughout.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Test Project Creation on /create Page",
+            "description": "Verify the creation of a new project on the /create page.",
+            "dependencies": [],
+            "details": "Navigate to the /create page and ensure a new project can be created successfully. Check for loading, error, and success states.",
+            "status": "pending",
+            "testStrategy": "Perform UI tests to verify project creation functionality."
+          },
+          {
+            "id": 2,
+            "title": "Test Redirection to /edit/[id] Page",
+            "description": "Ensure successful redirection to the /edit/[id] page after project creation.",
+            "dependencies": [
+              1
+            ],
+            "details": "After creating a project, verify that the application redirects to the /edit/[id] page correctly. Check URL and page content.",
+            "status": "pending",
+            "testStrategy": "Use automated tests to confirm correct redirection and page load."
+          },
+          {
+            "id": 3,
+            "title": "Verify Auto-Trigger of Scene Generation",
+            "description": "Check that scene generation is automatically triggered on the /edit/[id] page.",
+            "dependencies": [
+              2
+            ],
+            "details": "Ensure that upon reaching the /edit/[id] page, scenes start generating automatically without user intervention.",
+            "status": "pending",
+            "testStrategy": "Monitor network requests and UI changes to confirm auto-trigger functionality."
+          },
+          {
+            "id": 4,
+            "title": "Test Cinematic Overlay Display",
+            "description": "Validate the display of the cinematic overlay with animations.",
+            "dependencies": [
+              3
+            ],
+            "details": "Check that the cinematic overlay appears with bottom-up animations and displays scene-by-scene reveals as they generate.",
+            "status": "pending",
+            "testStrategy": "Perform visual tests to ensure overlay animations and transitions are smooth."
+          },
+          {
+            "id": 5,
+            "title": "Verify Timeline Display and Overlay Dismissal",
+            "description": "Ensure the timeline is displayed after dismissing the overlay.",
+            "dependencies": [
+              4
+            ],
+            "details": "Confirm that the Continue button enables when scenes are complete, allowing the overlay to be dismissed and the timeline to be shown.",
+            "status": "pending",
+            "testStrategy": "Test the transition from overlay to timeline, checking for smoothness and correctness."
+          }
+        ]
       }
     ],
     "metadata": {
@@ -1482,7 +1984,7 @@
       ],
       "created": "2025-11-14T19:47:38.627Z",
       "description": "Tasks for master context",
-      "updated": "2025-11-17T16:40:20.357Z"
+      "updated": "2025-11-20T03:13:21.499Z"
     }
   }
 }
