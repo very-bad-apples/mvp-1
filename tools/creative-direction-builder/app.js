@@ -192,7 +192,7 @@ function generateYAML(obj, indent = 0) {
 
 window.saveTemplate = async function() {
   const templateName = document.getElementById('templateName').value.trim();
-  const format = document.querySelector('input[name="format"]:checked').value;
+  const format = document.querySelector('input[name="previewFormat"]:checked').value;
   const statusDiv = document.getElementById('status');
 
   // Validate

@@ -173,19 +173,6 @@
         </label>
       </div>
 
-      <div class="form-section">
-        <h2>Save Template</h2>
-        <div class="format-toggle">
-          <label>
-            <input type="radio" name="format" value="yaml" checked> YAML
-          </label>
-          <label>
-            <input type="radio" name="format" value="json"> JSON
-          </label>
-        </div>
-        <button onclick="saveTemplate()">Generate & Save Template</button>
-        <div id="status"></div>
-      </div>
     </div>
 
     <!-- Right: Preview -->
@@ -200,6 +187,10 @@
         </label>
       </div>
       <pre id="preview"></pre>
+      <div style="margin-top: 15px;">
+        <button onclick="saveTemplate()" style="width: 100%; padding: 10px 20px; font-size: 16px; cursor: pointer;">Save</button>
+        <div id="status"></div>
+      </div>
     </div>
   </div>
 
