@@ -217,7 +217,7 @@ window.saveTemplate = async function() {
 
   // Save via Node script
   try {
-    const response = await fetch('http://localhost:3000/save', {
+    const response = await fetch('http://localhost:3002/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ templateName, format, template })
