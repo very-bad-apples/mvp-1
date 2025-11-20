@@ -1,0 +1,58 @@
+# Spike Jonze Director Configuration
+# Signature Style: Whimsical yet emotional, floating camera, wide-angle close-ups, mundane beauty
+
+camera:
+  shotType: close_up  # Close-ups to isolate emotion, wide shots to isolate character
+  movement: tracking  # Floating, smooth camera movement
+  lens: wide_angle  # Wide-angle close-ups for intimate yet expansive feel
+  angle: eye_level  # Centered framing with occasional unconventional angles
+
+lighting:
+  type: natural
+  direction: front  # Clean, natural lighting to focus on character emotion
+
+style:
+  visualStyle: documentary  # Naturalistic with whimsical elements
+  mood: peaceful  # Melancholic, contemplative, quietly emotional
+  colorGrading: warm_tones  # Soft, warm palette for emotional resonance
+
+motion:
+  intensity: 0.4  # Gentle, floating movement
+  guidanceScale: 9  # Allow emotional nuance while maintaining vision
+  cfgScale: 7  # Moderate guidance for naturalistic feel
+
+audio:
+  dialogue:
+    tone: calm  # Quiet, introspective delivery
+  music:
+    style: electronic  # Modern, atmospheric soundscapes
+    mood: melancholic  # Emotionally resonant
+    intensity: subtle  # Music supports but doesn't overwhelm
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - distorted
+    - oversaturated
+    - harsh lighting
+    - chaotic composition
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: dissolve  # Smooth, emotional transitions
+
+# Additional Jonze Characteristics:
+# - Shallow depth of field to communicate isolation
+# - Lens flares and floating camera movement
+# - Centered framing with storybook quality
+# - Wide-angle close-ups creating intimacy
+# - Unconventional framing and composition
+# - Playful use of colors while maintaining naturalism
+# - Slow motion technique (person on fire in music videos)
+# - Fascination with mundane textures and materials
+# - Metaphorical imagery for emotional states
+# - Simple style to focus on character struggle
+# - Finding beauty in the obscure and unnoticed
+# - Imaginative creature/puppet work (Where the Wild Things Are)
+# - Blending absurd with deeply emotional

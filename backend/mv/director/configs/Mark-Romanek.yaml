@@ -1,0 +1,64 @@
+# Mark Romanek Director Configuration
+# Signature Style: Visual poetry, meticulous lighting, desaturated palettes, intimate provocative imagery, tableau vivant framing
+
+camera:
+  shotType: medium_close_up  # Intimate framing that captures emotional detail
+  movement: static  # Often motionless camera creating living paintings, tableau vivant style
+  lens: standard  # Natural perspective for photographic realism
+  angle: eye_level  # Direct, unflinching gaze at subjects
+
+lighting:
+  type: studio
+  direction: front  # Elaborate lighting rigs, precise control, often sterile and clinical
+
+style:
+  visualStyle: cinematic
+  mood: mysterious  # Isolated, contemplative, often unsettling
+  colorGrading: desaturated  # Muted, washed-out palette with strategic color accents (red, green, blue)
+
+motion:
+  intensity: 0.3  # Minimal motion, deliberate and controlled
+  guidanceScale: 12  # Very high adherence to precise visual composition
+  cfgScale: 10  # Strong guidance for meticulous aesthetic control
+
+audio:
+  music:
+    style: electronic  # Often atmospheric, moody soundscapes
+    mood: melancholic  # Emotional depth, introspective
+    intensity: subtle  # Music supports visual storytelling
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - oversaturated colors
+    - chaotic composition
+    - handheld shake
+    - warm inviting atmosphere
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: hard_cut  # Clean, precise editorial choices
+
+# Additional Romanek Characteristics:
+# - Lushly filmed with intimate and provocative images
+# - Visual poetry - few directors match his ability to create cinematic art
+# - Exceptional proficiency with lighting as central element
+# - Desaturated, muted color palettes (especially whites)
+# - Strategic use of color accents (red, green, blue)
+# - Tableau vivant framing - living paintings with motionless camera
+# - Subjects trapped within frame through stationary blocking
+# - Cold, clinical aesthetic (Kubrick influence from 2001: A Space Odyssey)
+# - Sterile, blinding white environments
+# - Edward Hopper and Roy Andersson visual influences
+# - Collaboration with top cinematographers (Jeff Cronenweth, Harris Savides)
+# - Never makes the same video twice - versatile stylist
+# - Elaborate, detailed photography
+# - Rotting fruit and decay as visual metaphors (Johnny Cash "Hurt")
+# - Vintage/degraded film techniques (hand-cranked camera for NIN "Closer")
+# - Archival footage integration
+# - Museum-quality work (MoMA permanent collection)
+# - Controversial, disturbing imagery when thematically appropriate
+# - Isolation and alienation as visual themes
+# - Precise framing with compositional rigor
+# - "Vision with margins" - collaborative but controlled
