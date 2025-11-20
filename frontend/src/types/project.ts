@@ -181,6 +181,9 @@ export interface CreateProjectRequest {
   /** Product description (for ad-creative mode) */
   productDescription?: string | null
 
+  /** Director config name (e.g., "Wes-Anderson") */
+  directorConfig?: string | null
+
   /** Product images (for ad-creative mode) */
   images?: File[]
 

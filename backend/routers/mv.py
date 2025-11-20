@@ -99,6 +99,47 @@ async def get_config_flavors():
 
 
 @router.get(
+    "/get_director_configs",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Director Configs",
+    description="""
+Get list of available director configuration files.
+
+Returns an array of director config names (without extension) that are
+available in backend/mv/director/configs/. These configs can be used
+for creative direction in video generation.
+
+**Example Response:**
+```json
+{
+    "configs": ["Wes-Anderson", "David-Lynch", "Quentin-Tarantino"]
+}
+```
+"""
+)
+async def get_director_configs():
+    """
+    Get list of available director configuration files.
+
+    Returns:
+        Dictionary with 'configs' key containing list of available director config names
+    """
+    try:
+        from mv.director.prompt_parser import discover_director_configs
+
+        configs = discover_director_configs()
+
+        logger.info("director_configs_requested", configs=configs)
+
+        return {"configs": configs}
+    except Exception as e:
+        logger.error("get_director_configs_error", error=str(e), exc_info=True)
+        # Return empty list as fallback
+        return {"configs": []}
+
+
+@router.get(
     "/config/debug",
     summary="Debug Configuration",
     description="Shows current configuration values for troubleshooting"
