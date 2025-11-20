@@ -5,9 +5,10 @@ Handles file uploads, retrieval, and presigned URL generation.
 Uses existing Terraform-configured S3 bucket.
 """
 
+import asyncio
 import boto3
 from botocore.exceptions import ClientError
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, List
 from pathlib import Path
 import structlog
 from config import settings
@@ -163,6 +164,48 @@ class S3StorageService:
             )
             raise Exception(f"Failed to generate presigned URL: {e}")
 
+    def download_file(self, s3_key: str, local_path: str) -> str:
+        """
+        Download file from S3 to local path.
+
+        Args:
+            s3_key: S3 object key
+            local_path: Local filesystem path to save to
+
+        Returns:
+            Local path where file was saved
+
+        Raises:
+            Exception if download fails
+        """
+        try:
+            # Ensure parent directory exists
+            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+
+            self.s3_client.download_file(
+                self.bucket_name,
+                s3_key,
+                local_path
+            )
+
+            logger.info(
+                "s3_file_downloaded",
+                s3_key=s3_key,
+                local_path=local_path
+            )
+
+            return local_path
+
+        except ClientError as e:
+            logger.error(
+                "s3_download_failed",
+                s3_key=s3_key,
+                local_path=local_path,
+                error=str(e),
+                exc_info=True
+            )
+            raise Exception(f"Failed to download file from S3: {e}")
+
     def file_exists(self, s3_key: str) -> bool:
         """
         Check if file exists in S3.
@@ -221,6 +264,208 @@ class S3StorageService:
                 exc_info=True
             )
             raise Exception(f"Failed to delete file from S3: {e}")
+
+    def copy_file(self, src_s3_key: str, dest_s3_key: str) -> str:
+        """
+        Copy file within S3.
+
+        Args:
+            src_s3_key: Source S3 object key
+            dest_s3_key: Destination S3 object key
+
+        Returns:
+            Destination S3 key
+
+        Raises:
+            Exception if copy fails
+        """
+        try:
+            copy_source = {
+                'Bucket': self.bucket_name,
+                'Key': src_s3_key
+            }
+
+            self.s3_client.copy_object(
+                CopySource=copy_source,
+                Bucket=self.bucket_name,
+                Key=dest_s3_key
+            )
+
+            logger.info(
+                "s3_file_copied",
+                src_key=src_s3_key,
+                dest_key=dest_s3_key
+            )
+
+            return dest_s3_key
+
+        except ClientError as e:
+            logger.error(
+                "s3_copy_failed",
+                src_key=src_s3_key,
+                dest_key=dest_s3_key,
+                error=str(e),
+                exc_info=True
+            )
+            raise Exception(f"Failed to copy file in S3: {e}")
+
+    def list_files(self, prefix: str) -> List[str]:
+        """
+        List files with given prefix in S3.
+
+        Args:
+            prefix: S3 key prefix to filter by
+
+        Returns:
+            List of S3 keys matching the prefix
+
+        Raises:
+            Exception if listing fails
+        """
+        try:
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+            )
+
+            if 'Contents' not in response:
+                return []
+
+            keys = [obj['Key'] for obj in response['Contents']]
+
+            logger.info(
+                "s3_files_listed",
+                prefix=prefix,
+                count=len(keys)
+            )
+
+            return keys
+
+        except ClientError as e:
+            logger.error(
+                "s3_list_failed",
+                prefix=prefix,
+                error=str(e),
+                exc_info=True
+            )
+            raise Exception(f"Failed to list files in S3: {e}")
+
+    # Async wrappers for use in async contexts (e.g., AssetPersistenceService)
+
+    async def upload_file_async(
+        self,
+        file_data: BinaryIO,
+        s3_key: str,
+        content_type: str = None
+    ) -> str:
+        """
+        Async wrapper for upload_file.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.upload_file,
+            file_data,
+            s3_key,
+            content_type
+        )
+
+    async def upload_file_from_path_async(
+        self,
+        file_path: str,
+        s3_key: str,
+        content_type: str = None
+    ) -> str:
+        """
+        Async wrapper for upload_file_from_path.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.upload_file_from_path,
+            file_path,
+            s3_key,
+            content_type
+        )
+
+    async def download_file_async(
+        self,
+        s3_key: str,
+        local_path: str
+    ) -> str:
+        """
+        Async wrapper for download_file.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.download_file,
+            s3_key,
+            local_path
+        )
+
+    async def file_exists_async(self, s3_key: str) -> bool:
+        """
+        Async wrapper for file_exists.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.file_exists,
+            s3_key
+        )
+
+    async def delete_file_async(self, s3_key: str) -> None:
+        """
+        Async wrapper for delete_file.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.delete_file,
+            s3_key
+        )
+
+    async def copy_file_async(
+        self,
+        src_s3_key: str,
+        dest_s3_key: str
+    ) -> str:
+        """
+        Async wrapper for copy_file.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.copy_file,
+            src_s3_key,
+            dest_s3_key
+        )
+
+    async def list_files_async(self, prefix: str) -> List[str]:
+        """
+        Async wrapper for list_files.
+
+        Runs the sync operation in a thread pool executor.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.list_files,
+            prefix
+        )
 
 
 def generate_s3_key(project_id: str, file_type: str, filename: str = None) -> str:

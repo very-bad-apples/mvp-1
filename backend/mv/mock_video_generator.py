@@ -134,23 +134,16 @@ def generate_mock_video(
     # Generate UUID for this "video"
     video_id = str(uuid.uuid4())
 
-    # Create job directory structure for this video
-    job_dir = Path(__file__).parent / "outputs" / "jobs" / video_id
-    os.makedirs(job_dir, exist_ok=True)
-
-    # Copy mock video to job directory
+    # Copy mock video to videos directory (no job directories in new approach)
     mock_dir = get_mock_videos_directory()
     mock_video_path = mock_dir / mock_video_filename
-    video_path = job_dir / "video.mp4"
-    
-    # Copy the mock video
-    shutil.copy2(mock_video_path, video_path)
-    
-    # Also save to videos directory for backward compatibility
+
     videos_dir = Path(__file__).parent / "outputs" / "videos"
     os.makedirs(videos_dir, exist_ok=True)
-    video_path_compat = videos_dir / f"{video_id}.mp4"
-    shutil.copy2(mock_video_path, video_path_compat)
+    video_path = videos_dir / f"{video_id}.mp4"
+
+    # Copy the mock video
+    shutil.copy2(mock_video_path, video_path)
 
     video_url = f"/api/mv/get_video/{video_id}"
 
@@ -200,7 +193,7 @@ def generate_mock_video(
                 image_data += '=' * (4 - missing_padding)
             
             ref_image_data = base64.b64decode(image_data)
-            ref_image_path = job_dir / "reference_image.jpg"
+            ref_image_path = videos_dir / f"{video_id}_reference.jpg"
             with open(ref_image_path, "wb") as f:
                 f.write(ref_image_data)
             metadata["reference_image_path"] = str(ref_image_path)
@@ -209,56 +202,52 @@ def generate_mock_video(
 
     # Save metadata.json
     import json
-    metadata_path = job_dir / "metadata.json"
+    metadata_path = videos_dir / f"{video_id}_metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
-    # Upload entire job directory to cloud storage if configured
+    # Upload to S3 if configured
     cloud_urls = {}
     try:
-        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
-            from services.storage_backend import get_storage_backend
-            
-            async def upload_job_to_cloud():
-                storage = get_storage_backend()
-                urls = {}
-                
-                # Upload video
-                urls["video"] = await storage.upload_file(
-                    str(video_path),
-                    f"mv/jobs/{video_id}/video.mp4"
-                )
-                
-                # Upload metadata
-                urls["metadata"] = await storage.upload_file(
-                    str(metadata_path),
-                    f"mv/jobs/{video_id}/metadata.json"
-                )
-                
-                # Upload reference image if exists
-                ref_image_path = job_dir / "reference_image.jpg"
-                if ref_image_path.exists():
-                    urls["reference_image"] = await storage.upload_file(
-                        str(ref_image_path),
-                        f"mv/jobs/{video_id}/reference_image.jpg"
-                    )
-                
-                return urls
-            
-            # Run async upload - handle both sync and async contexts
-            # Use a separate thread with its own event loop to avoid conflicts
+        if settings.STORAGE_BUCKET:
+            from services.s3_storage import get_s3_storage_service
             import concurrent.futures
-            
+
+            async def upload_job_to_cloud():
+                s3_service = get_s3_storage_service()
+                urls = {}
+
+                # Upload video
+                s3_key = f"mv/projects/{video_id}/video.mp4"
+                await s3_service.upload_file_from_path_async(
+                    str(video_path),
+                    s3_key,
+                    content_type="video/mp4"
+                )
+                urls["video"] = s3_service.generate_presigned_url(s3_key)
+
+                # Upload metadata
+                metadata_s3_key = f"mv/projects/{video_id}/metadata.json"
+                await s3_service.upload_file_from_path_async(
+                    str(metadata_path),
+                    metadata_s3_key,
+                    content_type="application/json"
+                )
+                urls["metadata"] = s3_service.generate_presigned_url(metadata_s3_key)
+
+                return urls
+
+            # Run async upload in separate thread
             def run_upload():
                 return asyncio.run(upload_job_to_cloud())
-            
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_upload)
                 cloud_urls = future.result(timeout=300)  # 5 min timeout
-            
-            logger.info(f"Uploaded mock job {video_id} to cloud storage with {len(cloud_urls)} files")
+
+            logger.info(f"Uploaded mock job {video_id} to S3 with {len(cloud_urls)} files")
     except Exception as e:
-        logger.warning(f"Failed to upload mock job {video_id} to cloud storage: {e}")
+        logger.warning(f"Failed to upload mock job {video_id} to S3: {e}")
         # Continue without cloud upload - local files are still available
     
     # Add cloud URLs to metadata if upload succeeded

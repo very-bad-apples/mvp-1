@@ -5,15 +5,15 @@ This module provides functionality for stitching multiple video clips into a sin
 video using MoviePy. Supports both local filesystem and S3 storage backends.
 """
 
-import asyncio
-import concurrent.futures
 import json
 import logging
 import os
+import shutil
 import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +21,7 @@ from moviepy import VideoFileClip, concatenate_videoclips
 from pydantic import BaseModel, Field
 
 from config import settings
+from services.s3_file_cache import get_s3_file_cache
 
 logger = logging.getLogger(__name__)
 
@@ -105,39 +106,43 @@ def _get_local_video_path(video_id: str) -> Optional[Path]:
     return None
 
 
-async def _download_video_from_s3(video_id: str, temp_dir: str) -> str:
+def _get_cached_video_from_s3(video_id: str) -> str:
     """
-    Download a video from S3 to a temporary directory.
+    Get a video from S3 using the file cache.
+
+    Downloads from S3 on first access and caches locally.
+    Subsequent accesses return cached path without re-downloading.
 
     Args:
         video_id: UUID of the video
-        temp_dir: Temporary directory to save the video
 
     Returns:
-        Path to the downloaded video file
+        Path to the cached video file
 
     Raises:
         FileNotFoundError: If video doesn't exist in S3
+        Exception: If download fails
     """
-    from services.storage_backend import get_storage_backend
-
-    storage = get_storage_backend()
-    cloud_path = f"mv/jobs/{video_id}/video.mp4"
-
-    # Check if video exists
-    exists = await storage.exists(cloud_path)
-    if not exists:
-        raise FileNotFoundError(f"Video {video_id} not found in S3")
-
-    # Download to temp directory
-    local_path = os.path.join(temp_dir, f"{video_id}.mp4")
-    await storage.download_file(cloud_path, local_path)
+    cache = get_s3_file_cache()
+    s3_key = f"mv/projects/{video_id}/video.mp4"
 
     if settings.MV_DEBUG_MODE:
-        from mv.debug import log_stitch_s3_download
-        log_stitch_s3_download(video_id, cloud_path, local_path)
+        from mv.debug import debug_log
+        debug_log("stitch_cache_access", video_id=video_id, s3_key=s3_key)
 
-    return local_path
+    try:
+        # Cache handles download if needed
+        local_path = cache.get_file(s3_key)
+
+        if settings.MV_DEBUG_MODE:
+            from mv.debug import log_stitch_s3_download
+            log_stitch_s3_download(video_id, s3_key, local_path)
+
+        return local_path
+
+    except Exception as e:
+        logger.error(f"Failed to get video {video_id} from cache: {e}")
+        raise FileNotFoundError(f"Video {video_id} not found in S3") from e
 
 
 def _retrieve_video_files(video_ids: list[str]) -> tuple[list[str], Optional[str]]:
@@ -145,38 +150,31 @@ def _retrieve_video_files(video_ids: list[str]) -> tuple[list[str], Optional[str
     Retrieve video files for stitching.
 
     Handles both local filesystem and S3 storage based on SERVE_FROM_CLOUD setting.
+    When using S3, videos are cached locally and reused across stitching operations.
 
     Args:
         video_ids: List of video UUIDs
 
     Returns:
         Tuple of (list of video file paths, temp_dir to clean up or None)
+        Note: temp_dir is always None when using S3 cache (cache handles cleanup via LRU)
 
     Raises:
         FileNotFoundError: If any video is not found
     """
     video_paths = []
-    temp_dir = None
+    temp_dir = None  # No temp dir needed - cache handles storage
 
     if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
-        # Download from S3
-        temp_dir = tempfile.mkdtemp(prefix="stitch_")
-
+        # Get from S3 using cache (downloads only if not cached)
         if settings.MV_DEBUG_MODE:
             from mv.debug import log_stitch_storage_mode
-            log_stitch_storage_mode("s3", temp_dir)
+            log_stitch_storage_mode("s3_cache", None)
 
-        async def download_all():
-            paths = []
-            for video_id in video_ids:
-                path = await _download_video_from_s3(video_id, temp_dir)
-                paths.append(path)
-            return paths
-
-        # Run async downloads in a separate event loop
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(lambda: asyncio.run(download_all()))
-            video_paths = future.result(timeout=600)  # 10 min timeout
+        for video_id in video_ids:
+            # Cache handles download if needed, returns cached path
+            path = _get_cached_video_from_s3(video_id)
+            video_paths.append(path)
     else:
         # Local filesystem
         if settings.MV_DEBUG_MODE:
@@ -289,23 +287,25 @@ def _merge_video_clips(
             final_clip.close()
 
 
-async def _upload_to_s3(local_path: str, cloud_path: str) -> str:
+async def _upload_to_s3(local_path: str, s3_key: str, content_type: str = None) -> str:
     """
     Upload a file to S3.
 
     Args:
         local_path: Path to local file
-        cloud_path: Destination path in S3
+        s3_key: Destination S3 key
+        content_type: Optional content type
 
     Returns:
         Presigned URL for the uploaded file
     """
-    from services.storage_backend import get_storage_backend
+    from services.s3_storage import get_s3_storage_service
 
-    storage = get_storage_backend()
-    url = await storage.upload_file(local_path, cloud_path)
+    s3_service = get_s3_storage_service()
+    await s3_service.upload_file_from_path_async(local_path, s3_key, content_type)
 
-    return url
+    # Return presigned URL
+    return s3_service.generate_presigned_url(s3_key)
 
 
 def stitch_videos(
@@ -364,16 +364,10 @@ def stitch_videos(
     # Generate UUID for stitched video
     stitched_video_id = str(uuid.uuid4())
 
-    # Create output directory
-    job_dir = Path(__file__).parent / "outputs" / "jobs" / stitched_video_id
-    os.makedirs(job_dir, exist_ok=True)
-
-    # Also save to videos directory for backward compatibility
-    videos_dir = Path(__file__).parent / "outputs" / "videos"
-    os.makedirs(videos_dir, exist_ok=True)
-
-    output_path = job_dir / "video.mp4"
-    output_path_compat = videos_dir / f"{stitched_video_id}.mp4"
+    # Use temporary file ONLY during stitching (MoviePy needs file path)
+    temp_output_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    temp_output_path = temp_output_file.name
+    temp_output_file.close()  # Close so MoviePy can write to it
 
     try:
         # Handle audio overlay if requested
@@ -435,17 +429,13 @@ def stitch_videos(
                 if audio_overlay_path:
                     audio_overlay_applied = True
 
-        # Merge videos with optional audio overlay
+        # Merge videos with optional audio overlay to temp file
         merge_time, total_duration = _merge_video_clips(
             video_paths,
-            str(output_path),
+            temp_output_path,
             audio_overlay_path=audio_overlay_path,
             suppress_video_audio=suppress_video_audio
         )
-
-        # Copy to legacy location
-        import shutil
-        shutil.copy2(output_path, output_path_compat)
 
         # Build metadata
         total_processing_time = time.time() - total_start_time
@@ -456,7 +446,6 @@ def stitch_videos(
             "merge_time_seconds": round(merge_time, 2),
             "total_processing_time_seconds": round(total_processing_time, 2),
             "generation_timestamp": datetime.now(timezone.utc).isoformat(),
-            "local_path": str(output_path),
             "video_duration_seconds": round(total_duration, 2),
         }
 
@@ -476,70 +465,71 @@ def stitch_videos(
                 except Exception:
                     pass
 
-        # Save metadata
-        metadata_path = job_dir / "metadata.json"
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-
-        # Upload to cloud storage if configured
-        cloud_urls = {}
+        # Upload to S3 if configured
         if settings.STORAGE_BUCKET:
-            try:
-                async def upload_job_to_cloud():
-                    urls = {}
+            from services.s3_storage import get_s3_storage_service
 
-                    # Upload video
-                    urls["video"] = await _upload_to_s3(
-                        str(output_path),
-                        f"mv/jobs/{stitched_video_id}/video.mp4"
-                    )
+            s3_service = get_s3_storage_service()
 
-                    # Upload metadata
-                    urls["metadata"] = await _upload_to_s3(
-                        str(metadata_path),
-                        f"mv/jobs/{stitched_video_id}/metadata.json"
-                    )
+            # Upload video from temp file
+            video_s3_key = s3_service.upload_file_from_path(
+                temp_output_path,
+                f"mv/projects/{stitched_video_id}/video.mp4",
+                content_type="video/mp4"
+            )
 
-                    return urls
+            # Upload metadata from memory
+            metadata_json = json.dumps(metadata, indent=2).encode('utf-8')
+            s3_service.upload_file(
+                BytesIO(metadata_json),
+                f"mv/projects/{stitched_video_id}/metadata.json",
+                content_type="application/json"
+            )
 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(lambda: asyncio.run(upload_job_to_cloud()))
-                    cloud_urls = future.result(timeout=300)
+            # Generate presigned URL
+            video_url = s3_service.generate_presigned_url(video_s3_key)
+            metadata["cloud_url"] = video_url
+            metadata["storage_backend"] = "s3"
+            video_path = None  # No local path when using S3
 
-                logger.info(f"Uploaded stitched video {stitched_video_id} to cloud storage")
+            logger.info(f"Uploaded stitched video {stitched_video_id} directly to S3")
 
-                if settings.MV_DEBUG_MODE:
-                    from mv.debug import log_stitch_upload_complete
-                    log_stitch_upload_complete(stitched_video_id, cloud_urls)
+            if settings.MV_DEBUG_MODE:
+                from mv.debug import log_stitch_upload_complete
+                log_stitch_upload_complete(stitched_video_id, {"video": video_url})
 
-            except Exception as e:
-                logger.warning(f"Failed to upload stitched video to cloud: {e}")
-
-        # Determine video URL based on storage mode
-        if cloud_urls:
-            metadata["cloud_urls"] = cloud_urls
-            metadata["cloud_url"] = cloud_urls.get("video")
-            video_url = cloud_urls.get("video")
         else:
-            video_url = f"/api/mv/get_video/{stitched_video_id}"
+            # Fallback for local dev
+            videos_dir = Path(__file__).parent / "outputs" / "videos"
+            videos_dir.mkdir(parents=True, exist_ok=True)
 
-        metadata["local_video_url"] = f"/api/mv/get_video/{stitched_video_id}"
-        metadata["storage_backend"] = "s3" if cloud_urls else "local"
+            local_path = videos_dir / f"{stitched_video_id}.mp4"
+            shutil.copy2(temp_output_path, local_path)
+
+            video_url = f"/api/mv/get_video/{stitched_video_id}"
+            metadata["local_path"] = str(local_path)
+            metadata["storage_backend"] = "local"
+            video_path = str(local_path)
 
         if settings.MV_DEBUG_MODE:
             from mv.debug import log_stitch_result
-            log_stitch_result({
+            debug_info = {
                 "video_id": stitched_video_id,
-                "video_path": str(output_path),
+                "video_path": video_path,
                 "video_url": video_url,
-                "file_size_bytes": os.path.getsize(output_path),
                 "storage_backend": metadata["storage_backend"],
                 "audio_overlay_applied": audio_overlay_applied,
-            })
+            }
+            # Only include file size if we have a local path
+            if video_path and os.path.exists(video_path):
+                debug_info["file_size_bytes"] = os.path.getsize(video_path)
+            elif os.path.exists(temp_output_path):
+                debug_info["file_size_bytes"] = os.path.getsize(temp_output_path)
+            log_stitch_result(debug_info)
 
         return (
             stitched_video_id,
-            str(output_path),
+            video_path,
             video_url,
             metadata,
             audio_overlay_applied,
@@ -547,9 +537,18 @@ def stitch_videos(
         )
 
     finally:
-        # Clean up temp directory if created
+        # Clean up temp output file
+        if os.path.exists(temp_output_path):
+            try:
+                os.unlink(temp_output_path)
+                if settings.MV_DEBUG_MODE:
+                    from mv.debug import log_stitch_cleanup
+                    log_stitch_cleanup(temp_output_path)
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temp file {temp_output_path}: {e}")
+
+        # Clean up temp directory if created (S3 cache creates temp dirs for downloads)
         if temp_dir and os.path.exists(temp_dir):
-            import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
 
             if settings.MV_DEBUG_MODE:

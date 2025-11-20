@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import asyncio
 
-from .storage_backend import StorageBackend, get_storage_backend
+from .s3_storage import S3StorageService, get_s3_storage_service
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -26,27 +26,27 @@ logger = logging.getLogger(__name__)
 
 class AssetPersistenceService:
     """
-    Manages persisting video generation job assets to cloud storage.
-    
+    Manages persisting video generation job assets to S3 storage.
+
     Provides methods to upload complete job workspaces, download assets
     for regeneration, and manage versioning/backups.
-    
+
     Example:
         >>> service = AssetPersistenceService()
-        >>> urls = await service.persist_job_assets("job-123", "/tmp/video_jobs/job-123")
-        >>> print(urls["final_video"])
-        'https://storage.googleapis.com/bucket/videos/job-123/final.mp4'
+        >>> result = await service.persist_job_assets("job-123", "/tmp/video_jobs/job-123")
+        >>> print(result["final_video"])
+        'mv/projects/job-123/final/video.mp4'
     """
-    
-    def __init__(self, storage_backend: Optional[StorageBackend] = None):
+
+    def __init__(self, s3_service: Optional[S3StorageService] = None):
         """
         Initialize asset persistence service.
-        
+
         Args:
-            storage_backend: Optional custom storage backend. If None, uses factory.
+            s3_service: Optional custom S3 service. If None, uses singleton.
         """
-        self.storage = storage_backend or get_storage_backend()
-        logger.info("AssetPersistenceService initialized")
+        self.s3_service = s3_service or get_s3_storage_service()
+        logger.info("AssetPersistenceService initialized with S3StorageService")
     
     async def persist_job_assets(
         self,
@@ -202,17 +202,37 @@ class AssetPersistenceService:
         # Upload files in parallel for speed
         upload_tasks = []
         for file in files:
-            cloud_path = f"videos/{job_id}/{cloud_subpath}/{file.name}"
+            s3_key = f"videos/{job_id}/{cloud_subpath}/{file.name}"
+            # Determine content type based on extension
+            content_type = None
+            if file.suffix in ['.mp4', '.mov', '.avi']:
+                content_type = 'video/mp4'
+            elif file.suffix in ['.mp3', '.wav', '.m4a']:
+                content_type = 'audio/mpeg'
+            elif file.suffix in ['.json']:
+                content_type = 'application/json'
+            elif file.suffix in ['.jpg', '.jpeg', '.png']:
+                content_type = f'image/{file.suffix.lstrip(".")}'
+
             upload_tasks.append(
-                self.storage.upload_file(str(file), cloud_path)
+                self.s3_service.upload_file_from_path_async(
+                    str(file),
+                    s3_key,
+                    content_type
+                )
             )
-        
-        urls = await asyncio.gather(*upload_tasks)
-        
+
+        s3_keys = await asyncio.gather(*upload_tasks)
+
         if single_file:
-            # For final video, return just the first (only) URL
-            return urls[0] if urls else None
-        
+            # For final video, generate presigned URL and return it
+            if s3_keys:
+                url = self.s3_service.generate_presigned_url(s3_keys[0])
+                return url
+            return None
+
+        # For multiple files, return presigned URLs
+        urls = [self.s3_service.generate_presigned_url(key) for key in s3_keys]
         return urls
     
     async def download_job_assets(
@@ -240,35 +260,35 @@ class AssetPersistenceService:
         
         try:
             # List all files for this job
-            files = await self.storage.list_files(f"videos/{job_id}/")
-            
-            if not files:
+            s3_keys = await self.s3_service.list_files_async(f"videos/{job_id}/")
+
+            if not s3_keys:
                 raise FileNotFoundError(f"No assets found for job {job_id}")
-            
+
             # Download all files in parallel
             download_tasks = []
-            for cloud_path in files:
+            for s3_key in s3_keys:
                 # Determine local path based on cloud structure
                 # videos/job-123/final/video.mp4 -> /tmp/video_jobs/job-123/final/video.mp4
                 # videos/job-123/intermediate/scenes/scene_1.mp4 -> /tmp/.../scenes/scene_1.mp4
-                
-                rel_path = cloud_path.replace(f"videos/{job_id}/", "")
-                
+
+                rel_path = s3_key.replace(f"videos/{job_id}/", "")
+
                 # Simplify path: intermediate/scenes/... -> scenes/...
                 if rel_path.startswith("intermediate/"):
                     rel_path = rel_path.replace("intermediate/", "")
-                
+
                 local_path = base_path / rel_path
                 local_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 download_tasks.append(
-                    self.storage.download_file(cloud_path, str(local_path))
+                    self.s3_service.download_file_async(s3_key, str(local_path))
                 )
-            
+
             await asyncio.gather(*download_tasks)
-            
-            logger.info(f"Successfully downloaded {len(files)} assets for job {job_id}")
-            
+
+            logger.info(f"Successfully downloaded {len(s3_keys)} assets for job {job_id}")
+
         except Exception as e:
             logger.error(f"Failed to download assets for job {job_id}: {e}")
             raise
@@ -311,14 +331,17 @@ class AssetPersistenceService:
             dest_path = f"videos/{job_id}/intermediate/{asset_type}/{backup_name}"
         
         logger.info(f"Backing up {src_path} to {dest_path}")
-        
+
         # Check if source exists
-        if not await self.storage.exists(src_path):
+        if not await self.s3_service.file_exists_async(src_path):
             raise FileNotFoundError(f"Asset not found: {src_path}")
-        
+
         # Copy to backup
-        backup_url = await self.storage.copy_file(src_path, dest_path)
-        
+        await self.s3_service.copy_file_async(src_path, dest_path)
+
+        # Generate presigned URL for the backup
+        backup_url = self.s3_service.generate_presigned_url(dest_path)
+
         logger.info(f"Backup created: {backup_url}")
         return backup_url
     
@@ -333,20 +356,20 @@ class AssetPersistenceService:
             URL of backup, or None if no final video exists
         """
         # Find the final video (could be video.mp4, final_video.mp4, etc.)
-        files = await self.storage.list_files(f"videos/{job_id}/final/")
-        
+        s3_keys = await self.s3_service.list_files_async(f"videos/{job_id}/final/")
+
         # Find the main video file (not a backup)
         video_file = None
-        for f in files:
-            filename = f.split("/")[-1]
+        for s3_key in s3_keys:
+            filename = s3_key.split("/")[-1]
             if not filename.endswith("_v1.mp4") and filename.endswith(".mp4"):
                 video_file = filename
                 break
-        
+
         if not video_file:
             logger.warning(f"No final video found for job {job_id}")
             return None
-        
+
         return await self.backup_asset(job_id, "final", video_file)
     
     async def get_asset_metadata(self, job_id: str) -> Optional[Dict]:
@@ -359,22 +382,22 @@ class AssetPersistenceService:
         Returns:
             Metadata dict or None if not found
         """
-        metadata_path = f"videos/{job_id}/intermediate/metadata.json"
-        
-        if not await self.storage.exists(metadata_path):
+        s3_key = f"videos/{job_id}/intermediate/metadata.json"
+
+        if not await self.s3_service.file_exists_async(s3_key):
             return None
-        
+
         # Download to temp location
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp:
             tmp_path = tmp.name
-        
+
         try:
-            await self.storage.download_file(metadata_path, tmp_path)
-            
+            await self.s3_service.download_file_async(s3_key, tmp_path)
+
             with open(tmp_path, 'r') as f:
                 metadata = json.load(f)
-            
+
             return metadata
         finally:
             # Clean up temp file
@@ -412,9 +435,16 @@ class AssetPersistenceService:
                 upload_path = tmp.name
         
         try:
-            cloud_path = f"videos/{job_id}/intermediate/metadata.json"
-            url = await self.storage.upload_file(upload_path, cloud_path)
-            
+            s3_key = f"videos/{job_id}/intermediate/metadata.json"
+            await self.s3_service.upload_file_from_path_async(
+                upload_path,
+                s3_key,
+                content_type='application/json'
+            )
+
+            # Generate presigned URL
+            url = self.s3_service.generate_presigned_url(s3_key)
+
             logger.info(f"Updated metadata for job {job_id}")
             return url
         finally:
@@ -437,25 +467,25 @@ class AssetPersistenceService:
         
         try:
             # List all files for job
-            files = await self.storage.list_files(f"videos/{job_id}/")
-            
+            s3_keys = await self.s3_service.list_files_async(f"videos/{job_id}/")
+
             # Find backup files (contain _v2, _v3, etc. or _original)
             # Only delete if we have more than the limit
-            final_backups = [f for f in files if "/final/" in f and "_v" in f and f.endswith(".mp4")]
-            
+            final_backups = [f for f in s3_keys if "/final/" in f and "_v" in f and f.endswith(".mp4")]
+
             # Sort by version number (newest first)
             final_backups.sort(reverse=True)
-            
+
             # Delete old versions beyond limit
             if len(final_backups) > limit:
                 to_delete = final_backups[limit:]
-                
-                for file in to_delete:
-                    logger.info(f"Deleting old backup: {file}")
-                    await self.storage.delete_file(file)
-                
+
+                for s3_key in to_delete:
+                    logger.info(f"Deleting old backup: {s3_key}")
+                    await self.s3_service.delete_file_async(s3_key)
+
                 logger.info(f"Cleaned up {len(to_delete)} old backups")
-        
+
         except Exception as e:
             logger.error(f"Error cleaning up backups: {e}")
             # Don't raise - cleanup failure shouldn't break the main flow
@@ -496,9 +526,26 @@ class AssetPersistenceService:
             cloud_path = f"character_references/{image_id}{file_ext}"
         
         logger.info(f"Persisting character reference {image_id} to {cloud_path}")
-        
+
         try:
-            url = await self.storage.upload_file(local_image_path, cloud_path)
+            # Determine content type
+            content_type = None
+            if file_ext in ['.jpg', '.jpeg']:
+                content_type = 'image/jpeg'
+            elif file_ext == '.png':
+                content_type = 'image/png'
+            elif file_ext == '.webp':
+                content_type = 'image/webp'
+
+            await self.s3_service.upload_file_from_path_async(
+                local_image_path,
+                cloud_path,
+                content_type
+            )
+
+            # Generate presigned URL
+            url = self.s3_service.generate_presigned_url(cloud_path)
+
             logger.info(f"Successfully persisted character reference {image_id}")
             return url
         except Exception as e:
@@ -557,10 +604,27 @@ class AssetPersistenceService:
                     shutil.copy2(source_path, dest_path)
                     
                     # Upload to cloud
-                    cloud_path = f"videos/{job_id}/intermediate/character_reference/{image_id}{ext}"
-                    url = await self.storage.upload_file(str(dest_path), cloud_path)
+                    s3_key = f"videos/{job_id}/intermediate/character_reference/{image_id}{ext}"
+
+                    # Determine content type
+                    content_type = None
+                    if ext in ['.jpg', '.jpeg']:
+                        content_type = 'image/jpeg'
+                    elif ext == '.png':
+                        content_type = 'image/png'
+                    elif ext == '.webp':
+                        content_type = 'image/webp'
+
+                    await self.s3_service.upload_file_from_path_async(
+                        str(dest_path),
+                        s3_key,
+                        content_type
+                    )
+
+                    # Generate presigned URL
+                    url = self.s3_service.generate_presigned_url(s3_key)
                     urls.append(url)
-                    
+
                     logger.info(f"Associated character reference {image_id} with job {job_id}")
                     image_found = True
                     break
@@ -578,19 +642,16 @@ class AssetPersistenceService:
         extension: str = "png"
     ) -> Optional[str]:
         """
-        Generate presigned URL (S3) or public URL (Firebase) for character reference image.
-        
-        Reuses storage backend's generate_presigned_url() for S3 
-        and _get_public_url() for Firebase.
-        
+        Generate presigned URL for character reference image.
+
         Args:
             image_id: UUID of the image
             job_id: Optional job ID if image is associated with a job
             extension: Image file extension (png, jpg, webp)
-        
+
         Returns:
-            Presigned/public URL or None if image doesn't exist
-            
+            Presigned URL or None if image doesn't exist
+
         Example:
             >>> service = AssetPersistenceService()
             >>> url = await service.get_character_reference_url(
@@ -599,28 +660,21 @@ class AssetPersistenceService:
             ...     extension="png"
             ... )
         """
-        from services.storage_backend import S3StorageBackend, FirebaseStorageBackend
-        
-        # Determine cloud path
+        # Determine S3 key
         if job_id:
-            cloud_path = f"videos/{job_id}/intermediate/character_reference/{image_id}.{extension}"
+            s3_key = f"videos/{job_id}/intermediate/character_reference/{image_id}.{extension}"
         else:
-            cloud_path = f"character_references/{image_id}.{extension}"
-        
+            s3_key = f"character_references/{image_id}.{extension}"
+
         # Check if exists
-        if not await self.storage.exists(cloud_path):
+        if not await self.s3_service.file_exists_async(s3_key):
             return None
-        
-        # Generate URL based on backend type
-        if isinstance(self.storage, S3StorageBackend):
-            return self.storage.generate_presigned_url(
-                cloud_path, 
-                expiry=settings.PRESIGNED_URL_EXPIRY
-            )
-        elif isinstance(self.storage, FirebaseStorageBackend):
-            return self.storage._get_public_url(cloud_path)
-        
-        return None
+
+        # Generate presigned URL
+        return self.s3_service.generate_presigned_url(
+            s3_key,
+            expiry=settings.PRESIGNED_URL_EXPIRY
+        )
 
 
 

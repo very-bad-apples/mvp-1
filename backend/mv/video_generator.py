@@ -6,14 +6,15 @@ using either Replicate or Gemini backends. Designed to be called multiple times 
 generate individual scene clips for a music video.
 """
 
-import asyncio
 import base64
+import json
 import logging
 import os
 import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
 
@@ -324,24 +325,6 @@ def generate_video(
     # Generate UUID for video
     video_id = str(uuid.uuid4())
 
-    # Create job directory structure for this video
-    job_dir = Path(__file__).parent / "outputs" / "jobs" / video_id
-    os.makedirs(job_dir, exist_ok=True)
-    
-    # Also save to videos directory for backward compatibility
-    videos_dir = Path(__file__).parent / "outputs" / "videos"
-    os.makedirs(videos_dir, exist_ok=True)
-
-    video_filename = f"{video_id}.mp4"
-    video_path = job_dir / "video.mp4"  # Save in job directory
-    video_path_compat = videos_dir / video_filename  # Backward compatibility
-
-    # Save video to both locations
-    with open(video_path, "wb") as f:
-        f.write(video_data)
-    with open(video_path_compat, "wb") as f:
-        f.write(video_data)
-
     # Build metadata
     metadata = {
         "prompt": prompt,
@@ -354,7 +337,6 @@ def generate_video(
         },
         "generation_timestamp": datetime.now(timezone.utc).isoformat(),
         "processing_time_seconds": round(processing_time, 2),
-        "local_path": str(video_path),
         "video_id": video_id,
     }
 
@@ -371,106 +353,86 @@ def generate_video(
         if character_reference_warning:
             metadata["character_reference_warning"] = character_reference_warning
 
-    # Handle deprecated base64 reference image (backward compatibility)
-    if reference_image_base64:
-        metadata["has_reference_image"] = True
-        # Save reference image if provided
-        try:
-            import base64
-            # Fix base64 padding if needed
-            image_data = reference_image_base64
-            # Remove data URL prefix if present
-            if ',' in image_data:
-                image_data = image_data.split(',', 1)[1]
-            # Add padding if needed
-            missing_padding = len(image_data) % 4
-            if missing_padding:
-                image_data += '=' * (4 - missing_padding)
+    # Upload directly to S3 if configured
+    if settings.STORAGE_BUCKET:
+        from services.s3_storage import get_s3_storage_service
 
-            ref_image_data = base64.b64decode(image_data)
-            ref_image_path = job_dir / "reference_image.jpg"
-            with open(ref_image_path, "wb") as f:
-                f.write(ref_image_data)
-            metadata["reference_image_path"] = str(ref_image_path)
-        except Exception as e:
-            logger.warning(f"Failed to save reference image: {e}")
+        s3_service = get_s3_storage_service()
 
-    # Save metadata.json
-    import json
-    metadata_path = job_dir / "metadata.json"
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=2)
+        # Upload video from memory
+        video_s3_key = s3_service.upload_file(
+            BytesIO(video_data),
+            f"mv/projects/{video_id}/video.mp4",
+            content_type="video/mp4"
+        )
 
-    # Upload entire job directory to cloud storage if configured
-    cloud_urls = {}
-    try:
-        if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
-            from services.storage_backend import get_storage_backend
-            
-            async def upload_job_to_cloud():
-                storage = get_storage_backend()
-                urls = {}
-                
-                # Upload video
-                urls["video"] = await storage.upload_file(
-                    str(video_path),
-                    f"mv/jobs/{video_id}/video.mp4"
+        # Upload metadata from memory
+        metadata_json = json.dumps(metadata, indent=2).encode('utf-8')
+        s3_service.upload_file(
+            BytesIO(metadata_json),
+            f"mv/projects/{video_id}/metadata.json",
+            content_type="application/json"
+        )
+
+        # Upload reference image if exists (from base64)
+        if reference_image_base64:
+            try:
+                # Fix base64 padding if needed
+                image_data = reference_image_base64
+                # Remove data URL prefix if present
+                if ',' in image_data:
+                    image_data = image_data.split(',', 1)[1]
+                # Add padding if needed
+                missing_padding = len(image_data) % 4
+                if missing_padding:
+                    image_data += '=' * (4 - missing_padding)
+
+                ref_image_data = base64.b64decode(image_data)
+                s3_service.upload_file(
+                    BytesIO(ref_image_data),
+                    f"mv/projects/{video_id}/reference_image.jpg",
+                    content_type="image/jpeg"
                 )
-                
-                # Upload metadata
-                urls["metadata"] = await storage.upload_file(
-                    str(metadata_path),
-                    f"mv/jobs/{video_id}/metadata.json"
-                )
-                
-                # Upload reference image if exists
-                ref_image_path = job_dir / "reference_image.jpg"
-                if ref_image_path.exists():
-                    urls["reference_image"] = await storage.upload_file(
-                        str(ref_image_path),
-                        f"mv/jobs/{video_id}/reference_image.jpg"
-                    )
-                
-                return urls
-            
-            # Run async upload - handle both sync and async contexts
-            # Use a separate thread with its own event loop to avoid conflicts
-            import concurrent.futures
-            
-            def run_upload():
-                return asyncio.run(upload_job_to_cloud())
-            
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_upload)
-                cloud_urls = future.result(timeout=300)  # 5 min timeout
-            
-            logger.info(f"Uploaded job {video_id} to cloud storage with {len(cloud_urls)} files")
-    except Exception as e:
-        logger.warning(f"Failed to upload job {video_id} to cloud storage: {e}")
-        # Continue without cloud upload - local files are still available
+                metadata["has_reference_image"] = True
+            except Exception as e:
+                logger.warning(f"Failed to upload reference image: {e}")
 
-    # Add cloud URLs to metadata if upload succeeded
-    if cloud_urls:
-        metadata["cloud_urls"] = cloud_urls
-        metadata["cloud_url"] = cloud_urls.get("video")  # Backward compatibility
-        # Use cloud URL as primary video URL when available
-        video_url = cloud_urls.get("video")
+        # Generate presigned URL for response
+        video_url = s3_service.generate_presigned_url(video_s3_key)
+
+        metadata["cloud_url"] = video_url
+        metadata["storage_backend"] = "s3"
+        video_path = None  # No local path when using S3
+
+        logger.info(f"Uploaded video {video_id} directly to S3")
+
     else:
-        # Fallback to local API endpoint if cloud upload failed or not configured
+        # Fallback for local dev without S3
+        videos_dir = Path(__file__).parent / "outputs" / "videos"
+        videos_dir.mkdir(parents=True, exist_ok=True)
+
+        video_path = videos_dir / f"{video_id}.mp4"
+        with open(video_path, "wb") as f:
+            f.write(video_data)
+
         video_url = f"/api/mv/get_video/{video_id}"
-    
-    # Also store local API endpoint for backward compatibility
-    metadata["local_video_url"] = f"/api/mv/get_video/{video_id}"
+        metadata["local_path"] = str(video_path)
+        metadata["storage_backend"] = "local"
+        video_path = str(video_path)
 
     if settings.MV_DEBUG_MODE:
         from mv.debug import log_video_generation_result
-        log_video_generation_result({
+        debug_info = {
             "video_id": video_id,
-            "video_path": str(video_path),
+            "video_path": video_path,
             "processing_time_seconds": metadata["processing_time_seconds"],
-            "file_size_bytes": os.path.getsize(video_path),
+            "storage_backend": metadata["storage_backend"],
             "character_reference_id": character_reference_id,
             "character_reference_path": character_reference_path,
-        })
+        }
+        # Only include file size if we have a local path
+        if video_path and os.path.exists(video_path):
+            debug_info["file_size_bytes"] = os.path.getsize(video_path)
+        log_video_generation_result(debug_info)
 
-    return video_id, str(video_path), video_url, metadata, character_reference_warning
+    return video_id, video_path, video_url, metadata, character_reference_warning

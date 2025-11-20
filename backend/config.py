@@ -58,12 +58,9 @@ class Settings:
     REPLICATE_TIMEOUT: int = int(os.getenv("REPLICATE_TIMEOUT", "600"))
 
     # Cloud Storage Configuration
-    # Default to S3 for new MV pipeline; Firebase still supported for legacy endpoints
-    STORAGE_BACKEND: str = os.getenv("STORAGE_BACKEND", "s3")  # Options: "firebase" or "s3"
+    # All storage uses S3 (Firebase support removed)
+    STORAGE_BACKEND: str = "s3"  # Always S3
     STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "")
-    
-    # Firebase Storage (Google Cloud Storage)
-    FIREBASE_CREDENTIALS_PATH: str = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
     
     # AWS S3 Configuration
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")

@@ -488,35 +488,50 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         cloud_urls = {}
         try:
             if settings.STORAGE_BUCKET:
-                from services.storage_backend import get_storage_backend
                 import asyncio
                 import concurrent.futures
                 
                 async def upload_images_to_cloud():
-                    """Upload character reference images to cloud storage."""
-                    storage = get_storage_backend()
+                    """Upload character reference images to S3 storage."""
+                    from services.s3_storage import get_s3_storage_service
+
+                    s3_service = get_s3_storage_service()
                     urls = {}
-                    
+
                     for image in images:
                         try:
                             # Determine file extension from path
                             from pathlib import Path
                             ext = Path(image.path).suffix.lstrip('.')
-                            
-                            cloud_path = f"character_references/{image.id}.{ext}"
-                            url = await storage.upload_file(
+
+                            s3_key = f"character_references/{image.id}.{ext}"
+
+                            # Determine content type
+                            content_type = None
+                            if ext in ['jpg', 'jpeg']:
+                                content_type = 'image/jpeg'
+                            elif ext == 'png':
+                                content_type = 'image/png'
+                            elif ext == 'webp':
+                                content_type = 'image/webp'
+
+                            await s3_service.upload_file_from_path_async(
                                 image.path,
-                                cloud_path
+                                s3_key,
+                                content_type
                             )
-                            
+
+                            # Generate presigned URL
+                            url = s3_service.generate_presigned_url(s3_key)
+
                             # Update image with cloud URL
                             image.cloud_url = url
                             urls[image.id] = url
-                            
+
                             logger.info(
                                 "character_image_uploaded_to_cloud",
                                 image_id=image.id,
-                                cloud_path=cloud_path
+                                s3_key=s3_key
                             )
                         except Exception as e:
                             logger.warning(
@@ -525,7 +540,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                                 error=str(e)
                             )
                             # Continue with other images
-                    
+
                     return urls
                 
                 # Run async upload in separate thread to avoid event loop conflicts
@@ -647,55 +662,47 @@ async def get_character_reference(image_id: str, redirect: bool = False):
             storage_bucket=settings.STORAGE_BUCKET
         )
         try:
-            from services.storage_backend import get_storage_backend, S3StorageBackend
-            
-            storage = get_storage_backend()
-            
-            # S3: Generate presigned URL without exists() check (performance optimization)
+            from services.s3_storage import get_s3_storage_service
+
+            s3_service = get_s3_storage_service()
+
+            # Generate presigned URL without exists() check (performance optimization)
             # Note: We skip the exists() check for performance (like video endpoint)
             # If file doesn't exist, the presigned URL will return 404 when accessed
-            if isinstance(storage, S3StorageBackend):
-                # Default to png, but will work with any extension in S3
-                cloud_path = f"character_references/{image_id}.png"
-                
-                presigned_url = storage.generate_presigned_url(
-                    cloud_path,
-                    expiry=settings.PRESIGNED_URL_EXPIRY
-                )
-                
-                logger.info(
-                    "get_character_reference_url_generated",
-                    image_id=image_id,
-                    storage_backend="s3",
-                    cloud_path=cloud_path,
-                    redirect_mode=redirect
-                )
-                
-                # Return JSON with URL by default, or redirect if requested
-                if redirect:
-                    return RedirectResponse(
-                        url=presigned_url,
-                        status_code=302
-                    )
-                else:
-                    return JSONResponse(
-                        content={
-                            "image_id": image_id,
-                            "image_url": presigned_url,
-                            "storage_backend": "s3",
-                            "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
-                            "cloud_path": cloud_path
-                        },
-                        status_code=200
-                    )
-            
-            # If not S3, fall through to local serving
-            logger.debug(
-                "get_character_reference_cloud_fallback_to_local",
-                image_id=image_id,
-                reason="not_s3_backend"
+
+            # Default to png, but will work with any extension in S3
+            s3_key = f"character_references/{image_id}.png"
+
+            presigned_url = s3_service.generate_presigned_url(
+                s3_key,
+                expiry=settings.PRESIGNED_URL_EXPIRY
             )
-            
+
+            logger.info(
+                "get_character_reference_url_generated",
+                image_id=image_id,
+                storage_backend="s3",
+                s3_key=s3_key,
+                redirect_mode=redirect
+            )
+
+            # Return JSON with URL by default, or redirect if requested
+            if redirect:
+                return RedirectResponse(
+                    url=presigned_url,
+                    status_code=302
+                )
+
+            return JSONResponse(
+                content={
+                    "image_id": image_id,
+                    "image_url": presigned_url,
+                    "storage_backend": "s3",
+                    "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY
+                },
+                status_code=200
+            )
+
         except Exception as e:
             # If cloud serving fails, fall back to local
             logger.warning(
@@ -1155,11 +1162,8 @@ async def get_video(video_id: str, redirect: bool = False):
 
     This endpoint:
     1. Validates the video_id format
-    2. Checks SERVE_FROM_CLOUD config
-    3. If enabled, generates presigned URL and redirects to cloud storage
-    4. Otherwise, serves the video file from local storage
-
-    The video is served with Content-Type: video/mp4 (local) or redirected to cloud URL.
+    2. If S3 is configured, generates presigned URL
+    3. Otherwise, serves the video file from local storage
     """
     # Validate video_id format (basic UUID validation)
     if not video_id or len(video_id) != 36 or video_id.count("-") != 4:
@@ -1171,103 +1175,43 @@ async def get_video(video_id: str, redirect: bool = False):
                 "details": "video_id must be a valid UUID"
             }
         )
-    
-    # Check if we should serve from cloud storage
-    if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
-        logger.info(
-            "get_video_attempting_cloud_serve",
-            video_id=video_id,
-            serve_from_cloud=settings.SERVE_FROM_CLOUD,
-            storage_bucket=settings.STORAGE_BUCKET
+
+    # Always serve from S3 (production mode)
+    if settings.STORAGE_BUCKET:
+        from services.s3_storage import get_s3_storage_service
+
+        s3_service = get_s3_storage_service()
+        cloud_path = f"mv/projects/{video_id}/video.mp4"
+
+        presigned_url = s3_service.generate_presigned_url(
+            cloud_path,
+            expiry=settings.PRESIGNED_URL_EXPIRY
         )
-        try:
-            from services.storage_backend import get_storage_backend, S3StorageBackend
-            
-            storage = get_storage_backend()
-            cloud_path = f"mv/jobs/{video_id}/video.mp4"
-            
-            # Generate presigned URL (S3)
-            # Note: We skip the exists() check for performance (21s -> <100ms)
-            # If file doesn't exist, the presigned URL will return 404 when accessed
-            if isinstance(storage, S3StorageBackend):
-                presigned_url = storage.generate_presigned_url(
-                    cloud_path,
-                    expiry=settings.PRESIGNED_URL_EXPIRY
-                )
-                
-                logger.info(
-                    "get_video_url_generated",
-                    video_id=video_id,
-                    storage_backend="s3",
-                    cloud_path=cloud_path,
-                    redirect_mode=redirect
-                )
-                
-                # Return JSON with URL by default, or redirect if requested
-                if redirect:
-                    return RedirectResponse(
-                        url=presigned_url,
-                        status_code=302
-                    )
-                else:
-                    return JSONResponse(
-                        content={
-                            "video_id": video_id,
-                            "video_url": presigned_url,
-                            "storage_backend": "s3",
-                            "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
-                            "cloud_path": cloud_path
-                        },
-                        status_code=200
-                    )
-            
-            # Firebase: check existence then return public URL with token
-            from services.storage_backend import FirebaseStorageBackend
-            if isinstance(storage, FirebaseStorageBackend):
-                # Firebase needs existence check as URLs are always valid
-                exists = await storage.exists(cloud_path)
-                
-                if exists:
-                    url = storage._get_public_url(cloud_path)
-                    
-                    logger.info(
-                        "get_video_url_generated",
-                        video_id=video_id,
-                        storage_backend="firebase",
-                        redirect_mode=redirect
-                    )
-                    
-                    # Return JSON with URL by default, or redirect if requested
-                    if redirect:
-                        return RedirectResponse(
-                            url=url,
-                            status_code=302
-                        )
-                    else:
-                        return JSONResponse(
-                            content={
-                                "video_id": video_id,
-                                "video_url": url,
-                                "storage_backend": "firebase",
-                                "cloud_path": cloud_path
-                            },
-                            status_code=200
-                        )
-            
-            # If video not in cloud or storage backend not supported, fall through to local serving
-            logger.debug(
-                "get_video_cloud_fallback_to_local",
-                video_id=video_id,
-                reason="not_in_cloud_or_unsupported_backend"
+
+        logger.info(
+            "get_video_url_generated",
+            video_id=video_id,
+            storage_backend="s3",
+            cloud_path=cloud_path,
+            redirect_mode=redirect
+        )
+
+        # Return JSON with URL by default, or redirect if requested
+        if redirect:
+            return RedirectResponse(
+                url=presigned_url,
+                status_code=302
             )
-            
-        except Exception as e:
-            # If cloud serving fails, fall back to local
-            logger.warning(
-                "get_video_cloud_error_fallback",
-                video_id=video_id,
-                error=str(e)
-            )
+
+        return JSONResponse(
+            content={
+                "video_id": video_id,
+                "video_url": presigned_url,
+                "storage_backend": "s3",
+                "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY
+            },
+            status_code=200
+        )
 
     # Check if mock mode is enabled
     if settings.MOCK_VID_GENS:
@@ -1419,42 +1363,31 @@ async def get_video_info(video_id: str):
     # Add cloud URL if cloud storage is configured
     if settings.STORAGE_BUCKET:
         try:
-            from services.storage_backend import get_storage_backend, S3StorageBackend
-            
-            storage = get_storage_backend()
-            cloud_path = f"mv/jobs/{video_id}/video.mp4"
-            
-            # Check if video exists in cloud
-            exists_in_cloud = await storage.exists(cloud_path)
-            
+            from services.s3_storage import get_s3_storage_service
+
+            s3_service = get_s3_storage_service()
+            s3_key = f"mv/projects/{video_id}/video.mp4"
+
+            # Check if video exists in S3
+            exists_in_cloud = s3_service.file_exists(s3_key)
+
             if exists_in_cloud:
-                # Generate presigned URL for S3
-                if isinstance(storage, S3StorageBackend):
-                    presigned_url = storage.generate_presigned_url(
-                        cloud_path,
-                        expiry=settings.PRESIGNED_URL_EXPIRY
-                    )
-                    response["cloud_url"] = presigned_url
-                    response["cloud_storage"] = {
-                        "backend": "s3",
-                        "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY
-                    }
-                else:
-                    # Firebase: get public URL with token
-                    from services.storage_backend import FirebaseStorageBackend
-                    if isinstance(storage, FirebaseStorageBackend):
-                        url = storage._get_public_url(cloud_path)
-                        response["cloud_url"] = url
-                        response["cloud_storage"] = {
-                            "backend": "firebase",
-                            "expires_in_seconds": None  # Firebase tokens don't expire
-                        }
+                # Generate presigned URL
+                presigned_url = s3_service.generate_presigned_url(
+                    s3_key,
+                    expiry=settings.PRESIGNED_URL_EXPIRY
+                )
+                response["cloud_url"] = presigned_url
+                response["cloud_storage"] = {
+                    "backend": "s3",
+                    "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY
+                }
             else:
                 response["cloud_url"] = None
                 response["cloud_storage"] = {
                     "status": "not_uploaded"
                 }
-                
+
         except Exception as e:
             logger.warning("get_video_info_cloud_error", video_id=video_id, error=str(e))
             response["cloud_url"] = None
