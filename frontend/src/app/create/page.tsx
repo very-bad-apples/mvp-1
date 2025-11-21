@@ -37,7 +37,7 @@ export default function CreatePage() {
   const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
   const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [useAICharacter, setUseAICharacter] = useState(false)
+  const [useAICharacter, setUseAICharacter] = useState(true)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
   const [generatedImageIds, setGeneratedImageIds] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
