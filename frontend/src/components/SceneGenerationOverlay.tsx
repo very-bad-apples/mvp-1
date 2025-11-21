@@ -162,14 +162,14 @@ export function SceneGenerationOverlay({
             </div>
           </motion.div>
 
-          {/* Scene Cards - Rendered in reverse to show Scene 1 at bottom */}
+          {/* Scene Cards - Rendered in order from Scene 1 at top */}
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="show"
             className="w-full max-w-4xl space-y-4 mb-8"
           >
-            {[...scenes].reverse().map((scene) => {
+            {scenes.map((scene) => {
               const status = getSceneStatus(scene)
               const sceneProgress = status === 'complete' ? 100 : status === 'generating' ? 50 : 0
 

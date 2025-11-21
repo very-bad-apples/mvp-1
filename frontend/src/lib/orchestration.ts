@@ -19,6 +19,7 @@ import {
   generateLipSync,
   updateProject,
   getProject,
+  updateScene,
   APIError,
 } from '@/lib/api/client'
 import type {
@@ -272,10 +273,11 @@ export async function startFullGeneration(
 
     opts.onProgress('images', 1, 1, 'Character reference generated')
 
-    // Phase 3: Generate all videos (parallel)
+    // Phase 3: Generate all videos (parallel - backend handles DB updates atomically)
     opts.onProgress('videos', 0, project.scenes.length, 'Starting video generation...')
     await updateProject(projectId, { status: 'processing' })
 
+    // Generate all videos in parallel - backend updates each scene atomically in DynamoDB
     const videoPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
         async () => {
@@ -285,19 +287,14 @@ export async function startFullGeneration(
             prompt: scene.prompt,
             negative_prompt: scene.negativePrompt || undefined,
             reference_image_base64: project.characterReferenceImageId || undefined,
+            project_id: projectId,
+            sequence: scene.sequence,
           }
 
           const videoResponse = await generateVideo(videoRequest)
 
-          // Update project with video URL
-          const updatedScenes = [...project.scenes]
-          updatedScenes[index] = {
-            ...scene,
-            videoClipUrl: videoResponse.video_url,
-            status: 'completed',
-          }
-
-          project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+          // Backend automatically updates the scene in DynamoDB with the video URL
+          // No need to manually update - backend handles atomic updates per scene
 
           return videoResponse
         },
@@ -309,6 +306,10 @@ export async function startFullGeneration(
     )
 
     await Promise.all(videoPromises)
+
+    // Refetch project to get all updated scenes with video URLs
+    project = await getProject(projectId)
+
     opts.onProgress('videos', project.scenes.length, project.scenes.length, 'All videos generated')
 
     // Phase 4: Generate all lip-syncs (parallel)
@@ -358,19 +359,29 @@ export async function startFullGeneration(
     await Promise.all(lipsyncPromises)
     opts.onProgress('lipsync', project.scenes.length, project.scenes.length, 'All lip-syncs generated')
 
-    // Phase 5: Compose final video (sequential)
-    opts.onProgress('compose', 0, 1, 'Starting final composition...')
-    await updateProject(projectId, { status: 'processing' })
+    // Phase 5: Verify completion and update status
+    opts.onProgress('compose', 0, 1, 'Verifying all videos generated...')
 
-    // TODO: Implement video composition endpoint
-    // For now, mark as completed
-    await updateProject(projectId, { status: 'completed' })
-    opts.onProgress('compose', 1, 1, 'Final video composed')
-
-    // Fetch final project state
+    // Refetch project to get final state with all video URLs
     const finalProject = await getProject(projectId)
     if (!finalProject.projectId) {
       throw new Error('Failed to fetch final project state')
+    }
+
+    // Check if all scenes have videos
+    const allScenesComplete = finalProject.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    const completedCount = finalProject.scenes.filter(scene => scene.videoClipUrl).length
+
+    if (allScenesComplete) {
+      // All videos generated successfully - mark as completed
+      await updateProject(projectId, { status: 'completed' })
+      opts.onProgress('compose', 1, 1, `All ${completedCount} videos generated successfully!`)
+      console.log(`[Orchestration] Project ${projectId} completed: ${completedCount}/${finalProject.scenes.length} scenes with videos`)
+    } else {
+      // Some videos missing - keep as processing
+      await updateProject(projectId, { status: 'processing' })
+      opts.onProgress('compose', 1, 1, `${completedCount}/${finalProject.scenes.length} videos generated`)
+      console.warn(`[Orchestration] Project ${projectId} incomplete: Only ${completedCount}/${finalProject.scenes.length} scenes have videos`)
     }
 
     return finalProject
@@ -515,6 +526,94 @@ export async function regenerateImage(
 }
 
 /**
+ * Regenerate a specific scene prompt
+ *
+ * @param projectId Project identifier
+ * @param sceneIndex Scene index for prompt regeneration
+ * @param options Orchestration options
+ * @returns Updated project
+ */
+export async function regenerateScenePrompt(
+  projectId: string,
+  sceneIndex: number,
+  options: OrchestrationOptions = {}
+): Promise<Project> {
+  const opts = { ...DEFAULT_OPTIONS, ...options }
+
+  try {
+    // Fetch current project state
+    const projectResponse = await getProject(projectId)
+    if (!projectResponse.projectId) {
+      throw new Error('Failed to fetch project')
+    }
+
+    let project = projectResponse
+
+    if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
+      throw new Error(`Invalid scene index: ${sceneIndex}`)
+    }
+
+    const scene = project.scenes[sceneIndex]
+
+    opts.onProgress('scenes', sceneIndex, project.scenes.length, `Regenerating prompt for scene ${sceneIndex + 1}`)
+
+    // Generate a new scene using the create_scenes endpoint
+    // Request only 1 scene to get a fresh prompt
+    const scenesRequest: CreateScenesRequest = {
+      idea: project.conceptPrompt,
+      character_description: project.characterDescription,
+      config_flavor: 'default',
+      // Don't pass project_id to avoid overwriting all scenes
+      // We'll manually update just this one scene
+    }
+
+    const scenesResponse = await retryWithBackoff(
+      () => generateScenes(scenesRequest),
+      `Regenerate prompt for scene ${sceneIndex + 1}`,
+      opts,
+      'scenes',
+      sceneIndex
+    )
+
+    // Take the first generated scene's prompt and use it
+    if (scenesResponse.scenes && scenesResponse.scenes.length > 0) {
+      const newSceneData = scenesResponse.scenes[0]
+
+      // Update the specific scene using the updateScene endpoint
+      await retryWithBackoff(
+        () => updateScene(
+          projectId,
+          scene.sequence,
+          {
+            prompt: newSceneData.description,
+            negativePrompt: newSceneData.negative_description || undefined,
+          }
+        ),
+        `Update scene ${sceneIndex + 1} with new prompt`,
+        opts,
+        'scenes',
+        sceneIndex
+      )
+
+      // Refetch project to get updated scene
+      project = await getProject(projectId)
+      if (!project.projectId) {
+        throw new Error('Failed to refetch project after scene update')
+      }
+    } else {
+      throw new Error('No scenes generated from API')
+    }
+
+    opts.onProgress('scenes', sceneIndex + 1, project.scenes.length, `Prompt ${sceneIndex + 1} regenerated`)
+
+    return project
+  } catch (error) {
+    opts.onError('scenes', sceneIndex, error instanceof Error ? error : new Error(String(error)))
+    throw error
+  }
+}
+
+/**
  * Regenerate a specific video
  *
  * @param projectId Project identifier
@@ -552,19 +651,18 @@ export async function regenerateVideo(
           prompt: scene.prompt,
           negative_prompt: scene.negativePrompt || undefined,
           reference_image_base64: project.characterReferenceImageId || undefined,
+          project_id: projectId,
+          sequence: scene.sequence,
         }
 
         const videoResponse = await generateVideo(videoRequest)
 
-        // Update project with new video URL
-        const updatedScenes = [...project.scenes]
-        updatedScenes[sceneIndex] = {
-          ...scene,
-          videoClipUrl: videoResponse.video_url,
-          status: 'completed',
+        // Backend automatically updates the scene in DynamoDB with the video URL
+        // Just refetch the project to get the updated scene
+        project = await getProject(projectId)
+        if (!project.projectId) {
+          throw new Error('Failed to refetch project after video generation')
         }
-
-        project = await updateAndRefetch(projectId, { scenes: updatedScenes })
 
         return videoResponse
       },

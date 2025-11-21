@@ -14,6 +14,7 @@ from mv_schemas import (
     ProjectCreateResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    SceneUpdateRequest,
     ComposeRequest,
     ComposeResponse,
     FinalVideoResponse,
@@ -455,6 +456,159 @@ async def update_project(project_id: str, update_data: ProjectUpdateRequest):
             detail={
                 "error": "InternalError",
                 "message": "Failed to update project",
+                "details": str(e)
+            }
+        )
+
+
+@router.patch(
+    "/projects/{project_id}/scenes/{sequence}",
+    response_model=SceneResponse,
+    summary="Update Scene",
+    description="""
+Update a specific scene's editable fields (prompt, negative prompt).
+
+This endpoint allows manual editing of scene descriptions without regenerating
+the entire scene or video.
+"""
+)
+async def update_scene(
+    project_id: str,
+    sequence: int,
+    update_data: SceneUpdateRequest
+):
+    """
+    Update a scene's editable fields.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+        update_data: Fields to update
+
+    Returns:
+        Updated SceneResponse
+    """
+    try:
+        logger.info(
+            "update_scene_request",
+            project_id=project_id,
+            sequence=sequence,
+            updates=update_data.model_dump(exclude_none=True)
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Validate sequence
+        if sequence < 1:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid sequence number",
+                    "details": "Sequence must be >= 1"
+                }
+            )
+
+        # Retrieve the scene
+        pk = f"PROJECT#{project_id}"
+        sk = f"SCENE#{sequence:03d}"
+
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Scene {sequence} not found in project {project_id}",
+                    "details": "The specified scene does not exist"
+                }
+            )
+
+        # Update fields
+        updated = False
+
+        if update_data.prompt is not None:
+            scene_item.prompt = update_data.prompt.strip()
+            updated = True
+
+        if update_data.negativePrompt is not None:
+            scene_item.negativePrompt = update_data.negativePrompt.strip()
+            updated = True
+
+        # Save if any updates were made
+        if updated:
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+            logger.info(
+                "scene_updated",
+                project_id=project_id,
+                sequence=sequence
+            )
+
+        # Generate presigned URLs for response
+        s3_service = get_s3_storage_service()
+
+        reference_urls = []
+        if scene_item.referenceImageS3Keys:
+            for key in scene_item.referenceImageS3Keys:
+                reference_urls.append(s3_service.generate_presigned_url(key))
+
+        audio_url = None
+        if scene_item.audioClipS3Key:
+            audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+        video_url = None
+        if scene_item.videoClipS3Key:
+            video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+
+        lipsynced_url = None
+        if scene_item.lipSyncedVideoClipS3Key:
+            lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        return SceneResponse(
+            sequence=scene_item.sequence,
+            status=scene_item.status,
+            prompt=scene_item.prompt,
+            negativePrompt=scene_item.negativePrompt,
+            duration=scene_item.duration,
+            referenceImageUrls=reference_urls,
+            audioClipUrl=audio_url,
+            videoClipUrl=video_url,
+            needsLipSync=scene_item.needsLipSync or False,
+            lipSyncedVideoClipUrl=lipsynced_url,
+            retryCount=scene_item.retryCount or 0,
+            errorMessage=scene_item.errorMessage,
+            createdAt=scene_item.createdAt,
+            updatedAt=scene_item.updatedAt
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "update_scene_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to update scene",
                 "details": str(e)
             }
         )

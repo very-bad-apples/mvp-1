@@ -13,7 +13,7 @@ import {
 import { Loader2, MoreVertical, RefreshCw, Edit, Video, AlertCircle } from 'lucide-react'
 import type { Project, ProjectScene } from '@/types/project'
 import {
-  regenerateImage,
+  regenerateScenePrompt,
   regenerateVideo,
   regenerateLipSync,
 } from '@/lib/orchestration'
@@ -35,7 +35,7 @@ export function ScenesPanel({
   const [regeneratingScenes, setRegeneratingScenes] = useState<Set<string>>(new Set())
   const { toast } = useToast()
 
-  const handleRegenerateScene = async (scene: ProjectScene, type: 'image' | 'video' | 'all') => {
+  const handleRegenerateScene = async (scene: ProjectScene, type: 'prompt' | 'video' | 'all') => {
     const sceneId = `scene-${scene.sequence}`
     setRegeneratingScenes(prev => new Set(prev).add(sceneId))
 
@@ -47,16 +47,16 @@ export function ScenesPanel({
 
       const sceneIndex = scene.sequence - 1
 
-      if (type === 'image' || type === 'all') {
-        await regenerateImage(
+      if (type === 'prompt' || type === 'all') {
+        await regenerateScenePrompt(
           project.projectId,
           sceneIndex,
           {
             onProgress: (phase, idx, total, message) => {
-              console.log(`Regenerate image progress: ${message}`)
+              console.log(`Regenerate prompt progress: ${message}`)
             },
             onError: (phase, idx, error) => {
-              console.error('Regenerate image error:', error)
+              console.error('Regenerate prompt error:', error)
             },
           }
         )
@@ -196,12 +196,12 @@ export function ScenesPanel({
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleRegenerateScene(scene, 'image')
+                            handleRegenerateScene(scene, 'prompt')
                           }}
                           className="text-gray-200 hover:bg-gray-700"
                         >
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Regenerate Image
+                          <Edit className="mr-2 h-4 w-4" />
+                          Regenerate Prompt
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={(e) => {
@@ -222,11 +222,10 @@ export function ScenesPanel({
                     {scene.videoClipUrl ? (
                       <video
                         src={scene.videoClipUrl}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover pointer-events-none"
                         muted
-                        loop
-                        autoPlay={false}
-                        poster={scene.videoClipUrl}
+                        preload="metadata"
+                        playsInline
                       />
                     ) : status === 'processing' ? (
                       <div className="absolute inset-0 flex items-center justify-center">

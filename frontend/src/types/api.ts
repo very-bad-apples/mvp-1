@@ -85,6 +85,8 @@ export interface GenerateVideoRequest {
   reference_image_base64?: string
   video_rules_template?: string
   backend?: 'replicate' | 'gemini'
+  project_id?: string
+  sequence?: number
 }
 
 export interface GenerateVideoResponse {

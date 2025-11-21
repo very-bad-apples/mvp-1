@@ -8,9 +8,10 @@ import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { ScenesPanel } from '@/components/ScenesPanel'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { generateScenes, composeVideo } from '@/lib/api/client'
+import { generateScenes, composeVideo, updateScene } from '@/lib/api/client'
 import { useToast } from '@/hooks/useToast'
 import { SceneGenerationOverlay } from '@/components/SceneGenerationOverlay'
+import { SceneDetailPanel } from '@/components/SceneDetailPanel'
 import { startFullGeneration } from '@/lib/orchestration'
 
 export default function EditPage({ params }: { params: { id: string } }) {
@@ -50,12 +51,79 @@ export default function EditPage({ params }: { params: { id: string } }) {
     return project.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
   }, [project?.scenes])
 
+  // Auto-select the currently playing scene based on currentTime
+  useEffect(() => {
+    if (!project?.scenes) return
+
+    // Get scenes with videos, sorted by sequence
+    const scenesWithVideos = project.scenes
+      .filter(scene => scene.videoClipUrl)
+      .sort((a, b) => a.sequence - b.sequence)
+
+    if (scenesWithVideos.length === 0) return
+
+    // Calculate which scene is playing at currentTime
+    let accumulatedTime = 0
+    for (const scene of scenesWithVideos) {
+      const sceneDuration = scene.duration || 0
+      if (currentTime >= accumulatedTime && currentTime < accumulatedTime + sceneDuration) {
+        // This scene is currently playing - auto-select it
+        const sceneId = `scene-${scene.sequence}`
+        if (selectedSceneId !== sceneId) {
+          setSelectedSceneId(sceneId)
+        }
+        return
+      }
+      accumulatedTime += sceneDuration
+    }
+
+    // If we're beyond all scenes, select the last scene
+    if (currentTime >= accumulatedTime && scenesWithVideos.length > 0) {
+      const lastScene = scenesWithVideos[scenesWithVideos.length - 1]
+      const sceneId = `scene-${lastScene.sequence}`
+      if (selectedSceneId !== sceneId) {
+        setSelectedSceneId(sceneId)
+      }
+    }
+  }, [currentTime, project?.scenes, selectedSceneId])
+
   // Get the selected scene object from the ID
   const selectedScene = useMemo(() => {
     if (!selectedSceneId || !project?.scenes) return null
     const sequence = parseInt(selectedSceneId.replace('scene-', ''))
     return project.scenes.find(scene => scene.sequence === sequence) || null
   }, [selectedSceneId, project?.scenes])
+
+  // Handle scene selection - jump to scene's start time in timeline
+  const handleSceneSelect = (sceneId: string | null) => {
+    if (!sceneId || !project?.scenes) {
+      return
+    }
+
+    // Parse scene sequence from ID
+    const sequence = parseInt(sceneId.replace('scene-', ''))
+
+    // Get all scenes with videos, sorted by sequence
+    const scenesWithVideos = project.scenes
+      .filter(scene => scene.videoClipUrl)
+      .sort((a, b) => a.sequence - b.sequence)
+
+    // Find the clicked scene in the sorted list
+    const sceneIndex = scenesWithVideos.findIndex(scene => scene.sequence === sequence)
+    if (sceneIndex === -1) {
+      console.warn(`Scene ${sequence} not found or has no video`)
+      return
+    }
+
+    // Calculate the scene's start time in the global timeline
+    const startTime = scenesWithVideos
+      .slice(0, sceneIndex)
+      .reduce((total, scene) => total + (scene.duration || 0), 0)
+
+    // Jump to the scene's start time (auto-selection will update the detail panel)
+    setCurrentTime(startTime)
+    setIsPlaying(true) // Auto-play when jumping to a scene
+  }
 
   // Handle overlay visibility - show only for new projects that haven't dismissed it
   useEffect(() => {
@@ -64,21 +132,15 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
   }, [project, isGeneratingScenes])
 
-  // Auto-trigger scene generation for new projects
+  // Auto-trigger scene generation and video generation
   useEffect(() => {
-    const triggerSceneGeneration = async () => {
-      // Only trigger if:
-      // 1. Project is loaded
-      // 2. Project has no scenes
-      // 3. We haven't already triggered generation
-      // 4. Not currently loading or generating
-      if (
-        project &&
-        project.scenes.length === 0 &&
-        !sceneGenerationTriggered.current &&
-        !loading &&
-        !isGeneratingScenes
-      ) {
+    const triggerGeneration = async () => {
+      if (!project || loading || sceneGenerationTriggered.current) {
+        return
+      }
+
+      // Case 1: Project has no scenes - generate scenes first, then videos
+      if (project.scenes.length === 0 && !isGeneratingScenes) {
         sceneGenerationTriggered.current = true
         setIsGeneratingScenes(true)
 
@@ -97,7 +159,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
           toast({
             title: "Scenes Generated!",
-            description: "Scene descriptions have been created. You can now continue to the editor.",
+            description: "Scene descriptions have been created.",
           })
 
           // Refresh project data to get the new scenes
@@ -105,18 +167,14 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
           // Show overlay now that we have scenes
           setShowOverlay(true)
-
-          // Scene generation is complete - allow user to continue
           setIsGeneratingScenes(false)
 
-          // Start video generation in the BACKGROUND (non-blocking)
+          // Start video generation in the BACKGROUND
           toast({
             title: "Starting Video Generation",
-            description: "Videos will generate in the background. You can continue editing.",
+            description: "Videos will generate in the background.",
           })
 
-          // Start the full generation orchestration WITHOUT awaiting
-          // This runs in the background while user can interact with the editor
           startFullGeneration(params.id, {
             onProgress: (phase, sceneIndex, total, message) => {
               console.log(`[Generation] ${phase}: ${sceneIndex}/${total}`, message)
@@ -138,10 +196,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
             })
           })
 
-          toast({
-            title: "Background Generation Started!",
-            description: "Video assets are being generated. Check the timeline for progress.",
-          })
         } catch (err) {
           console.error('Scene generation error:', err)
           toast({
@@ -149,26 +203,58 @@ export default function EditPage({ params }: { params: { id: string } }) {
             description: err instanceof Error ? err.message : "Failed to generate scenes",
             variant: "destructive",
           })
-          sceneGenerationTriggered.current = false // Allow retry
+          sceneGenerationTriggered.current = false
           setIsGeneratingScenes(false)
         }
+        return
+      }
+
+      // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
+      const scenesWithoutVideos = project.scenes.filter(scene => !scene.videoClipUrl)
+      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
+        sceneGenerationTriggered.current = true
+
+        console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without videos, triggering generation`)
+
+        toast({
+          title: "Generating Missing Videos",
+          description: `Starting video generation for ${scenesWithoutVideos.length} scenes...`,
+        })
+
+        // Start video generation in the BACKGROUND (non-blocking)
+        startFullGeneration(params.id, {
+          onProgress: (phase, sceneIndex, total, message) => {
+            console.log(`[Generation] ${phase}: ${sceneIndex}/${total}`, message)
+          },
+          onError: (phase, sceneIndex, error) => {
+            console.error(`[Generation Error] ${phase}:`, error)
+            toast({
+              title: "Generation Error",
+              description: `Failed during ${phase} phase: ${error.message}`,
+              variant: "destructive",
+            })
+          },
+        }).catch((err) => {
+          console.error('Background generation error:', err)
+          toast({
+            title: "Video Generation Failed",
+            description: err instanceof Error ? err.message : "Failed to generate videos",
+            variant: "destructive",
+          })
+        })
       }
     }
 
-    triggerSceneGeneration()
+    triggerGeneration()
   }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
 
   // Poll for composition completion
   useEffect(() => {
     if (!isComposing || !compositionJobId) return
 
-    // Check if composition is complete by checking if finalOutputUrl is available
+    // Check if already complete (in case of re-render)
     if (project?.finalOutputUrl) {
       setIsComposing(false)
-      toast({
-        title: "Video Composition Complete!",
-        description: "Your final video is ready. You can now download it.",
-      })
       return
     }
 
@@ -176,12 +262,26 @@ export default function EditPage({ params }: { params: { id: string } }) {
     const pollInterval = setInterval(async () => {
       // Trigger a refetch to get latest project data
       await refetch()
+
+      // Note: The check for finalOutputUrl happens in a separate effect
+      // that watches the project state, to avoid including project in deps here
     }, 3000) // Poll every 3 seconds
 
     return () => {
       clearInterval(pollInterval)
     }
-  }, [isComposing, compositionJobId, project?.finalOutputUrl, refetch, toast])
+  }, [isComposing, compositionJobId, refetch])
+
+  // Separate effect to detect composition completion
+  useEffect(() => {
+    if (isComposing && project?.finalOutputUrl) {
+      setIsComposing(false)
+      toast({
+        title: "Video Composition Complete!",
+        description: "Your final video is ready. You can now download it.",
+      })
+    }
+  }, [project?.finalOutputUrl, isComposing, toast])
 
   // Handle Continue button click
   const handleContinue = () => {
@@ -238,6 +338,58 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
   }
 
+  // Handle scene prompt update
+  const handleUpdateScenePrompt = async (sceneSequence: number, newPrompt: string) => {
+    if (!project) return
+
+    try {
+      // Update the scene via the new dedicated endpoint
+      await updateScene(params.id, sceneSequence, { prompt: newPrompt })
+
+      toast({
+        title: "Prompt Updated",
+        description: `Scene ${sceneSequence} prompt has been updated successfully.`,
+      })
+
+      // Refetch project to get updated data
+      await refetch()
+    } catch (error) {
+      console.error('Error updating scene prompt:', error)
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update scene prompt",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  // Handle scene negative prompt update
+  const handleUpdateSceneNegativePrompt = async (sceneSequence: number, newNegativePrompt: string) => {
+    if (!project) return
+
+    try {
+      // Update the scene via the dedicated endpoint
+      await updateScene(params.id, sceneSequence, { negativePrompt: newNegativePrompt })
+
+      toast({
+        title: "Negative Prompt Updated",
+        description: `Scene ${sceneSequence} negative prompt has been updated successfully.`,
+      })
+
+      // Refetch project to get updated data
+      await refetch()
+    } catch (error) {
+      console.error('Error updating scene negative prompt:', error)
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update scene negative prompt",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
   // Loading state
   if (loading && !project) {
     return (
@@ -284,7 +436,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Navigation */}
       <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
               <Video className="h-8 w-8 text-blue-500" />
@@ -333,25 +485,39 @@ export default function EditPage({ params }: { params: { id: string } }) {
           <ScenesPanel
             project={project}
             selectedSceneId={selectedSceneId}
-            onSceneSelect={setSelectedSceneId}
+            onSceneSelect={handleSceneSelect}
             onProjectUpdate={refetch}
           />
         </div>
 
         {/* Main Panel - Video Preview (70%) */}
-        <div className="flex-1 flex items-center justify-center bg-gray-800/50 p-6">
-          <VideoPreview
-            jobId={params.id}
-            project={project}
-            currentTime={currentTime}
-            duration={duration}
-            isPlaying={isPlaying}
-            onPlayPause={() => setIsPlaying(!isPlaying)}
-            onSeek={setCurrentTime}
-            showFinalVideo={!!project?.finalOutputUrl}
-            isComposing={isComposing}
-            selectedScene={selectedScene}
-          />
+        <div className="flex-1 bg-gray-800/50 p-6 overflow-y-auto">
+          <div className="max-w-5xl mx-auto space-y-4">
+            {/* Video Preview */}
+            <div className="flex items-center justify-center">
+              <VideoPreview
+                jobId={params.id}
+                project={project}
+                currentTime={currentTime}
+                duration={duration}
+                isPlaying={isPlaying}
+                onPlayPause={() => setIsPlaying(!isPlaying)}
+                onSeek={setCurrentTime}
+                showFinalVideo={!!project?.finalOutputUrl}
+                isComposing={isComposing}
+                selectedScene={selectedScene}
+              />
+            </div>
+
+            {/* Scene Detail Panel - Only show when a scene is selected */}
+            {selectedScene && (
+              <SceneDetailPanel
+                scene={selectedScene}
+                onUpdatePrompt={handleUpdateScenePrompt}
+                onUpdateNegativePrompt={handleUpdateSceneNegativePrompt}
+              />
+            )}
+          </div>
         </div>
       </div>
 

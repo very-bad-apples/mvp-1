@@ -18,6 +18,7 @@ interface VideoPreviewProps {
   showFinalVideo?: boolean
   isComposing?: boolean
   selectedScene?: ProjectScene | null
+  isScenePreviewMode?: boolean // When true, locks to selectedScene; when false, shows details for currently playing scene
 }
 
 export function VideoPreview({
@@ -31,6 +32,7 @@ export function VideoPreview({
   showFinalVideo = false,
   isComposing = false,
   selectedScene = null,
+  isScenePreviewMode = false,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
@@ -123,8 +125,10 @@ export function VideoPreview({
     const video = videoRef.current
     if (!video) return
 
-    // MODE 1: If a specific scene is selected, show only that scene's video
-    if (selectedScene && selectedScene.videoClipUrl) {
+    // MODE 1: If in scene preview mode, show only that scene's video
+    if (isScenePreviewMode && selectedScene && selectedScene.videoClipUrl) {
+      const videoUrl = selectedScene.lipSyncedVideoClipUrl || selectedScene.videoClipUrl
+
       const handleLoadedMetadata = () => {
         setIsVideoLoaded(true)
         setVideoError(null)
@@ -132,12 +136,7 @@ export function VideoPreview({
       }
 
       const handleLoadedData = () => {
-        if (isPlaying) {
-          video.play().catch(err => {
-            console.error('Error playing selected scene:', err)
-            setVideoError('Failed to play selected scene')
-          })
-        }
+        // Playback handled by separate play/pause effect
       }
 
       const handleError = (e: Event) => {
@@ -150,8 +149,11 @@ export function VideoPreview({
       video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('error', handleError)
 
-      video.src = selectedScene.lipSyncedVideoClipUrl || selectedScene.videoClipUrl
-      video.load()
+      // Only reload if URL actually changed
+      if (video.src !== videoUrl) {
+        video.src = videoUrl
+        video.load()
+      }
 
       return () => {
         video.removeEventListener('loadedmetadata', handleLoadedMetadata)
@@ -165,16 +167,11 @@ export function VideoPreview({
       const handleLoadedMetadata = () => {
         setIsVideoLoaded(true)
         setVideoError(null)
-        video.currentTime = currentTime
+        // Seeking handled by separate sync effect
       }
 
       const handleLoadedData = () => {
-        if (isPlaying) {
-          video.play().catch(err => {
-            console.error('Error playing final video:', err)
-            setVideoError('Failed to play final video')
-          })
-        }
+        // Playback handled by separate play/pause effect
       }
 
       const handleError = (e: Event) => {
@@ -187,8 +184,11 @@ export function VideoPreview({
       video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('error', handleError)
 
-      video.src = project.finalOutputUrl
-      video.load()
+      // Only reload if URL actually changed
+      if (video.src !== project.finalOutputUrl) {
+        video.src = project.finalOutputUrl
+        video.load()
+      }
 
       return () => {
         video.removeEventListener('loadedmetadata', handleLoadedMetadata)
@@ -206,22 +206,11 @@ export function VideoPreview({
     const handleLoadedMetadata = () => {
       setIsVideoLoaded(true)
       setVideoError(null)
-
-      // Set the video to the correct local time within the scene
-      const sceneInfo = getCurrentSceneInfo(currentTime)
-      if (sceneInfo && sceneInfo.index === currentSceneIndex) {
-        video.currentTime = sceneInfo.localTime
-      }
+      // Initial seek will be handled by the sync effect
     }
 
     const handleLoadedData = () => {
-      // Video is ready to play
-      if (isPlaying) {
-        video.play().catch(err => {
-          console.error('Error playing video:', err)
-          setVideoError('Failed to play video')
-        })
-      }
+      // Video loaded - playback will be handled by play/pause effect
     }
 
     const handleError = (e: Event) => {
@@ -234,16 +223,18 @@ export function VideoPreview({
     video.addEventListener('loadeddata', handleLoadedData)
     video.addEventListener('error', handleError)
 
-    // Set the video source
-    video.src = currentScene.videoClipUrl
-    video.load()
+    // Only reload video when the source URL actually changes
+    if (video.src !== currentScene.videoClipUrl) {
+      video.src = currentScene.videoClipUrl
+      video.load()
+    }
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
       video.removeEventListener('loadeddata', handleLoadedData)
       video.removeEventListener('error', handleError)
     }
-  }, [selectedScene, currentSceneIndex, validScenes, showFinalVideo, project.finalOutputUrl, currentTime, isPlaying])
+  }, [isScenePreviewMode, selectedScene, currentSceneIndex, validScenes, showFinalVideo, project.finalOutputUrl])
 
   // Handle play/pause state changes
   useEffect(() => {
@@ -260,10 +251,13 @@ export function VideoPreview({
     }
   }, [isPlaying, isVideoLoaded])
 
-  // Sync video playback time with parent currentTime
+  // Sync video playback time with parent currentTime (only for normal sequential playback)
   useEffect(() => {
     const video = videoRef.current
     if (!video || !isVideoLoaded || isSeekingRef.current) return
+
+    // Skip sync when in scene preview mode or viewing final video - they manage their own playback
+    if ((isScenePreviewMode && selectedScene) || (showFinalVideo && project.finalOutputUrl)) return
 
     const sceneInfo = getCurrentSceneInfo(currentTime)
     if (!sceneInfo || sceneInfo.index !== currentSceneIndex) return
@@ -273,15 +267,18 @@ export function VideoPreview({
     if (diff > 0.1) {
       video.currentTime = sceneInfo.localTime
     }
-  }, [currentTime, currentSceneIndex, isVideoLoaded])
+  }, [currentTime, currentSceneIndex, isVideoLoaded, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl])
 
-  // Handle video timeupdate event to sync parent currentTime
+  // Handle video timeupdate event to sync parent currentTime (only for normal sequential playback)
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     const handleTimeUpdate = () => {
       if (isSeekingRef.current) return
+
+      // Skip updating parent timeline when in scene preview mode or viewing final video
+      if ((isScenePreviewMode && selectedScene) || (showFinalVideo && project.finalOutputUrl)) return
 
       const sceneInfo = sceneTimings[currentSceneIndex]
       if (!sceneInfo) return
@@ -296,7 +293,7 @@ export function VideoPreview({
 
     video.addEventListener('timeupdate', handleTimeUpdate)
     return () => video.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [currentSceneIndex, currentTime, onSeek, sceneTimings])
+  }, [currentSceneIndex, currentTime, onSeek, sceneTimings, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl])
 
   // Handle automatic scene transitions when video ends
   useEffect(() => {
@@ -681,18 +678,51 @@ export function VideoPreview({
 
       {/* Playback Controls */}
       <div className="flex flex-col gap-3">
-        {/* Progress Bar */}
+        {/* Progress Bar with Scene Markers */}
         <div className="flex items-center gap-3">
           <span className="text-sm font-mono text-gray-400">
             {formatTime(currentTime)}
           </span>
-          <Slider
-            value={[currentTime]}
-            max={duration}
-            step={0.1}
-            onValueChange={([value]) => onSeek(value)}
-            className="flex-1"
-          />
+          <div className="flex-1 relative">
+            {/* Scene Markers - positioned on the slider track */}
+            {duration > 0 && sceneTimings.length > 0 && (
+              <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-2 pointer-events-none">
+                {sceneTimings.map((timing, index) => {
+                  const position = (timing.startTime / duration) * 100
+                  const isCurrentScene = index === currentSceneIndex
+
+                  return (
+                    <div
+                      key={`marker-${index}`}
+                      className="absolute top-0 h-full w-0.5 pointer-events-auto cursor-pointer group"
+                      style={{ left: `${position}%` }}
+                      onClick={() => {
+                        onSeek(timing.startTime)
+                        setCurrentSceneIndex(index)
+                        setIsVideoLoaded(false)
+                      }}
+                    >
+                      {/* Marker Line */}
+                      <div
+                        className={`w-full h-full transition-all ${
+                          isCurrentScene
+                            ? 'bg-blue-300'
+                            : 'bg-gray-300 group-hover:bg-white'
+                        }`}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <Slider
+              value={[currentTime]}
+              max={duration}
+              step={0.1}
+              onValueChange={([value]) => onSeek(value)}
+              className="flex-1"
+            />
+          </div>
           <span className="text-sm font-mono text-gray-400">
             {formatTime(duration)}
           </span>

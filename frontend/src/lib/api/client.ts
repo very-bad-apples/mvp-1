@@ -541,6 +541,25 @@ export async function updateProject(
 }
 
 /**
+ * Update a specific scene
+ * @param projectId Project identifier
+ * @param sequence Scene sequence number
+ * @param data Scene update data
+ * @returns Updated scene response
+ */
+export async function updateScene(
+  projectId: string,
+  sequence: number,
+  data: { prompt?: string; negativePrompt?: string }
+): Promise<any> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}`
+  return apiFetch<any>(url, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
  * Generation Functions
  */
 
