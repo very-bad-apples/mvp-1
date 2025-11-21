@@ -1,0 +1,56 @@
+# Quentin Tarantino Director Configuration
+# Signature Style: Stylized violence, bold colors, trunk shots, dramatic angles, 60s-70s aesthetic
+
+camera:
+  shotType: close_up  # Alternates with extreme close-ups for intensity
+  movement: dolly  # Smooth dolly movements mixed with jarring handheld
+  lens: wide_angle  # Wide compositions for formalist style
+  angle: low_angle  # Unfamiliar perspectives including low angles, overheads (God's Eye)
+
+lighting:
+  type: dramatic
+  direction: side  # Bold, dramatic lighting with high contrast
+
+style:
+  visualStyle: cinematic
+  mood: dramatic  # Intense, violent, tension-filled
+  colorGrading: vibrant  # Bold colors with occasional desaturation for contrast
+
+motion:
+  intensity: 0.6  # Dynamic movement during action, controlled during dialogue
+  guidanceScale: 10  # Balanced between creative and precise
+  cfgScale: 8  # Strong but allows for stylistic freedom
+
+audio:
+  dialogue:
+    tone: calm  # Often calm delivery before explosive violence
+  music:
+    style: electronic  # Mix of surf rock, soul, and eclectic choices
+    mood: tense  # Building tension or ironic contrast
+    intensity: prominent
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - low resolution
+    - watermarks
+    - subtle violence  # Violence should be bold and stylized
+    - muted colors
+  safetyLevel: block_low_and_above  # Content includes stylized violence
+
+transitions:
+  type: hard_cut  # Quick cuts and dynamic editing
+
+# Additional Tarantino Characteristics:
+# - Trunk shot POV (signature camera angle)
+# - 60s-70s cinematographic aesthetic with zooms and slow push-ins
+# - 2.35:1 aspect ratio for maximum cinematic style
+# - Extreme close-ups mixed with wide shots for visual rhythm
+# - Slow motion in action sequences for dramatic impact
+# - Stylized, exaggerated violence with blood as bold crimson splash
+# - Spaghetti Western and Grindhouse influences
+# - Washed-out colors punctuated by vibrant blood reds
+# - Long tracking shots
+# - Chapter-based storytelling with text cards
+# - Deliberate use of silence and sound design shifts

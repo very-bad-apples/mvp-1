@@ -1,0 +1,60 @@
+# Hype Williams Director Configuration
+# Signature Style: Fisheye lens, saturated colors, neon lighting, hip-hop opulence, distorted perspectives
+
+camera:
+  shotType: close_up  # Fisheye close-ups creating warped intimacy with subject
+  movement: static  # Later style: centered static framing on torso up
+  lens: fisheye  # Signature distorted, magnified perspective
+  angle: low_angle  # Elevating subjects to larger-than-life status
+
+lighting:
+  type: neon
+  direction: back  # Dramatic backlighting with colored gels (blues, greens)
+
+style:
+  visualStyle: commercial  # High production, luxury aesthetic
+  mood: energetic  # Bold, confident, larger-than-life
+  colorGrading: vibrant  # Hyper-saturated, bold hues with signature blue tones
+
+motion:
+  intensity: 0.4  # Slow motion sequences for dramatic effect
+  guidanceScale: 10  # Strong adherence to signature aesthetic
+  cfgScale: 9  # High guidance for distinctive color grading
+
+audio:
+  music:
+    style: electronic  # Hip-hop, R&B production
+    mood: energetic  # Confident, powerful
+    intensity: prominent
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - muted colors
+    - subtle lighting
+    - realistic proportions
+    - documentary style
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: dissolve  # Smooth, luxurious transitions
+
+# Additional Hype Williams Characteristics:
+# - Fisheye lens creating warped, fantastical realities
+# - Cartoonish pop aesthetic despite realism
+# - Saturated colors and wide framing
+# - Cinematic references to film noir and sci-fi
+# - Slow motion sequences (signature technique)
+# - Neon lighting (green and blue especially)
+# - Famous blue-hued cinematography (Belly film)
+# - Post-2003 style: center focus torso-up with solid color background
+# - Soft different-color light in center of background
+# - Futuristic clothing and set design
+# - Illusion of proximity to artist through distortion
+# - 90s hip-hop golden era aesthetic
+# - Luxury and opulence imagery (chrome, jewelry, cars)
+# - Bold fashion and styling
+# - Collaborations: Busta Rhymes, Missy Elliott, Jay-Z, Nas
+# - Music video innovation that defined hip-hop visuals
+# - Dreamworld aesthetic

@@ -240,9 +240,9 @@ function SceneCard({
                 variant="outline"
                 className="text-xs border-gray-600 hover:bg-gray-700"
                 onClick={() => onRegenerateImage(scene.sequence!)}
-                aria-label={`Regenerate image for scene ${scene.sequence}`}
+                aria-label={`Regenerate video for scene ${scene.sequence}`}
               >
-                Regen Image
+                Regen Video
               </Button>
             )}
             {onRegenerateVideo && scene.status === 'completed' && (
@@ -327,7 +327,7 @@ function VideoPlayerSection({
 
 export function ProjectPageClient({ projectId }: { projectId: string }) {
   const { toast } = useToast()
-  const { project, loading, error, refetch, isPolling } = useProjectPolling(projectId)
+  const { project, loading, error, refetch, isPolling, setOptimisticProject } = useProjectPolling(projectId)
 
   // Calculate phases based on project status
   const phases = useMemo(() => {
@@ -350,21 +350,47 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         description: 'Your project generation has been queued.',
       })
 
-      const response = await fetch(`/api/projects/${projectId}/generate`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (API_KEY) {
+        headers['X-API-Key'] = API_KEY
+      }
+
+      const response = await fetch(`${API_URL}/api/mv/projects/${projectId}/generate`, {
         method: 'POST',
+        headers,
       })
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to start generation')
+        const errorMessage = data.detail?.message || data.error || data.message || 'Failed to start generation'
+        throw new Error(errorMessage)
+      }
+
+      // The response contains the updated project with "processing" status
+      // Parse the response
+      const updatedProject = await response.json()
+
+      // Optimistically update UI immediately with response data
+      // This gives instant feedback without waiting for polling
+      if (updatedProject && updatedProject.projectId) {
+        // Add frontend-only fields
+        const optimisticProject = {
+          ...updatedProject,
+          mode: project?.mode || 'music-video',
+          progress: Math.round((updatedProject.completedScenes / Math.max(updatedProject.sceneCount, 1)) * 100),
+        }
+        setOptimisticProject(optimisticProject)
       }
 
       toast({
         title: 'Generation Started',
         description: 'Your project is now being generated.',
       })
-
-      await refetch()
     } catch (err) {
       toast({
         title: 'Generation Failed',
@@ -372,36 +398,36 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         variant: 'destructive',
       })
     }
-  }, [project, projectId, refetch, toast])
+  }, [project, projectId, setOptimisticProject, toast])
 
   // Handle scene regeneration
   const handleRegenerateImage = useCallback(async (sceneId: number) => {
     try {
       toast({
-        title: 'Regenerating Image',
-        description: `Regenerating image for scene ${sceneId}...`,
+        title: 'Regenerating Video',
+        description: `Regenerating video for scene ${sceneId}...`,
       })
 
       const response = await fetch(
-        `/api/projects/${projectId}/scenes/${sceneId}/regenerate-image`,
+        `/api/projects/${projectId}/scenes/${sceneId}/regenerate-video`,
         { method: 'POST' }
       )
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to regenerate image')
+        throw new Error(data.error || 'Failed to regenerate video')
       }
 
       toast({
         title: 'Regeneration Started',
-        description: `Image regeneration for scene ${sceneId} has started.`,
+        description: `Video regeneration for scene ${sceneId} has started.`,
       })
 
       await refetch()
     } catch (err) {
       toast({
         title: 'Regeneration Failed',
-        description: err instanceof Error ? err.message : 'Failed to regenerate image',
+        description: err instanceof Error ? err.message : 'Failed to regenerate video',
         variant: 'destructive',
       })
     }

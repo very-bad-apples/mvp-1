@@ -24,29 +24,6 @@ When MV_DEBUG_MODE=true, the flavor of config chosen at prompt time should log o
 
 ---
 
-### Implementation Plan (v1)
-
-**Status**: Planning Complete - See `.devdocs/v3/tasklist.md` for detailed task breakdown
-
-**Key Design Decisions**:
-1. **Auto-discovery**: System automatically discovers all flavor directories under `backend/mv/configs/`
-2. **Parameter naming**: API parameter will be called `config_flavor` (optional)
-3. **Fallback behavior**: If flavor or specific config file not found → fall back to `default/` with warning log
-4. **Loading strategy**: All flavors loaded into memory at startup into queryable data structure
-5. **Endpoint integration**: All three MV endpoints (`create_scenes`, `generate_video`, `generate_character_reference`) will accept `config_flavor` parameter
-6. **Storage**: Configs live in memory only (not stored in DynamoDB) - static between startup/runtime
-7. **Debug logging**:
-   - At startup: Log discovered flavor names
-   - At prompt time: Log selected flavor name + full config values/prompts
-
-**Architecture**:
-- New `backend/mv/config_manager.py` module handles all config loading/querying
-- Data structure: `_flavors[flavor_name][config_type] = config_dict`
-- Existing modules (scene_generator, video_generator, image_generator) refactored to query config_manager
-- Backward compatible: requests without `config_flavor` default to "default" flavor
-
-**See**: `.devdocs/v3/tasklist.md` for complete 10-section task breakdown with 40+ subtasks
-
 
 ## v2
 
@@ -59,39 +36,76 @@ Pass this information to the quick-gen-page and display in the input data. Allow
 
 Have the quickgen page attach the config flavor specified (either passed from create page or specified from quickgen-page select box) to the outgoing requests to the api e.g. create_scenes, generate_videos
 
+## v3
+
+Let's integrate the lipsync capability with the quick-gen-page:
+
+1. add a checkbox (default off) next to every regenerate button on the video section of the card.
+    - when this box is checked, the regenerate button changes to say "Regenearate with lipsync" and it's behavior will be to make a request to the /api/mv/lipsync endpoint instead of generate_video. 
+
+2. update the api/mv/lipsync to:
+    - make video_url and audio_url optional params
+    - add video_id and audio_id params as optional.
+        - when video_id or audio_id is supplied, they should use methods to lookup the url for those resources and pass those urls to the replicate api call.
+    - add optional paramaters of start_time and end_time (floats)
+    - it should clip 
+
+3. configure the client to utilize these parameters by sending a request with the video_id of the current clip on that card, the audio_id of the assoicated audio track (as displayed in the quick-gen-page input data section) and the start_time and end_time as calculated by assuming each clip is 8 seconds long and starts at start_time 0 seconds. So determine based on the scenes position where the start and end position should be.
+
+4. when the lipsync api returns to the client it should use the newly returned id to replace the id for that scene in the card, display the newly created video and update any react state properties holding current video ids.
+
+5. When the lipsync endpoint returns it should kickoff a new call to the stitch-video endpoint with the updated id to the newly returned stitched video and return that new video.
+    - also add a "re-stitch with current clips" button to the final video section which will call the stitch-video endpoint with the current id's of the videos and the audio paramaters unchanged from the original call.
+
+## v4
+
+create a new config_flavor by copying the default directory in backend/mv/configs/ and renaming it mv1. then update the files scene_prompts.yaml and parameters.yaml to be suited to producing a music video that will feature a band and a lead singer performing a song to an audience.
+
+## v5
+
+Add an option in the create page under the configurations section for start_at for the audio track which is a numeric integer input field. Add a button which when clicked slices off the N seconds in the start_at input field off the and creates a new audio track/uuid and replaces the existing one being displayed. This updated uuid and audio track should be the one passed to the quick-gen-page.
+
+- apply audio clipping to cut the audio track to the start duration specified.
+    - follow the patterns used elsewhere in the code for how to do this
+
+- make sure to place the output trimmed audio into an s3 bucket.
+
 ---
 
-### Implementation Plan (v2)
+### Implementation Plan
 
-**Status**: Planning Complete - See `.devdocs/v3/tasklist.md` (v2 section) for detailed task breakdown
+A comprehensive task list has been created in `.devdocs/v3/tasklist.md` under the "v5: Audio Start Trimming Feature" section.
 
-**Key Design Decisions**:
-1. **API Endpoint**: New `GET /api/mv/get_config_flavors` endpoint returns list of available flavors
-2. **Data Flow**: Config flavor passed via sessionStorage (same as other create → quick-gen data)
-3. **UI Component**: Collapsible "Configuration" section using Card/Collapsible component
-4. **Positioning**: Section placed between "Generation Mode" and "Video Description" on create page
-5. **Default State**: Configuration section collapsed by default on both pages
-6. **Quick-Gen Integration**:
-   - Configuration section above "Input Data" card
-   - Selected flavor displayed in "Input Data" section
-   - Flavor changeable via select box in Configuration section
-7. **API Integration**: `config_flavor` parameter added to both `create_scenes` and `generate_video` calls
+**Key Implementation Details:**
 
-**Frontend Changes**:
-- **Create page** (`frontend/src/app/create/page.tsx`):
-  - New collapsible Configuration section with config flavor select
-  - Fetch flavors from `/api/mv/get_config_flavors` on mount
-  - Add `configFlavor` to sessionStorage when navigating to quick-gen
+1. **Backend**: New `/api/audio/trim` endpoint that:
+   - Accepts `audio_id` and `start_at` (seconds) parameters
+   - Uses ffmpeg to trim audio from start position to end: `ffmpeg -i input.mp3 -ss {start_at} -acodec copy -y output.mp3`
+   - Generates new UUID for trimmed audio (original remains unchanged)
+   - Stores trimmed audio in `backend/mv/outputs/audio/{uuid}.mp3`
+   - Uploads to S3 if configured (graceful fallback to local storage)
 
-- **Quick-gen page** (`frontend/src/app/quick-gen-page/page.tsx`):
-  - New Configuration section for changing flavor
-  - Display received flavor in Input Data card
-  - Attach flavor to `create_scenes` API call
-  - Attach flavor to `generate_video` API calls
+2. **Frontend**: Audio trimming UI in create page Configuration section:
+   - Numeric input field for start position (default: 0, integer only)
+   - "Trim Audio" button (disabled if no audio loaded)
+   - Loading state during trim operation
+   - Replaces current audio with trimmed version after success
+   - Trimmed audio UUID propagates to quick-gen page via sessionStorage
 
-**Backend Changes**:
-- New endpoint: `GET /api/mv/get_config_flavors`
-- Returns: `{"flavors": ["default", "example", ...]}`
-- Uses existing `get_discovered_flavors()` from config_manager
+3. **Data Flow**:
+   - User uploads audio → Original UUID created
+   - User sets start_at=30 and clicks "Trim Audio"
+   - Backend trims audio and generates new UUID
+   - Frontend replaces audio_id with trimmed UUID
+   - Navigation to quick-gen passes trimmed UUID
+   - All scene/video generation uses trimmed audio
 
-**See**: `.devdocs/v3/tasklist.md` (v2 section) for complete 11-section task breakdown with 40+ subtasks
+4. **Audio Clipping Pattern**: Follows `clip_audio()` function from `backend/mv/lipsync.py:170-246` which uses ffmpeg subprocess calls with proper timeout, error handling, and S3 upload integration.
+
+5. **Error Handling**:
+   - Fatal: Audio not found (404), invalid start_at (400), ffmpeg failures (500)
+   - Non-fatal: S3 upload failures (log warning, continue with local file)
+
+**Example Use Case**: User wants to create a music video starting from the chorus at 45 seconds. They upload the full song, set start_at=45, trim the audio, then proceed to generate scenes and videos that sync to the audio starting from the 45-second mark.
+
+**Success Criteria**: Users can trim audio from any start position, creating a new UUID that seamlessly integrates with the existing create → quick-gen → generation pipeline, with trimmed audio stored both locally and in S3 (when configured).

@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
+import { useToast } from '@/hooks/useToast'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Mode = 'ad-creative' | 'music-video'
 
@@ -43,6 +45,15 @@ export default function CreatePage() {
   const [generationAttempts, setGenerationAttempts] = useState(0)
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [imageId: string]: 'loading' | 'loaded' | 'error' }>({})
 
+  // Configuration section state
+  const [isConfigExpanded, setIsConfigExpanded] = useState(false)
+  const [configFlavor, setConfigFlavor] = useState<string>('default')
+  const [availableFlavors, setAvailableFlavors] = useState<string[]>(['default'])
+  const [isFetchingFlavors, setIsFetchingFlavors] = useState(false)
+  const [directorConfig, setDirectorConfig] = useState<string>('')
+  const [availableDirectorConfigs, setAvailableDirectorConfigs] = useState<string[]>([])
+  const [isFetchingDirectorConfigs, setIsFetchingDirectorConfigs] = useState(false)
+
   // Update useAICharacter default when mode changes
   useEffect(() => {
     if (mode === 'music-video') {
@@ -51,6 +62,56 @@ export default function CreatePage() {
       setUseAICharacter(false)
     }
   }, [mode])
+
+  // Fetch available config flavors on mount
+  useEffect(() => {
+    const fetchConfigFlavors = async () => {
+      setIsFetchingFlavors(true)
+      try {
+        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.flavors && Array.isArray(data.flavors)) {
+            setAvailableFlavors(data.flavors)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch config flavors:', error)
+        // Keep default fallback
+      } finally {
+        setIsFetchingFlavors(false)
+      }
+    }
+
+    fetchConfigFlavors()
+  }, [])
+
+  // Fetch available director configs on mount
+  useEffect(() => {
+    const fetchDirectorConfigs = async () => {
+      setIsFetchingDirectorConfigs(true)
+      try {
+        const response = await fetch(`${API_URL}/api/mv/get_director_configs`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.configs && Array.isArray(data.configs)) {
+            setAvailableDirectorConfigs(data.configs)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch director configs:', error)
+        // Keep empty array as fallback
+      } finally {
+        setIsFetchingDirectorConfigs(false)
+      }
+    }
+
+    fetchDirectorConfigs()
+  }, [])
 
   // Note: Blob URL cleanup removed in v10 - images now fetched directly from backend
 
@@ -199,6 +260,9 @@ export default function CreatePage() {
       characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
       // Include YouTube URL for music-video mode
       youtubeUrl: audioSource === 'youtube' ? youtubeUrl : undefined,
+      // Include configuration options
+      configFlavor: configFlavor,
+      directorConfig: directorConfig || undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
@@ -396,6 +460,107 @@ export default function CreatePage() {
                   </TabsList>
                 </Tabs>
               </div>
+
+              {/* Configuration Section - Collapsible */}
+              <Collapsible
+                open={isConfigExpanded}
+                onOpenChange={setIsConfigExpanded}
+                className="space-y-3"
+              >
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full flex items-center justify-between p-3 bg-gray-900/30 hover:bg-gray-900/50 border border-gray-700 rounded-lg transition-colors"
+                  >
+                    <span className="text-sm font-medium text-white">Configuration</span>
+                    {isConfigExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-3 pt-2">
+                  <div className="p-4 bg-gray-900/30 border border-gray-700 rounded-lg space-y-3">
+                    {/* Config Flavor Select */}
+                    <div className="space-y-2">
+                      <Label htmlFor="config-flavor" className="text-sm font-medium text-white">
+                        Config Flavor
+                      </Label>
+                      <Select
+                        value={configFlavor}
+                        onValueChange={setConfigFlavor}
+                        disabled={isFetchingFlavors}
+                      >
+                        <SelectTrigger
+                          id="config-flavor"
+                          className="w-full bg-gray-800 border-gray-600 text-white"
+                        >
+                          <SelectValue placeholder={isFetchingFlavors ? "Loading..." : "Select flavor"} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          {availableFlavors.map((flavor) => (
+                            <SelectItem
+                              key={flavor}
+                              value={flavor}
+                              className="text-white hover:bg-gray-700"
+                            >
+                              {flavor}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400">
+                        Choose the configuration profile for video generation
+                      </p>
+                    </div>
+
+                    {/* Director Config Selector */}
+                    <div className="space-y-2">
+                      <Label htmlFor="director-config" className="text-sm font-medium text-white">
+                        Director Config (Optional)
+                      </Label>
+                      <Select
+                        value={directorConfig || undefined}
+                        onValueChange={(value) => setDirectorConfig(value || '')}
+                        disabled={isFetchingDirectorConfigs}
+                      >
+                        <SelectTrigger
+                          id="director-config"
+                          className="w-full bg-gray-800 border-gray-600 text-white"
+                        >
+                          <SelectValue placeholder={isFetchingDirectorConfigs ? "Loading..." : "None (optional)"} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          {availableDirectorConfigs.length > 0 ? (
+                            availableDirectorConfigs.map((config) => (
+                              <SelectItem
+                                key={config}
+                                value={config}
+                                className="text-white hover:bg-gray-700"
+                              >
+                                {config}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem
+                              value="no-configs"
+                              disabled
+                              className="text-gray-500"
+                            >
+                              No configs available
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400">
+                        Choose a creative direction template (e.g., Wes-Anderson, David-Lynch)
+                      </p>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               {/* Mode-Specific Upload Zone */}
               {mode === 'ad-creative' && (

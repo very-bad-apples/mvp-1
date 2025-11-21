@@ -100,6 +100,47 @@ async def get_config_flavors():
 
 
 @router.get(
+    "/get_director_configs",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Director Configs",
+    description="""
+Get list of available director configuration files.
+
+Returns an array of director config names (without extension) that are
+available in backend/mv/director/configs/. These configs can be used
+for creative direction in video generation.
+
+**Example Response:**
+```json
+{
+    "configs": ["Wes-Anderson", "David-Lynch", "Quentin-Tarantino"]
+}
+```
+"""
+)
+async def get_director_configs():
+    """
+    Get list of available director configuration files.
+
+    Returns:
+        Dictionary with 'configs' key containing list of available director config names
+    """
+    try:
+        from mv.director.prompt_parser import discover_director_configs
+
+        configs = discover_director_configs()
+
+        logger.info("director_configs_requested", configs=configs)
+
+        return {"configs": configs}
+    except Exception as e:
+        logger.error("get_director_configs_error", error=str(e), exc_info=True)
+        # Return empty list as fallback
+        return {"configs": []}
+
+
+@router.get(
     "/config/debug",
     summary="Debug Configuration",
     description="Shows current configuration values for troubleshooting"
@@ -1620,8 +1661,12 @@ async def lipsync_video(request: LipsyncRequest):
     try:
         logger.info(
             "lipsync_request_received",
-            video_url=request.video_url[:100] + "..." if len(request.video_url) > 100 else request.video_url,
-            audio_url=request.audio_url[:100] + "..." if len(request.audio_url) > 100 else request.audio_url,
+            video_url=request.video_url[:100] + "..." if request.video_url and len(request.video_url) > 100 else request.video_url,
+            audio_url=request.audio_url[:100] + "..." if request.audio_url and len(request.audio_url) > 100 else request.audio_url,
+            video_id=request.video_id,
+            audio_id=request.audio_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection
