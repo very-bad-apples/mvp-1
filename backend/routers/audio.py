@@ -10,8 +10,10 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional
 import os
+import uuid
+import subprocess
 
-from schemas import AudioDownloadRequest, AudioDownloadResponse, ErrorResponse
+from schemas import AudioDownloadRequest, AudioDownloadResponse, AudioTrimRequest, AudioTrimResponse, ErrorResponse
 from services.audio_downloader import AudioDownloader, AudioDownloadError
 from pipeline.asset_manager import AssetManager
 from config import settings
@@ -355,4 +357,249 @@ async def get_audio_info(audio_id: str):
         "file_size_bytes": stat.st_size,
         "created_at": created_at
     }
+
+
+def trim_audio_from_start(source_path: str, output_path: str, start_at: int) -> dict:
+    """
+    Trim audio file from start position to end using ffmpeg.
+
+    Args:
+        source_path: Path to source audio file
+        output_path: Path for trimmed output file
+        start_at: Start time in seconds (trim from this point to end)
+
+    Returns:
+        Dictionary with metadata about trimmed audio
+
+    Raises:
+        RuntimeError: If ffmpeg fails
+    """
+    try:
+        # Use ffmpeg to trim audio from start_at to end of file
+        cmd = [
+            'ffmpeg',
+            '-i', source_path,
+            '-ss', str(start_at),
+            '-acodec', 'copy',  # Copy codec for faster processing
+            '-y',  # Overwrite output file
+            output_path
+        ]
+
+        logger.info(
+            "audio_trim_starting",
+            source_path=source_path,
+            output_path=output_path,
+            start_at=start_at,
+            command=' '.join(cmd)
+        )
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60  # 1 minute timeout for audio trimming
+        )
+
+        if result.returncode != 0:
+            logger.error("ffmpeg_trim_failed", stderr=result.stderr, returncode=result.returncode)
+            raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+
+        # Get file size
+        file_size = os.path.getsize(output_path)
+
+        logger.info("audio_trim_completed", output_path=output_path, file_size_bytes=file_size)
+
+        return {
+            "file_size_bytes": file_size,
+            "ffmpeg_command": ' '.join(cmd)
+        }
+
+    except subprocess.TimeoutExpired:
+        logger.error("audio_trim_timeout", source_path=source_path, start_at=start_at)
+        raise RuntimeError("Audio trimming timed out after 60 seconds")
+    except Exception as e:
+        logger.error("audio_trim_error", error=str(e), exc_info=True)
+        raise RuntimeError(f"Audio trimming failed: {str(e)}")
+
+
+@router.post(
+    "/trim",
+    response_model=AudioTrimResponse,
+    status_code=200,
+    responses={
+        200: {"description": "Audio trimmed successfully"},
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"},
+        404: {"model": ErrorResponse, "description": "Audio file not found"},
+        500: {"model": ErrorResponse, "description": "Internal server error or trimming failure"}
+    },
+    summary="Trim Audio from Start Position",
+    description="""
+Trim audio from a specified start position to the end of the file.
+
+This endpoint:
+1. Validates the source audio_id exists
+2. Trims the audio from start_at seconds to end using ffmpeg
+3. Generates a new UUID for the trimmed audio
+4. Saves the trimmed file to storage
+5. Uploads to S3 if cloud storage is configured (optional)
+6. Returns metadata and access URL for the trimmed audio
+
+**Important Notes:**
+- The original audio file remains unchanged
+- A new UUID is generated for each trim operation
+- Trimming creates a new file from start_at to end of audio
+- S3 upload failures are non-fatal (local file still available)
+
+**Required Fields:**
+- audio_id: UUID of the source audio file
+
+**Optional Fields:**
+- start_at: Start position in seconds (default: 0)
+
+**Example Use Case:**
+User wants to skip the first 30 seconds of a song to start from the chorus.
+They set start_at=30, and the trimmed audio begins at the 30-second mark.
+"""
+)
+async def trim_audio(request: AudioTrimRequest):
+    """
+    Trim audio from specified start position to end.
+
+    Creates a new audio file with a new UUID, leaving the original unchanged.
+
+    **Example Request:**
+    ```json
+    {
+        "audio_id": "550e8400-e29b-41d4-a716-446655440000",
+        "start_at": 30
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "audio_id": "def456-e29b-41d4-a716-446655440000",
+        "audio_path": "/backend/mv/outputs/audio/def456.mp3",
+        "audio_url": "/api/audio/get/def456-e29b-41d4-a716-446655440000",
+        "original_audio_id": "550e8400-e29b-41d4-a716-446655440000",
+        "start_at": 30,
+        "duration": null,
+        "file_size_bytes": 2400000,
+        "metadata": {
+            "cloud_url": "https://...",
+            "ffmpeg_command": "ffmpeg -i input.mp3 -ss 30 -acodec copy -y output.mp3"
+        }
+    }
+    ```
+    """
+    try:
+        logger.info(
+            "audio_trim_request_received",
+            audio_id=request.audio_id,
+            start_at=request.start_at
+        )
+
+        # Validate audio_id format
+        if not request.audio_id or len(request.audio_id) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid audio_id format",
+                    "details": "audio_id must be a valid identifier"
+                }
+            )
+
+        # Find source audio file
+        source_audio_path = None
+
+        # Check MP3 first (most common)
+        mp3_path = Path(AUDIO_BASE_PATH) / f"{request.audio_id}.mp3"
+        if mp3_path.exists():
+            source_audio_path = mp3_path
+        else:
+            # Try other formats
+            for ext in ['m4a', 'opus', 'webm', 'ogg', 'aac']:
+                potential_path = Path(AUDIO_BASE_PATH) / f"{request.audio_id}.{ext}"
+                if potential_path.exists():
+                    source_audio_path = potential_path
+                    break
+
+        if not source_audio_path:
+            logger.warning("audio_trim_source_not_found", audio_id=request.audio_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Audio file with ID {request.audio_id} not found",
+                    "details": "The source audio may have been deleted or the ID is incorrect"
+                }
+            )
+
+        # Generate new UUID for trimmed audio
+        new_audio_id = str(uuid.uuid4())
+        output_path = Path(AUDIO_BASE_PATH) / f"{new_audio_id}.mp3"
+
+        # Trim audio using ffmpeg
+        trim_metadata = trim_audio_from_start(
+            source_path=str(source_audio_path),
+            output_path=str(output_path),
+            start_at=request.start_at
+        )
+
+        # Upload to S3 if configured (optional - failures are non-fatal)
+        cloud_url = None
+        try:
+            if settings.STORAGE_BUCKET:
+                from services.storage_backend import get_storage_backend
+                storage = get_storage_backend()
+
+                # Upload trimmed audio to S3
+                import asyncio
+                cloud_url = await storage.upload_file(
+                    str(output_path),
+                    f"mv/outputs/audio/{new_audio_id}.mp3"
+                )
+
+                logger.info(f"Uploaded trimmed audio {new_audio_id} to cloud storage")
+                trim_metadata["cloud_url"] = cloud_url
+        except Exception as e:
+            logger.warning(f"Failed to upload trimmed audio {new_audio_id} to cloud storage: {e}")
+            # Continue without cloud upload - local file is still available
+
+        # Build response
+        response = AudioTrimResponse(
+            audio_id=new_audio_id,
+            audio_path=str(output_path),
+            audio_url=f"/api/audio/get/{new_audio_id}",
+            original_audio_id=request.audio_id,
+            start_at=request.start_at,
+            duration=None,  # Could be extracted from ffmpeg output if needed
+            file_size_bytes=trim_metadata["file_size_bytes"],
+            metadata=trim_metadata
+        )
+
+        logger.info(
+            "audio_trim_completed",
+            original_audio_id=request.audio_id,
+            new_audio_id=new_audio_id,
+            start_at=request.start_at,
+            file_size_bytes=trim_metadata["file_size_bytes"]
+        )
+
+        return response
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error("audio_trim_unexpected_error", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "An unexpected error occurred during audio trimming",
+                "details": str(e)
+            }
+        )
 
