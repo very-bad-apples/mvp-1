@@ -717,6 +717,8 @@ export default function CreatePage() {
                             setDownloadedAudioId(audioId)
                             setDownloadedAudioUrl(audioUrl)
                           }}
+                          currentAudioId={downloadedAudioId}
+                          currentAudioUrl={downloadedAudioUrl}
                         />
                       </div>
                     )}
