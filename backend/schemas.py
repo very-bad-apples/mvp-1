@@ -187,3 +187,46 @@ class AudioDownloadResponse(BaseModel):
                 }
             }
         }
+
+
+class AudioTrimRequest(BaseModel):
+    """Request model for audio trimming"""
+    audio_id: str = Field(..., description="UUID of the source audio file to trim")
+    start_at: int = Field(default=0, ge=0, description="Start position in seconds (trim from this point to end)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "audio_id": "550e8400-e29b-41d4-a716-446655440000",
+                "start_at": 30
+            }
+        }
+
+
+class AudioTrimResponse(BaseModel):
+    """Response model for audio trim endpoint"""
+    audio_id: str = Field(..., description="UUID of the new trimmed audio file")
+    audio_path: str = Field(..., description="Filesystem path to trimmed audio")
+    audio_url: str = Field(..., description="URL path to retrieve trimmed audio")
+    original_audio_id: str = Field(..., description="Reference to original audio UUID")
+    start_at: int = Field(..., description="The start position used for trimming (seconds)")
+    duration: Optional[float] = Field(None, description="Duration of trimmed audio in seconds (if available)")
+    file_size_bytes: int = Field(..., description="Size of trimmed audio file in bytes")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata including cloud_url if S3 upload succeeded")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "audio_id": "def456-e29b-41d4-a716-446655440000",
+                "audio_path": "/backend/mv/outputs/audio/def456-e29b-41d4-a716-446655440000.mp3",
+                "audio_url": "/api/audio/get/def456-e29b-41d4-a716-446655440000",
+                "original_audio_id": "550e8400-e29b-41d4-a716-446655440000",
+                "start_at": 30,
+                "duration": 150.5,
+                "file_size_bytes": 2400000,
+                "metadata": {
+                    "cloud_url": "https://s3.example.com/...",
+                    "ffmpeg_command": "ffmpeg -i input.mp3 -ss 30 -acodec copy -y output.mp3"
+                }
+            }
+        }

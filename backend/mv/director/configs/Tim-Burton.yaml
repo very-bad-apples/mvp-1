@@ -1,0 +1,58 @@
+# Tim Burton Director Configuration
+# Signature Style: Gothic, high contrast, German Expressionism, dark palette with vibrant accents
+
+camera:
+  shotType: wide_shot  # Showcasing elaborate gothic production design
+  movement: crane  # Sweeping, theatrical movements through fantastical sets
+  lens: wide_angle  # Exaggerated perspective for distorted, expressionistic feel
+  angle: low_angle  # Creates imposing, theatrical atmosphere
+
+lighting:
+  type: dramatic
+  direction: side  # Low-key lighting with heavy shadows and hard light
+
+style:
+  visualStyle: cinematic
+  mood: mysterious  # Dark, melancholic, whimsical darkness
+  colorGrading: desaturated  # Monochromatic grays, blacks, blues with vibrant color accents
+
+motion:
+  intensity: 0.5  # Deliberate, theatrical movement
+  guidanceScale: 11  # Strong adherence to gothic aesthetic
+  cfgScale: 9  # High guidance for distinctive visual style
+
+audio:
+  music:
+    style: orchestral  # Danny Elfman's signature gothic orchestrations
+    mood: mysterious  # Dark yet whimsical
+    intensity: prominent  # Music is integral to atmosphere
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - realistic lighting
+    - naturalistic colors
+    - subtle design
+    - minimal contrast
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: dissolve  # Gothic, theatrical transitions
+
+# Additional Burton Characteristics:
+# - "Burtonesque": melancholy celebration, creepy curling lines, heavy Gothic
+# - High contrast lighting with intense shadows
+# - Nearly monochromatic palette (grays, blacks, blues)
+# - Candy-colored pastel accents (stripes, swirls) against dark palette
+# - German Expressionism influence (chiaroscuro, exaggerated sets)
+# - Stylized, distorted architectural elements
+# - Muted character colors with colorful elements as visual cues
+# - Recurring spiral and striped motifs
+# - Stop-motion animation aesthetic
+# - Pale, gaunt character designs
+# - Gothic architecture and twisted landscapes
+# - Dark comedy tone
+# - Outsider protagonists
+# - Danny Elfman musical collaboration
+# - Practical effects and elaborate production design

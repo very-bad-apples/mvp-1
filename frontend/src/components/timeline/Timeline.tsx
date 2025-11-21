@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { ZoomIn, ZoomOut, RefreshCw, Edit3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/useToast'
 import { TimelineItemSheet, TimelineItem } from './TimelineItemSheet'
 
 interface TimelineProps {

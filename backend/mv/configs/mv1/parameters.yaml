@@ -1,0 +1,22 @@
+# Music Video (mv1) parameters for scene generation
+# Optimized for outdoor stadium concert performances with band and lead singer
+# These parameters are tuned for dynamic, high-energy music video aesthetic
+
+# Character/performance personality traits for the lead singer
+# More energetic and performance-oriented than default config
+character_characteristics: "charismatic, energetic, passionate, commanding stage presence"
+
+# Video type remains standard
+video_type: "music video"
+
+# Video characteristics emphasize concert/performance aesthetic
+# Changed from vlogging to concert-specific style
+video_characteristics: "cinematic, high-definition, dynamic camera work, concert lighting, music video aesthetic"
+
+# Camera angle: mix of perspectives for music video variety
+# Changed from simple "front" to indicate multiple angles
+camera_angle: "front, side, and dynamic angles"
+
+# Number of scenes: keeping 4 as default
+# This provides good variety for music videos (wide shots, close-ups, band shots, etc.)
+number_of_scenes: 4

@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Youtube, Download, Loader2, CheckCircle2, X, Music } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/hooks/useToast'
 
 // Use Next.js API route instead of direct backend call
 const API_URL = '/api/audio'
@@ -24,17 +24,33 @@ interface AudioDownloadResult {
 interface YouTubeAudioDownloaderProps {
   onAudioDownloaded?: (audioId: string, audioUrl: string) => void
   downloadedAudio?: AudioDownloadResult | null
+  currentAudioId?: string  // Current audio ID (may be trimmed version)
+  currentAudioUrl?: string // Current audio URL (may be trimmed version)
 }
 
-export function YouTubeAudioDownloader({ 
-  onAudioDownloaded, 
-  downloadedAudio 
+export function YouTubeAudioDownloader({
+  onAudioDownloaded,
+  downloadedAudio,
+  currentAudioId,
+  currentAudioUrl
 }: YouTubeAudioDownloaderProps) {
   const { toast } = useToast()
   const [url, setUrl] = useState('')
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadResult, setDownloadResult] = useState<AudioDownloadResult | null>(downloadedAudio || null)
   const [error, setError] = useState<string | null>(null)
+
+  // Update download result when currentAudioId changes (e.g., after trimming)
+  useEffect(() => {
+    if (currentAudioId && downloadResult && currentAudioId !== downloadResult.audio_id) {
+      // Audio was trimmed - update the display with new audio ID
+      setDownloadResult({
+        ...downloadResult,
+        audio_id: currentAudioId,
+        audio_url: currentAudioUrl || downloadResult.audio_url,
+      })
+    }
+  }, [currentAudioId, currentAudioUrl, downloadResult])
 
   const isValidYouTubeUrl = (url: string): boolean => {
     const patterns = [

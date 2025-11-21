@@ -1,0 +1,18 @@
+Scene Creative Direction:
+
+Camera: {{camera.shotType}} shot with {{camera.lens}} lens, {{camera.movement}} camera movement, {{camera.angle}} angle.
+
+Lighting: {{lighting.type}} lighting from {{lighting.direction}}.
+
+Visual Style: {{style.visualStyle}} style with {{style.colorGrading}} color grading, {{style.mood}} mood.
+
+Motion: Motion intensity {{motion.intensity}}, guidance scale {{motion.guidanceScale}}, CFG scale {{motion.cfgScale}}.
+
+Audio: {{audio.dialogue.tone}} dialogue tone. Music: {{audio.music.style}} style, {{audio.music.mood}} mood, {{audio.music.intensity}} intensity.
+
+Negative Prompts: {{quality.negativePrompts}}
+
+Safety: {{quality.safetyLevel}}
+
+Transitions: {{transitions.type}}
+

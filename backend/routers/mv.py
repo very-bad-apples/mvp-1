@@ -47,6 +47,7 @@ from mv_models import (
 )
 from services.s3_storage import (
     get_s3_storage_service,
+    generate_s3_key,
     generate_scene_s3_key,
     validate_s3_key,
 )
@@ -55,6 +56,88 @@ from pynamodb.exceptions import DoesNotExist, PutError
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/mv", tags=["Music Video"])
+
+
+@router.get(
+    "/get_config_flavors",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Config Flavors",
+    description="""
+Get list of available configuration flavors.
+
+Returns an array of flavor names that are available for use with the
+config_flavor parameter in scene generation, video generation, and
+character reference generation endpoints.
+
+**Example Response:**
+```json
+{
+    "flavors": ["default", "example", "cinematic"]
+}
+```
+"""
+)
+async def get_config_flavors():
+    """
+    Get list of available configuration flavors.
+
+    Returns:
+        Dictionary with 'flavors' key containing list of available flavor names
+    """
+    try:
+        from mv.config_manager import get_discovered_flavors
+
+        flavors = get_discovered_flavors()
+
+        logger.info("config_flavors_requested", flavors=flavors)
+
+        return {"flavors": flavors}
+    except Exception as e:
+        logger.error("get_config_flavors_error", error=str(e), exc_info=True)
+        # Return default as fallback
+        return {"flavors": ["default"]}
+
+
+@router.get(
+    "/get_director_configs",
+    response_model=dict,
+    status_code=200,
+    summary="Get Available Director Configs",
+    description="""
+Get list of available director configuration files.
+
+Returns an array of director config names (without extension) that are
+available in backend/mv/director/configs/. These configs can be used
+for creative direction in video generation.
+
+**Example Response:**
+```json
+{
+    "configs": ["Wes-Anderson", "David-Lynch", "Quentin-Tarantino"]
+}
+```
+"""
+)
+async def get_director_configs():
+    """
+    Get list of available director configuration files.
+
+    Returns:
+        Dictionary with 'configs' key containing list of available director config names
+    """
+    try:
+        from mv.director.prompt_parser import discover_director_configs
+
+        configs = discover_director_configs()
+
+        logger.info("director_configs_requested", configs=configs)
+
+        return {"configs": configs}
+    except Exception as e:
+        logger.error("get_director_configs_error", error=str(e), exc_info=True)
+        # Return empty list as fallback
+        return {"configs": []}
 
 
 @router.get(
@@ -220,6 +303,7 @@ async def create_scenes(request: CreateScenesRequest):
             video_type=request.video_type.strip() if request.video_type else None,
             video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
             camera_angle=request.camera_angle.strip() if request.camera_angle else None,
+            config_flavor=request.config_flavor,
         )
 
         # If project_id provided, create scene records in DynamoDB
@@ -482,6 +566,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
             output_format=request.output_format.strip() if request.output_format else None,
             negative_prompt=request.negative_prompt.strip() if request.negative_prompt else None,
             seed=request.seed,
+            config_flavor=request.config_flavor,
         )
 
         # Upload to S3 if cloud storage is configured (follows video_generator.py pattern)
@@ -922,6 +1007,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             reference_image_base64=request.reference_image_base64,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
+            config_flavor=request.config_flavor,
         )
 
         # DynamoDB integration: Update scene record if project_id and sequence provided
@@ -1485,8 +1571,26 @@ Generate a lip-synced video by syncing audio to a video scene using Sync Labs' L
 This endpoint takes a video URL (scene) and an audio URL, then generates a lip-synced version
 where the video's lip movements match the provided audio track.
 
+**Two Usage Modes:**
+
+1. **Direct URLs Mode:**
+   - Provide `video_url` and `audio_url` directly
+   - URLs can be HTTP/HTTPS URLs or S3 presigned URLs
+   - No DynamoDB integration
+
+2. **DynamoDB Mode (Recommended):**
+   - Provide `project_id` and `sequence` (scene number)
+   - Endpoint automatically fetches:
+     - Audio from `project.audioBackingTrackS3Key` (from YouTube URL or uploaded audio)
+     - Video from `scene.videoClipS3Key` (generated scene video)
+   - Generates presigned URLs and sends to Replicate
+   - Saves result to `scene.lipSyncedVideoClipS3Key` in DynamoDB
+
 **Database Integration:**
 - If `project_id` and `sequence` are provided together, the endpoint will:
+  - Fetch audio S3 key from project metadata
+  - Fetch video S3 key from scene record
+  - Generate presigned URLs from S3 keys
   - Mark the scene as "processing" before lipsync starts
   - Update the scene record with lipsynced video S3 key and job ID on success
   - Mark the scene as "completed" when lipsynced video is ready
@@ -1496,19 +1600,16 @@ where the video's lip movements match the provided audio track.
 **Limitations:**
 - Synchronous processing (20-300s response times)
 - No progress tracking (client waits for completion)
-- File-based storage (videos saved with UUID filenames)
 - Requires Scale plan or higher for Replicate API access
 
-**Required Fields:**
-- video_url: URL to the video file (scene) - supports MP4, MOV, WEBM, M4V, GIF
-- audio_url: URL to the audio file - supports MP3, OGG, WAV, M4A, AAC
+**Required Fields (choose one mode):**
+- Mode 1: `video_url` + `audio_url` (direct URLs)
+- Mode 2: `project_id` + `sequence` (fetch from DynamoDB)
 
 **Optional Fields:**
 - temperature: Control expressiveness of lip movements (0.0 = subtle, 1.0 = exaggerated)
 - occlusion_detection_enabled: Enable for complex scenes with obstructions (may slow processing)
 - active_speaker_detection: Auto-detect active speaker in multi-person videos
-- project_id: Project UUID for DynamoDB integration (requires sequence)
-- sequence: Scene sequence number for DynamoDB integration (requires project_id)
 
 **Best Practices:**
 - Ensure input video shows the speaker actively talking for natural speaking motion
@@ -1560,44 +1661,129 @@ async def lipsync_video(request: LipsyncRequest):
     try:
         logger.info(
             "lipsync_request_received",
-            video_url=request.video_url[:100] + "..." if len(request.video_url) > 100 else request.video_url,
-            audio_url=request.audio_url[:100] + "..." if len(request.audio_url) > 100 else request.audio_url,
+            video_url=request.video_url[:100] + "..." if request.video_url and len(request.video_url) > 100 else request.video_url,
+            audio_url=request.audio_url[:100] + "..." if request.audio_url and len(request.audio_url) > 100 else request.audio_url,
+            video_id=request.video_id,
+            audio_id=request.audio_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection
         )
 
-        # Validate required fields
-        if not request.video_url or not request.video_url.strip():
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Video URL is required",
-                    "details": "The 'video_url' field cannot be empty"
-                }
-            )
+        # Determine video_url and audio_url
+        video_url = None
+        audio_url = None
+        
+        # If project_id and sequence provided, fetch from DynamoDB
+        if request.project_id and request.sequence:
+            try:
+                # Fetch project and scene from DynamoDB
+                pk = f"PROJECT#{request.project_id}"
+                
+                # Get project for audio
+                try:
+                    project_item = MVProjectItem.get(pk, "METADATA")
+                    if not project_item.audioBackingTrackS3Key:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "error": "ValidationError",
+                                "message": "Project audio not found",
+                                "details": "Project does not have audioBackingTrackS3Key. Please ensure audio was uploaded when creating the project."
+                            }
+                        )
+                except DoesNotExist:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Project {request.project_id} not found",
+                            "details": "The specified project does not exist in the database"
+                        }
+                    )
+                
+                # Get scene for video
+                sk = f"SCENE#{request.sequence:03d}"
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                    if not scene_item.videoClipS3Key:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "error": "ValidationError",
+                                "message": "Scene video not found",
+                                "details": f"Scene {request.sequence} does not have videoClipS3Key. Please generate the video first."
+                            }
+                        )
+                except DoesNotExist:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Scene {request.sequence} not found for project {request.project_id}",
+                            "details": "The specified scene does not exist in the database"
+                        }
+                    )
+                
+                # Generate presigned URLs from S3 keys
+                from services.s3_storage import get_s3_storage_service
+                s3_service = get_s3_storage_service()
+                
+                audio_url = s3_service.generate_presigned_url(project_item.audioBackingTrackS3Key)
+                video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+                
+                logger.info(
+                    "lipsync_urls_from_dynamodb",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    audio_s3_key=project_item.audioBackingTrackS3Key,
+                    video_s3_key=scene_item.videoClipS3Key
+                )
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(
+                    "failed_to_fetch_urls_from_dynamodb",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": "InternalError",
+                        "message": "Failed to fetch audio/video URLs from DynamoDB",
+                        "details": str(e)
+                    }
+                )
+        else:
+            # Use provided URLs directly
+            if not request.video_url or not request.video_url.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Video URL is required",
+                        "details": "Either provide video_url and audio_url, or provide project_id and sequence to fetch from DynamoDB"
+                    }
+                )
 
-        if not request.audio_url or not request.audio_url.strip():
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Audio URL is required",
-                    "details": "The 'audio_url' field cannot be empty"
-                }
-            )
-
-        # Validate project_id and sequence are provided together
-        if (request.project_id and not request.sequence) or (request.sequence and not request.project_id):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "project_id and sequence must be provided together",
-                    "details": "Both project_id and sequence are required for DynamoDB integration"
-                }
-            )
+            if not request.audio_url or not request.audio_url.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Audio URL is required",
+                        "details": "Either provide video_url and audio_url, or provide project_id and sequence to fetch from DynamoDB"
+                    }
+                )
+            
+            video_url = request.video_url.strip()
+            audio_url = request.audio_url.strip()
 
         # DynamoDB integration: Mark scene as "processing" before lipsync starts
         if request.project_id and request.sequence:
@@ -1639,10 +1825,10 @@ async def lipsync_video(request: LipsyncRequest):
                     exc_info=True
                 )
 
-        # Generate lipsync video
-        video_id, video_path, video_url, metadata = generate_lipsync(
-            video_url=request.video_url.strip(),
-            audio_url=request.audio_url.strip(),
+        # Generate lipsync video (uploads directly to S3, returns S3 URLs)
+        video_id, video_s3_url, audio_s3_url, audio_s3_key, metadata = generate_lipsync(
+            video_url=video_url,
+            audio_url=audio_url,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection,
@@ -1672,47 +1858,61 @@ async def lipsync_video(request: LipsyncRequest):
                     )
                     # Don't fail the request, just log warning
                 else:
-                    # Upload lipsynced video to S3 if storage is configured
+                    # Extract S3 key from S3 URL (if it's a presigned URL, we need the key)
+                    # The video is already uploaded to mv/jobs/{video_id}/lipsync.mp4
+                    # For DynamoDB, we can optionally copy to scene-specific path or use the generic path
                     lipsync_s3_key = None
                     if settings.STORAGE_BUCKET:
                         try:
-                            s3_service = get_s3_storage_service()
-                            lipsync_s3_key = generate_scene_s3_key(
+                            # Use scene-specific S3 key for better organization
+                            scene_s3_key = generate_scene_s3_key(
                                 request.project_id,
                                 request.sequence,
                                 "lipsynced"
                             )
-                            s3_service.upload_file_from_path(
-                                video_path,
-                                lipsync_s3_key,
-                                content_type="video/mp4"
-                            )
+                            
+                            # Use S3 server-side copy (no download/upload needed)
+                            from services.storage_backend import get_storage_backend
+                            import asyncio
+                            import concurrent.futures
+                            
+                            async def copy_to_scene_path():
+                                storage = get_storage_backend()
+                                generic_path = f"mv/jobs/{video_id}/lipsync.mp4"
+                                
+                                # Direct S3-to-S3 copy (fast, no temp files)
+                                await storage.copy_file(generic_path, scene_s3_key)
+                                
+                                return scene_s3_key
+                            
+                            def run_copy():
+                                return asyncio.run(copy_to_scene_path())
+                            
+                            with concurrent.futures.ThreadPoolExecutor() as executor:
+                                future = executor.submit(run_copy)
+                                lipsync_s3_key = future.result(timeout=120)  # 2 min timeout
+                            
                             logger.info(
-                                "lipsync_video_uploaded_to_s3",
+                                "lipsync_video_copied_to_scene_path",
                                 project_id=request.project_id,
                                 sequence=request.sequence,
                                 s3_key=lipsync_s3_key
                             )
                         except Exception as e:
-                            logger.error(
-                                "s3_upload_failed_for_lipsync",
+                            logger.warning(
+                                "lipsync_copy_to_scene_path_failed",
                                 project_id=request.project_id,
                                 sequence=request.sequence,
-                                error=str(e),
-                                exc_info=True
+                                error=str(e)
                             )
-                            # Continue without S3 key - will use local path
+                            # Continue without scene-specific path - generic path is still available
 
-                    # Update scene record (validate S3 key to ensure it's not a URL)
-                    # Only set S3 key if we have a valid one (S3 upload succeeded or S3 not configured)
+                    # Update scene record with S3 keys (only existing fields, no new fields)
                     if lipsync_s3_key:
                         scene_item.lipSyncedVideoClipS3Key = validate_s3_key(lipsync_s3_key, "lipSyncedVideoClipS3Key")
+                    
                     scene_item.lipsyncJobId = video_id
-                    # Only mark completed if S3 upload succeeded or S3 is not configured
-                    # Keep existing completed status if already completed
-                    if lipsync_s3_key or not settings.STORAGE_BUCKET:
-                        if scene_item.status != "completed":
-                            scene_item.status = "completed"
+                    scene_item.status = "completed"
                     scene_item.updatedAt = datetime.now(timezone.utc)
                     scene_item.save()
 
@@ -1735,15 +1935,16 @@ async def lipsync_video(request: LipsyncRequest):
 
         response = LipsyncResponse(
             video_id=video_id,
-            video_path=video_path,
-            video_url=video_url,
+            video_url=video_s3_url,
+            audio_url=audio_s3_url,
             metadata=metadata
         )
 
         logger.info(
             "lipsync_request_completed",
             video_id=video_id,
-            video_path=video_path,
+            video_s3_url=video_s3_url[:100] + "..." if len(video_s3_url) > 100 else video_s3_url,
+            audio_s3_url=audio_s3_url[:100] + "..." if len(audio_s3_url) > 100 else audio_s3_url,
             processing_time_seconds=metadata.get("processing_time_seconds"),
             file_size_bytes=metadata.get("file_size_bytes"),
             has_project_id=request.project_id is not None

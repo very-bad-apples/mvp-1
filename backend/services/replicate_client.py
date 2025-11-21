@@ -157,11 +157,19 @@ class ReplicateClient:
             use_file_output=use_file_output,
         )
 
+        # Ensure API token is set in environment (safeguard)
+        if not self.api_token:
+            raise ValueError(
+                "Replicate API token is not set. Cannot make API call."
+            )
+        os.environ["REPLICATE_API_TOKEN"] = self.api_token
+
         try:
+            # Use replicate.run() - it reads REPLICATE_API_TOKEN from environment
+            # We ensure it's set above as a safeguard
             output = replicate.run(
                 model_id,
                 input=input_params,
-                use_file_output=use_file_output,
             )
 
             self.logger.info(
@@ -234,6 +242,9 @@ class ReplicateClient:
         )
 
         try:
+            # Use client instance to ensure API token is passed correctly
+            # Note: Replicate SDK doesn't have async_run on client, so we use the module function
+            # but ensure environment variable is set (done in __init__)
             output = await replicate.async_run(
                 model_id,
                 input=input_params,
