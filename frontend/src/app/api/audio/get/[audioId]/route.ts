@@ -5,7 +5,8 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+// Use server-side API key (not exposed to client)
+const API_KEY = process.env.API_KEY || ''
 
 export async function GET(
   request: NextRequest,
