@@ -293,7 +293,8 @@ resource "aws_lb_listener" "https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.certificate_arn
+  # Use Terraform-managed certificate if available, otherwise use provided ARN
+  certificate_arn   = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate.main.arn
 
   default_action {
     type             = "forward"
@@ -705,7 +706,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "MOCK_VID_GENS"
-          value = "false"
+          value = "true"
         },
         {
           name  = "DEBUG"
@@ -817,6 +818,7 @@ resource "aws_ecs_service" "main" {
 
   depends_on = [
     aws_lb_listener.http,
+    aws_lb_listener.https,
     aws_iam_role_policy_attachment.ecs_task_execution
   ]
   

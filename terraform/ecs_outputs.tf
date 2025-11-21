@@ -84,7 +84,7 @@ output "https_enabled" {
 
 output "certificate_arn" {
   description = "ARN of the ACM certificate (if HTTPS enabled)"
-  value       = var.enable_https ? var.certificate_arn : "HTTPS not enabled"
+  value       = var.enable_https ? (var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate.main.arn) : "HTTPS not enabled"
 }
 
 # Target Group
