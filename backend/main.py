@@ -263,17 +263,17 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models, mv, audio
-# Note: projects.py router removed - using mv_projects.py instead (duplicate conflict resolved)
+from routers import projects
+from routers import generate, jobs, websocket, models, mv
 from routers import mv_projects
+from routers import audio_converter
 
 app.include_router(generate.router)
 app.include_router(jobs.router)
 app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
-app.include_router(audio.router)
-# Note: projects.router removed - duplicate of mv_projects.router (both used /api/mv prefix)
+app.include_router(audio_converter.router)
 app.include_router(mv_projects.router)
 logger.info("router_loaded", router="mv_projects")
 

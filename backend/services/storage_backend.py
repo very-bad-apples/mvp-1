@@ -51,6 +51,24 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
+    async def upload_bytes(self, data: bytes, cloud_path: str, content_type: str = "application/octet-stream") -> str:
+        """
+        Upload bytes or BytesIO directly to cloud storage (no temp file needed).
+        
+        Args:
+            data: Bytes to upload
+            cloud_path: Destination path in cloud (e.g., "videos/job-123/final.mp4")
+            content_type: MIME type (e.g., "video/mp4", "audio/mpeg")
+            
+        Returns:
+            Public URL to access the file
+            
+        Raises:
+            Exception: If upload fails
+        """
+        pass
+    
+    @abstractmethod
     async def download_file(self, cloud_path: str, local_path: str) -> str:
         """
         Download file from cloud storage to local filesystem.
@@ -183,6 +201,33 @@ class FirebaseStorageBackend(StorageBackend):
             await loop.run_in_executor(
                 None,
                 partial(self.fs.put, local_path, full_path)
+            )
+            
+            url = self._get_public_url(cloud_path)
+            logger.info(f"Upload successful: {url}")
+            return url
+            
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            raise
+    
+    async def upload_bytes(self, data: bytes, cloud_path: str, content_type: str = "application/octet-stream") -> str:
+        """Upload bytes directly to Firebase Storage (no temp file)."""
+        from io import BytesIO
+        
+        full_path = self._get_full_path(cloud_path)
+        
+        logger.info(f"Uploading {len(data)} bytes to gs://{full_path}")
+        
+        try:
+            # fsspec supports file-like objects
+            data_stream = BytesIO(data)
+            
+            # Run blocking I/O in thread pool
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                partial(self.fs.put_file, data_stream, full_path)
             )
             
             url = self._get_public_url(cloud_path)
@@ -408,6 +453,36 @@ class S3StorageBackend(StorageBackend):
             await loop.run_in_executor(
                 None,
                 partial(self.fs.put, local_path, full_path)
+            )
+            
+            # Generate presigned URL for secure, time-limited access
+            from config import settings
+            url = self.generate_presigned_url(cloud_path, expiry=settings.PRESIGNED_URL_EXPIRY)
+            logger.info(f"Upload successful with presigned URL (expires in {settings.PRESIGNED_URL_EXPIRY}s)")
+            return url
+            
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            raise
+    
+    async def upload_bytes(self, data: bytes, cloud_path: str, content_type: str = "application/octet-stream") -> str:
+        """Upload bytes directly to S3 (no temp file)."""
+        from io import BytesIO
+        
+        logger.info(f"Uploading {len(data)} bytes to s3://{self.bucket}/{cloud_path}")
+        
+        try:
+            # Use boto3 for direct bytes upload (more efficient than fsspec for this)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                partial(
+                    self.s3_client.put_object,
+                    Bucket=self.bucket,
+                    Key=cloud_path,
+                    Body=data,
+                    ContentType=content_type
+                )
             )
             
             # Generate presigned URL for secure, time-limited access

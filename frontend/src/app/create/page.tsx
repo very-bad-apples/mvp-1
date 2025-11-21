@@ -9,21 +9,19 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
-import { YouTubeAudioDownloader } from '@/components/YouTubeAudioDownloader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
-import { createProject, getConfigFlavors, getDirectorConfigs, generateCharacterReference } from '@/lib/api/client'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+type Mode = 'ad-creative' | 'music-video'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
-
-type Mode = 'ad-creative' | 'music-video'
 
 export default function CreatePage() {
   const router = useRouter()
@@ -33,9 +31,10 @@ export default function CreatePage() {
   const [characterDescription, setCharacterDescription] = useState('')
   const [uploadedImages, setUploadedImages] = useState<File[]>([])
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
-  const [downloadedAudioId, setDownloadedAudioId] = useState<string>('')
-  const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
-  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
+  const [youtubeUrl, setYoutubeUrl] = useState<string>('')
+  const [convertedAudioFile, setConvertedAudioFile] = useState<File | null>(null)
+  const [isConvertingAudio, setIsConvertingAudio] = useState(false)
+  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('youtube')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [useAICharacter, setUseAICharacter] = useState(true)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
@@ -44,30 +43,39 @@ export default function CreatePage() {
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
   const [generationAttempts, setGenerationAttempts] = useState(0)
+  const [imageLoadingStates, setImageLoadingStates] = useState<{ [imageId: string]: 'loading' | 'loaded' | 'error' }>({})
 
-  // Config flavor state
+  // Configuration section state
   const [isConfigExpanded, setIsConfigExpanded] = useState(false)
   const [configFlavor, setConfigFlavor] = useState<string>('default')
   const [availableFlavors, setAvailableFlavors] = useState<string[]>(['default'])
   const [isFetchingFlavors, setIsFetchingFlavors] = useState(false)
-
-  // Director config state
   const [directorConfig, setDirectorConfig] = useState<string>('')
   const [availableDirectorConfigs, setAvailableDirectorConfigs] = useState<string[]>([])
   const [isFetchingDirectorConfigs, setIsFetchingDirectorConfigs] = useState(false)
 
-  // Audio trimming state
-  const [startAt, setStartAt] = useState<number>(0)
-  const [isTrimming, setIsTrimming] = useState(false)
+  // Update useAICharacter default when mode changes
+  useEffect(() => {
+    if (mode === 'music-video') {
+      setUseAICharacter(true)
+    } else if (mode === 'ad-creative') {
+      setUseAICharacter(false)
+    }
+  }, [mode])
 
   // Fetch available config flavors on mount
   useEffect(() => {
     const fetchConfigFlavors = async () => {
       setIsFetchingFlavors(true)
       try {
-        const data = await getConfigFlavors()
-        if (data.flavors && Array.isArray(data.flavors)) {
-          setAvailableFlavors(data.flavors)
+        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.flavors && Array.isArray(data.flavors)) {
+            setAvailableFlavors(data.flavors)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch config flavors:', error)
@@ -85,9 +93,14 @@ export default function CreatePage() {
     const fetchDirectorConfigs = async () => {
       setIsFetchingDirectorConfigs(true)
       try {
-        const data = await getDirectorConfigs()
-        if (data.configs && Array.isArray(data.configs)) {
-          setAvailableDirectorConfigs(data.configs)
+        const response = await fetch(`${API_URL}/api/mv/get_director_configs`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.configs && Array.isArray(data.configs)) {
+            setAvailableDirectorConfigs(data.configs)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch director configs:', error)
@@ -100,16 +113,7 @@ export default function CreatePage() {
     fetchDirectorConfigs()
   }, [])
 
-  // Cleanup blob URLs on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      generatedImages.forEach(url => {
-        if (url.startsWith('blob:')) {
-          URL.revokeObjectURL(url)
-        }
-      })
-    }
-  }, [generatedImages])
+  // Note: Blob URL cleanup removed in v10 - images now fetched directly from backend
 
   // Check if form is valid and ready to submit
   const isFormValid = () => {
@@ -120,11 +124,11 @@ export default function CreatePage() {
     if (mode === 'ad-creative' && uploadedImages.length === 0) return false
     if (mode === 'music-video') {
       if (audioSource === 'upload' && !uploadedAudio) return false
-      if (audioSource === 'youtube' && !downloadedAudioId) return false
+      if (audioSource === 'youtube' && !convertedAudioFile) return false
     }
 
-    // Check AI character requirements
-    if (useAICharacter && selectedImageIndex === null) return false
+    // Check AI character requirements - only required for ad-creative mode
+    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) return false
 
     return true
   }
@@ -160,17 +164,18 @@ export default function CreatePage() {
         })
         return
       }
-      if (audioSource === 'youtube' && !downloadedAudioId) {
+      if (audioSource === 'youtube' && !convertedAudioFile) {
         toast({
           title: "Error",
-          description: "Please download audio from YouTube",
+          description: "Please convert YouTube audio first",
           variant: "destructive",
         })
         return
       }
     }
 
-    if (useAICharacter && selectedImageIndex === null) {
+    // Character image selection only required for ad-creative mode
+    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) {
       toast({
         title: "Error",
         description: "Please generate and select a character image",
@@ -182,68 +187,59 @@ export default function CreatePage() {
     setIsSubmitting(true)
 
     try {
-      // Get character reference image ID if using AI character
-      const characterReferenceImageId = useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
-        ? generatedImageIds[selectedImageIndex]
-        : null
+      // Prepare FormData for the API
+      const formData = new FormData()
+      formData.append('mode', mode)
+      formData.append('prompt', prompt)
+      formData.append('characterDescription', characterDescription)
 
-      // Prepare files for upload
-      let audioFile: File | undefined = undefined
-
-      if (mode === 'music-video') {
-        if (audioSource === 'upload' && uploadedAudio) {
-          // Use uploaded audio file directly
-          audioFile = uploadedAudio
-        } else if (audioSource === 'youtube' && downloadedAudioId) {
-          // Fetch YouTube audio file from backend and convert to File
-          try {
-            const audioResponse = await fetch(`${API_URL}/api/audio/get/${downloadedAudioId}`, {
-              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-            })
-
-            if (!audioResponse.ok) {
-              throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`)
-            }
-
-            const audioBlob = await audioResponse.blob()
-            // Create a File from the blob with a proper filename
-            audioFile = new File([audioBlob], `${downloadedAudioId}.mp3`, { type: 'audio/mpeg' })
-          } catch (error) {
-            console.error('Error fetching YouTube audio:', error)
-            toast({
-              title: "Error",
-              description: "Failed to fetch audio file. Please try again.",
-              variant: "destructive",
-            })
-            setIsSubmitting(false)
-            return
-          }
+      if (mode === 'ad-creative') {
+        uploadedImages.forEach((image, index) => {
+          formData.append(`images`, image)
+        })
+      } else {
+        // Music video mode - send audio file (either uploaded or converted from YouTube)
+        const audioFile = audioSource === 'upload' ? uploadedAudio : convertedAudioFile
+        if (audioFile) {
+          formData.append('audio', audioFile)
         }
       }
 
-      // Call the createProject API
-      const response = await createProject({
-        mode,
-        prompt: prompt.trim(),
-        characterDescription: characterDescription.trim() || 'No character description provided',
-        characterReferenceImageId,
-        directorConfig: directorConfig || undefined,
-        images: mode === 'ad-creative' ? uploadedImages : undefined,
-        audio: audioFile,
+      // Add selected character reference image ID if using AI character
+      if (useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]) {
+        formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
+      }
+
+      // Call the real API endpoint
+      const response = await fetch(`${API_URL}/api/mv/projects`, {
+        method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+        },
+        body: formData,
       })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+        const errorMessage = errorData.detail?.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      const projectId = data.projectId
 
       toast({
         title: "Project created successfully!",
-        description: response.message,
+        description: `Project ID: ${projectId}`,
       })
 
-      // Navigate to the project page
-      router.push(`/project/${response.projectId}`)
+      // Navigate to the project result page
+      router.push(`/result/${projectId}`)
     } catch (error) {
       console.error('Error submitting form:', error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create project",
+        description: error instanceof Error ? error.message : "Failed to start video generation",
         variant: "destructive",
       })
     } finally {
@@ -261,15 +257,46 @@ export default function CreatePage() {
     const quickJobData = {
       videoDescription: prompt,
       characterDescription: characterDescription,
-      characterReferenceImageId,
-      // Include audio data if YouTube audio was downloaded
-      audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
-      audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
+      characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+      // Include YouTube URL for music-video mode
+      youtubeUrl: audioSource === 'youtube' ? youtubeUrl : undefined,
+      // Include configuration options
       configFlavor: configFlavor,
       directorConfig: directorConfig || undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
+  }
+
+  /**
+   * Fetch a single character reference image by ID.
+   * Uses redirect=false to get JSON response (cloud) or direct file (local).
+   */
+  const fetchCharacterImage = async (imageId: string): Promise<string> => {
+    const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false`, {
+      headers: {
+        'X-API-Key': API_KEY,
+        'Content-Type': 'application/json'
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image ${imageId}`)
+    }
+
+    // For cloud storage: response is JSON with image_url
+    // For local storage: response is the image file directly
+    const contentType = response.headers.get('content-type')
+
+    if (contentType?.includes('application/json')) {
+      // Cloud storage mode - get presigned URL from JSON
+      const data = await response.json()
+      return data.image_url || data.video_url // video_url is legacy field name
+    } else {
+      // Local storage mode - create object URL from blob
+      const blob = await response.blob()
+      return URL.createObjectURL(blob)
+    }
   }
 
   const handleGenerateImages = async () => {
@@ -285,81 +312,79 @@ export default function CreatePage() {
     setIsGeneratingImages(true)
     setSelectedImageIndex(null) // Reset selection
     setImageGenerationError(null) // Clear previous errors
-
-    // Clean up previous blob URLs to prevent memory leaks
-    generatedImages.forEach(url => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url)
-      }
-    })
     setGeneratedImages([])
     setGeneratedImageIds([])
+    setImageLoadingStates({})
 
     try {
-      const data = await generateCharacterReference({
-        character_description: characterDescription.trim(),
-        num_images: 4, // Request 4 images for selection
+      // Step 1: Generate images and get image IDs (no base64 in v10)
+      const response = await fetch(`${API_URL}/api/mv/generate_character_reference`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          character_description: characterDescription.trim(),
+          num_images: 4, // Request 4 images for selection
+        }),
       })
 
-      // Fetch images using their IDs (backend no longer returns base64 for performance)
-      const blobUrls: string[] = []
-      const imageIds: string[] = []
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character images')
+      }
 
-      for (const image of data.images) {
-        imageIds.push(image.id)
-        
-        // If cloud_url is available, use it directly
-        if (image.cloud_url) {
-          blobUrls.push(image.cloud_url)
-        } else {
-          // Otherwise, fetch the image from the backend
-          try {
-            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
-              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-            })
+      const data = await response.json()
+      const imageIds = data.images.map((img: any) => img.id)
 
-            if (!response.ok) {
-              throw new Error(`Failed to fetch image ${image.id}`)
-            }
+      // Initialize image IDs and placeholder URLs
+      setGeneratedImageIds(imageIds)
+      setGeneratedImages(new Array(imageIds.length).fill('')) // Placeholder empty strings
 
-            const contentType = response.headers.get('content-type')
-            
-            if (contentType?.includes('application/json')) {
-              // Cloud storage mode - get presigned URL from JSON
-              const jsonData = await response.json()
-              blobUrls.push(jsonData.image_url || jsonData.video_url)
-            } else {
-              // Local storage mode - create object URL from blob
-              const blob = await response.blob()
-              const objectUrl = URL.createObjectURL(blob)
-              blobUrls.push(objectUrl)
-            }
-          } catch (fetchError) {
-            console.error(`Failed to fetch image ${image.id}:`, fetchError)
-            // Continue with other images, but this one will be missing
-            blobUrls.push('') // Placeholder to maintain array index alignment
-          }
+      // Initialize all images as loading
+      const initialLoadingStates: { [key: string]: 'loading' | 'loaded' | 'error' } = {}
+      imageIds.forEach((id: string) => {
+        initialLoadingStates[id] = 'loading'
+      })
+      setImageLoadingStates(initialLoadingStates)
+
+      // Step 2: Fetch all images in parallel
+      const fetchPromises = imageIds.map(async (imageId: string, index: number) => {
+        try {
+          const imageUrl = await fetchCharacterImage(imageId)
+
+          // Update the specific image URL
+          setGeneratedImages(prev => {
+            const newImages = [...prev]
+            newImages[index] = imageUrl
+            return newImages
+          })
+
+          // Update loading state to loaded
+          setImageLoadingStates(prev => ({
+            ...prev,
+            [imageId]: 'loaded'
+          }))
+        } catch (error) {
+          console.error(`Failed to fetch image ${imageId}:`, error)
+
+          // Update loading state to error
+          setImageLoadingStates(prev => ({
+            ...prev,
+            [imageId]: 'error'
+          }))
         }
-      }
+      })
 
-      // Filter out any failed image fetches
-      const validPairs = imageIds.map((id, index) => ({ id, url: blobUrls[index] }))
-        .filter(pair => pair.url)
-      
-      const validIds = validPairs.map(pair => pair.id)
-      const validUrls = validPairs.map(pair => pair.url)
+      // Wait for all fetches to complete
+      await Promise.allSettled(fetchPromises)
 
-      if (validIds.length === 0) {
-        throw new Error('Failed to fetch any character reference images')
-      }
-
-      setGeneratedImages(validUrls)
-      setGeneratedImageIds(validIds)
       setGenerationAttempts(prev => prev + 1)
 
       toast({
         title: "Character Images Generated",
-        description: `${validIds.length} character references ready. Click to select one.`,
+        description: `${imageIds.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)
@@ -376,70 +401,6 @@ export default function CreatePage() {
     }
   }
 
-  const handleTrimAudio = async () => {
-    // Validate that we have an audio file
-    const audioId = downloadedAudioId || uploadedAudio?.name
-    if (!downloadedAudioId) {
-      toast({
-        title: "Error",
-        description: "No audio file loaded. Please upload or download audio first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Validate start_at value
-    if (startAt < 0) {
-      toast({
-        title: "Error",
-        description: "Start position must be 0 or greater",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsTrimming(true)
-
-    try {
-      const response = await fetch(`${API_URL}/api/audio/trim`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(API_KEY ? { 'X-API-Key': API_KEY } : {})
-        },
-        body: JSON.stringify({
-          audio_id: downloadedAudioId,
-          start_at: startAt
-        })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail?.message || `Trim failed: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-
-      // Replace audio with trimmed version
-      setDownloadedAudioId(data.audio_id)
-      setDownloadedAudioUrl(data.audio_url)
-
-      toast({
-        title: "Audio Trimmed",
-        description: `Audio trimmed from ${startAt}s. New audio ready to use.`,
-      })
-
-    } catch (error) {
-      console.error("Audio trim error:", error)
-      toast({
-        title: "Trim Failed",
-        description: error instanceof Error ? error.message : "Failed to trim audio",
-        variant: "destructive",
-      })
-    } finally {
-      setIsTrimming(false)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -485,16 +446,16 @@ export default function CreatePage() {
                 >
                   <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-900/50">
                     <TabsTrigger
-                      value="music-video"
-                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                    >
-                      Music Video
-                    </TabsTrigger>
-                    <TabsTrigger
                       value="ad-creative"
                       className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                     >
                       Ad Creative
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="music-video"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                    >
+                      Music Video
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -597,59 +558,19 @@ export default function CreatePage() {
                         Choose a creative direction template (e.g., Wes-Anderson, David-Lynch)
                       </p>
                     </div>
-
-                    {/* Audio Trim Section - Only show for music-video mode with downloaded audio */}
-                    {mode === 'music-video' && audioSource === 'youtube' && downloadedAudioId && (
-                      <div className="space-y-2 pt-3 border-t border-gray-700">
-                        <Label htmlFor="start-at" className="text-sm font-medium text-white">
-                          Audio Start Position (seconds)
-                        </Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="start-at"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={startAt}
-                            onChange={(e) => setStartAt(parseInt(e.target.value) || 0)}
-                            disabled={isTrimming}
-                            className="flex-1 bg-gray-800 border-gray-600 text-white"
-                            placeholder="0"
-                          />
-                          <Button
-                            type="button"
-                            onClick={handleTrimAudio}
-                            disabled={isTrimming || !downloadedAudioId}
-                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                          >
-                            {isTrimming ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Trimming...
-                              </>
-                            ) : (
-                              'Trim Audio'
-                            )}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-400">
-                          Trim audio from this start position (in seconds) to the end. Creates a new audio file.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
 
               {/* Mode-Specific Upload Zone */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-1">
-                  <Label className="text-sm font-medium text-white">
-                    {mode === 'ad-creative' ? 'Product Images' : 'Music Source'}
-                  </Label>
-                  <span className="text-red-400 text-sm">*</span>
-                </div>
-                {mode === 'ad-creative' ? (
+              {mode === 'ad-creative' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm font-medium text-white">
+                      Product Images
+                    </Label>
+                    <span className="text-red-400 text-sm">*</span>
+                  </div>
                   <div>
                     <ImageUploadZone
                       onFilesChange={setUploadedImages}
@@ -661,70 +582,8 @@ export default function CreatePage() {
                       </p>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Audio Source Tabs */}
-                    <Tabs
-                      value={audioSource}
-                      onValueChange={(value) => {
-                        setAudioSource(value as 'upload' | 'youtube')
-                        // Clear the other source when switching
-                        if (value === 'upload') {
-                          setDownloadedAudioId('')
-                          setDownloadedAudioUrl('')
-                        } else {
-                          setUploadedAudio(null)
-                        }
-                      }}
-                      className="w-full"
-                    >
-                      <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
-                        <TabsTrigger
-                          value="upload"
-                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                        >
-                          Upload File
-                        </TabsTrigger>
-                        <TabsTrigger
-                          value="youtube"
-                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                        >
-                          YouTube URL
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-
-                    {/* Audio Upload Zone */}
-                    {audioSource === 'upload' && (
-                      <div>
-                        <AudioUploadZone
-                          onFileChange={setUploadedAudio}
-                          file={uploadedAudio}
-                        />
-                        {!uploadedAudio && (
-                          <p className="text-xs text-red-400 mt-2">
-                            Music file is required
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* YouTube Downloader */}
-                    {audioSource === 'youtube' && (
-                      <div>
-                        <YouTubeAudioDownloader
-                          onAudioDownloaded={(audioId, audioUrl) => {
-                            setDownloadedAudioId(audioId)
-                            setDownloadedAudioUrl(audioUrl)
-                          }}
-                          currentAudioId={downloadedAudioId}
-                          currentAudioUrl={downloadedAudioUrl}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* User Prompt */}
               <div className="space-y-3">
@@ -755,7 +614,7 @@ export default function CreatePage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="character" className="text-sm font-medium text-white">
-                    Character & Style
+                    Character & Style{mode === 'music-video' ? ' (Optional)' : ''}
                   </Label>
                   <div className="flex items-center gap-2">
                     <Label htmlFor="ai-toggle" className="text-sm text-gray-400 cursor-pointer">
@@ -770,7 +629,7 @@ export default function CreatePage() {
                   </div>
                 </div>
 
-                {useAICharacter && (
+                {(useAICharacter || mode === 'music-video') && (
                   <div className="space-y-4">
                     {/* Character Description Input */}
                     <Textarea
@@ -818,38 +677,70 @@ export default function CreatePage() {
                     )}
 
                     {/* Generated Images Grid - Above the button */}
-                    {generatedImages.length > 0 && !isGeneratingImages && (
+                    {generatedImageIds.length > 0 && !isGeneratingImages && (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                          {generatedImages.map((imageUrl, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => setSelectedImageIndex(index)}
-                              className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                                selectedImageIndex === index
-                                  ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
-                                  : 'border-gray-600 hover:border-gray-500'
-                              }`}
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={imageUrl}
-                                alt={`Character option ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                              {selectedImageIndex === index && (
-                                <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                                  <div className="bg-blue-500 rounded-full p-2">
-                                    <CheckCircle2 className="h-6 w-6 text-white" />
+                          {generatedImageIds.map((imageId, index) => {
+                            const imageUrl = generatedImages[index]
+                            const loadingState = imageLoadingStates[imageId]
+
+                            return (
+                              <button
+                                key={imageId}
+                                type="button"
+                                onClick={() => {
+                                  if (loadingState === 'loaded') {
+                                    setSelectedImageIndex(index)
+                                  }
+                                }}
+                                disabled={loadingState !== 'loaded'}
+                                className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                  selectedImageIndex === index && loadingState === 'loaded'
+                                    ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
+                                    : 'border-gray-600 hover:border-gray-500'
+                                } ${loadingState !== 'loaded' ? 'cursor-not-allowed' : ''}`}
+                              >
+                                {/* Loading State */}
+                                {loadingState === 'loading' && (
+                                  <div className="absolute inset-0 bg-gray-800/50 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
                                   </div>
+                                )}
+
+                                {/* Error State */}
+                                {loadingState === 'error' && (
+                                  <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center p-4">
+                                    <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
+                                    <span className="text-xs text-red-300 text-center">Failed to load image</span>
+                                  </div>
+                                )}
+
+                                {/* Loaded Image */}
+                                {loadingState === 'loaded' && imageUrl && (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={imageUrl}
+                                      alt={`Character option ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    {selectedImageIndex === index && (
+                                      <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                        <div className="bg-blue-500 rounded-full p-2">
+                                          <CheckCircle2 className="h-6 w-6 text-white" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Image Label */}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
+                                  <span className="text-xs text-white">Option {index + 1}</span>
                                 </div>
-                              )}
-                              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
-                                <span className="text-xs text-white">Option {index + 1}</span>
-                              </div>
-                            </button>
-                          ))}
+                              </button>
+                            )
+                          })}
                         </div>
 
                         {selectedImageIndex !== null && (
@@ -903,12 +794,184 @@ export default function CreatePage() {
                   </div>
                 )}
 
-                {!useAICharacter && (
+                {!useAICharacter && mode === 'ad-creative' && (
                   <p className="text-xs text-gray-400">
                     Enable &quot;Use AI Generation&quot; to add character and style details
                   </p>
                 )}
               </div>
+
+              {/* Music Source for Music Video Mode */}
+              {mode === 'music-video' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm font-medium text-white">
+                      Music Source
+                    </Label>
+                    <span className="text-red-400 text-sm">*</span>
+                  </div>
+                  <div className="space-y-4">
+                    {/* Audio Source Tabs */}
+                    <Tabs
+                      value={audioSource}
+                      onValueChange={(value) => {
+                        setAudioSource(value as 'upload' | 'youtube')
+                        // Clear the other source when switching
+                        if (value === 'upload') {
+                          setYoutubeUrl('')
+                          setConvertedAudioFile(null)
+                        } else {
+                          setUploadedAudio(null)
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
+                        <TabsTrigger
+                          value="upload"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          Upload File
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="youtube"
+                          className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        >
+                          YouTube URL
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {/* Audio Upload Zone */}
+                    {audioSource === 'upload' && (
+                      <div>
+                        <AudioUploadZone
+                          onFileChange={setUploadedAudio}
+                          file={uploadedAudio}
+                        />
+                        {!uploadedAudio && (
+                          <p className="text-xs text-red-400 mt-2">
+                            Music file is required
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* YouTube URL Input */}
+                    {audioSource === 'youtube' && (
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="youtube-url" className="text-white">
+                            YouTube URL
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="youtube-url"
+                              type="url"
+                              placeholder="https://www.youtube.com/watch?v=..."
+                              value={youtubeUrl}
+                              onChange={(e) => setYoutubeUrl(e.target.value)}
+                              className="bg-gray-800 border-gray-700 text-white placeholder-gray-500 flex-1"
+                              disabled={isConvertingAudio}
+                            />
+                            <Button
+                              type="button"
+                              onClick={async () => {
+                                if (!youtubeUrl.trim()) {
+                                  toast({
+                                    title: "Error",
+                                    description: "Please enter a YouTube URL",
+                                    variant: "destructive",
+                                  })
+                                  return
+                                }
+
+                                setIsConvertingAudio(true)
+                                try {
+                                  const response = await fetch(`${API_URL}/api/audio/convert-youtube`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'X-API-Key': API_KEY,
+                                    },
+                                    body: JSON.stringify({ url: youtubeUrl }),
+                                  })
+
+                                  if (!response.ok) {
+                                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+                                    throw new Error(errorData.detail?.message || errorData.detail || 'Failed to convert audio')
+                                  }
+
+                                  const blob = await response.blob()
+                                  const audioFile = new File([blob], "audio.mp3", { type: "audio/mpeg" })
+                                  setConvertedAudioFile(audioFile)
+
+                                  toast({
+                                    title: "Success",
+                                    description: "Audio converted successfully!",
+                                  })
+                                } catch (error) {
+                                  console.error('Error converting audio:', error)
+                                  toast({
+                                    title: "Error",
+                                    description: error instanceof Error ? error.message : "Failed to convert audio",
+                                    variant: "destructive",
+                                  })
+                                } finally {
+                                  setIsConvertingAudio(false)
+                                }
+                              }}
+                              disabled={isConvertingAudio || !youtubeUrl.trim()}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {isConvertingAudio ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Converting...
+                                </>
+                              ) : (
+                                'Convert'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Show converted audio file */}
+                        {convertedAudioFile && (
+                          <div className="border border-gray-600 rounded-lg p-4 bg-gray-800/30">
+                            <div className="flex items-center gap-4">
+                              <div className="rounded-lg bg-green-500/10 p-3 flex-shrink-0">
+                                <CheckCircle2 className="h-6 w-6 text-green-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white">{convertedAudioFile.name}</p>
+                                <p className="text-xs text-gray-400">
+                                  {(convertedAudioFile.size / (1024 * 1024)).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Audio Preview */}
+                            <div className="mt-4">
+                              <audio
+                                controls
+                                src={URL.createObjectURL(convertedAudioFile)}
+                                className="w-full h-10"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {!convertedAudioFile && !isConvertingAudio && (
+                          <p className="text-xs text-red-400">
+                            Click &quot;Convert&quot; to download audio from YouTube
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <div className="space-y-2">
@@ -962,19 +1025,19 @@ export default function CreatePage() {
                             Please upload a music file
                           </p>
                         )}
-                        {audioSource === 'youtube' && !downloadedAudioId && (
+                        {audioSource === 'youtube' && !convertedAudioFile && (
                           <p className="text-xs text-yellow-400 text-center">
-                            Audio is required
+                            Convert YouTube audio first
                           </p>
                         )}
                       </>
                     )}
-                    {useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
+                    {mode === 'ad-creative' && useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
                       <p className="text-xs text-yellow-400 text-center">
                         Please select a character image to continue
                       </p>
                     )}
-                    {useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
+                    {mode === 'ad-creative' && useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
                       <p className="text-xs text-yellow-400 text-center">
                         Please generate and select a character image to continue
                       </p>

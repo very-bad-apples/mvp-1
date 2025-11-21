@@ -484,7 +484,10 @@ export default function QuickGenPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        throw new Error(errorData.detail?.message || errorData.detail || 'Failed to generate video')
+        // Extract detailed error message from backend response
+        const errorMessage = errorData.detail?.message || errorData.detail?.details || errorData.detail || 'Failed to generate video'
+        const errorCode = errorData.detail?.error_code || errorData.detail?.error || 'UNKNOWN_ERROR'
+        throw new Error(`${errorMessage} (${errorCode})`)
       }
 
       const data = await response.json()
