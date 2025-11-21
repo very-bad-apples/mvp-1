@@ -225,3 +225,21 @@ export type UpdateProjectResponse = GetProjectResponse
  */
 export type GetProjectResponse = Omit<Project, 'mode' | 'progress'>
 
+/**
+ * Request to compose final video
+ * Note: No additional fields needed - uses project metadata
+ */
+export interface ComposeRequest {
+  // No fields needed
+}
+
+/**
+ * Response from composing final video
+ */
+export interface ComposeResponse {
+  jobId: string
+  projectId: string
+  status: string
+  message: string
+}
+
