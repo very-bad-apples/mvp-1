@@ -327,7 +327,7 @@ function VideoPlayerSection({
 
 export function ProjectPageClient({ projectId }: { projectId: string }) {
   const { toast } = useToast()
-  const { project, loading, error, refetch, isPolling } = useProjectPolling(projectId)
+  const { project, loading, error, refetch, isPolling, setOptimisticProject } = useProjectPolling(projectId)
 
   // Calculate phases based on project status
   const phases = useMemo(() => {
@@ -372,8 +372,20 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
       }
 
       // The response contains the updated project with "processing" status
-      // Refetch immediately to update the UI state
-      await refetch()
+      // Parse the response
+      const updatedProject = await response.json()
+
+      // Optimistically update UI immediately with response data
+      // This gives instant feedback without waiting for polling
+      if (updatedProject && updatedProject.projectId) {
+        // Add frontend-only fields
+        const optimisticProject = {
+          ...updatedProject,
+          mode: project?.mode || 'music-video',
+          progress: Math.round((updatedProject.completedScenes / Math.max(updatedProject.sceneCount, 1)) * 100),
+        }
+        setOptimisticProject(optimisticProject)
+      }
 
       toast({
         title: 'Generation Started',
@@ -386,7 +398,7 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         variant: 'destructive',
       })
     }
-  }, [project, projectId, refetch, toast])
+  }, [project, projectId, setOptimisticProject, toast])
 
   // Handle scene regeneration
   const handleRegenerateImage = useCallback(async (sceneId: number) => {

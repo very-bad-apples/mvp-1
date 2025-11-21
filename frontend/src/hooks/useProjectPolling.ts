@@ -63,13 +63,8 @@ interface UseProjectPollingReturn extends UseProjectPollingState {
   refetch: () => Promise<void>
   /** Check if polling is currently active */
   isPolling: boolean
-}
-
-/**
- * Check if a project status is terminal (should stop polling)
- */
-function isTerminalStatus(status: Project['status'] | undefined): boolean {
-  return status === 'completed' || status === 'failed'
+  /** Optimistically update project state (useful for immediate UI updates) */
+  setOptimisticProject: (project: Project) => void
 }
 
 /**
@@ -348,6 +343,28 @@ export function useProjectPolling(
   }, [fetchProject])
 
   /**
+   * Optimistically update project state
+   * Useful for immediate UI updates before server confirmation
+   */
+  const setOptimisticProject = useCallback((project: Project) => {
+    setState(prev => ({
+      ...prev,
+      project,
+      loading: false,
+      error: null,
+    }))
+
+    // Check if we should start polling based on optimistic status
+    const needsPolling = shouldPollStatus(project.status as ProjectStatus)
+    if (needsPolling && !isPollingRef.current && !intervalRef.current) {
+      console.log(
+        `[useProjectPolling] Optimistic status '${project.status}' requires polling, starting`
+      )
+      startPolling()
+    }
+  }, [startPolling])
+
+  /**
    * Fetch once on mount, don't start interval polling
    * Polling will only happen for active processing states via shouldPollStatus check
    */
@@ -369,5 +386,6 @@ export function useProjectPolling(
     ...state,
     refetch,
     isPolling: isPollingRef.current,
+    setOptimisticProject,
   }
 }
