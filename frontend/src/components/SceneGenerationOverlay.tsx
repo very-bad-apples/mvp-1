@@ -80,9 +80,11 @@ export function SceneGenerationOverlay({
   }
 
   // Determine scene status
+  // NOTE: This overlay tracks SCENE TEXT generation only, not video generation
   const getSceneStatus = (scene: ProjectScene) => {
     if (scene.errorMessage) return 'error'
-    if (scene.videoClipUrl) return 'complete'
+    // A scene is complete when it has a prompt (text description), NOT when it has a video
+    if (scene.prompt && scene.prompt.length > 0) return 'complete'
     if (scene.status === 'processing') return 'generating'
     return 'pending'
   }
@@ -121,8 +123,8 @@ export function SceneGenerationOverlay({
     }
   }
 
-  // Calculate overall progress
-  const completedScenes = scenes.filter(s => s.videoClipUrl).length
+  // Calculate overall progress based on scene TEXT generation, not video generation
+  const completedScenes = scenes.filter(s => s.prompt && s.prompt.length > 0).length
   const progress = totalScenes > 0 ? (completedScenes / totalScenes) * 100 : 0
 
   return (
@@ -214,21 +216,17 @@ export function SceneGenerationOverlay({
                         )}
                       </div>
 
-                      {/* Thumbnail placeholder */}
-                      <div className="flex-shrink-0 w-32 h-20 rounded-lg bg-gray-700 overflow-hidden">
-                        {scene.videoClipUrl ? (
-                          <video
-                            src={scene.videoClipUrl}
-                            className="w-full h-full object-cover"
-                            muted
-                            loop
-                            autoPlay
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-                          </div>
-                        )}
+                      {/* Scene icon placeholder - NO VIDEO PREVIEW since this is scene text generation only */}
+                      <div className="flex-shrink-0 w-32 h-20 rounded-lg bg-gray-700/50 overflow-hidden border border-gray-600">
+                        <div className="w-full h-full flex items-center justify-center">
+                          {status === 'complete' ? (
+                            <CheckCircle2 className="w-10 h-10 text-green-400" />
+                          ) : status === 'generating' ? (
+                            <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+                          ) : (
+                            <Clock className="w-10 h-10 text-gray-500" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </Card>

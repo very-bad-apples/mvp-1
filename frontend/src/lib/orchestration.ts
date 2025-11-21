@@ -20,7 +20,7 @@ import {
   updateProject,
   getProject,
   APIError,
-} from '@/lib/api'
+} from '@/lib/api/client'
 import type {
   CreateScenesRequest,
   GenerateCharacterReferenceRequest,
@@ -59,6 +59,18 @@ export type ErrorCallback = (
 ) => void
 
 /**
+ * Retry callback type for recovery feedback
+ */
+export type RetryCallback = (
+  phase: OrchestrationPhase,
+  sceneIndex: number | null,
+  attempt: number,
+  maxAttempts: number,
+  delay: number,
+  error: Error
+) => void
+
+/**
  * Orchestration options
  */
 export interface OrchestrationOptions {
@@ -67,6 +79,9 @@ export interface OrchestrationOptions {
 
   /** Error callback for error handling */
   onError?: ErrorCallback
+
+  /** Retry callback for recovery feedback */
+  onRetry?: RetryCallback
 
   /** Maximum number of retries per operation (default: 3) */
   maxRetries?: number
@@ -87,6 +102,7 @@ export interface OrchestrationOptions {
 const DEFAULT_OPTIONS: Required<OrchestrationOptions> = {
   onProgress: () => {},
   onError: () => {},
+  onRetry: () => {},
   maxRetries: 3,
   initialRetryDelay: 1000,
   maxRetryDelay: 10000,
@@ -139,13 +155,26 @@ async function retryWithBackoff<T>(
 
       // Calculate delay for next retry
       const delay = calculateBackoffDelay(attempt, options)
+
+      // Log structured retry information
       console.warn(
         `[Orchestration] ${operationName} failed (attempt ${attempt + 1}/${options.maxRetries + 1}), retrying in ${delay}ms...`,
-        error
+        {
+          phase,
+          sceneIndex,
+          attempt: attempt + 1,
+          maxAttempts: options.maxRetries + 1,
+          nextRetryIn: `${delay}ms`,
+          errorType: lastError.constructor.name,
+          errorMessage: lastError.message,
+        }
       )
 
-      // Call error callback
+      // Call error callback (for logging)
       options.onError(phase, sceneIndex, lastError)
+
+      // Call retry callback (for UI feedback)
+      options.onRetry(phase, sceneIndex, attempt + 1, options.maxRetries + 1, delay, lastError)
 
       // Wait before retrying
       await sleep(delay)
