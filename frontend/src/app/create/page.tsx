@@ -76,24 +76,25 @@ export default function CreatePage() {
   }, [])
 
   // Fetch available director configs on mount
-  useEffect(() => {
-    const fetchDirectorConfigs = async () => {
-      setIsFetchingDirectorConfigs(true)
-      try {
-        const data = await getDirectorConfigs()
-        if (data.configs && Array.isArray(data.configs)) {
-          setAvailableDirectorConfigs(data.configs)
-        }
-      } catch (error) {
-        console.error('Failed to fetch director configs:', error)
-        // Keep empty array as fallback
-      } finally {
-        setIsFetchingDirectorConfigs(false)
-      }
-    }
+  // TEMPORARILY DISABLED - endpoint not available in current backend
+  // useEffect(() => {
+  //   const fetchDirectorConfigs = async () => {
+  //     setIsFetchingDirectorConfigs(true)
+  //     try {
+  //       const data = await getDirectorConfigs()
+  //       if (data.configs && Array.isArray(data.configs)) {
+  //         setAvailableDirectorConfigs(data.configs)
+  //       }
+  //     } catch (error) {
+  //       console.error('Failed to fetch director configs:', error)
+  //       // Keep empty array as fallback
+  //     } finally {
+  //       setIsFetchingDirectorConfigs(false)
+  //     }
+  //   }
 
-    fetchDirectorConfigs()
-  }, [])
+  //   fetchDirectorConfigs()
+  // }, [])
 
   // Cleanup on unmount (no-op for cloud URLs, kept for future compatibility)
   useEffect(() => {

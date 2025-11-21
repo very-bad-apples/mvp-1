@@ -50,6 +50,20 @@ class SceneResponse(BaseModel):
         }
 
 
+class SceneUpdateRequest(BaseModel):
+    """Request model for updating a scene's editable fields."""
+    prompt: Optional[str] = Field(None, min_length=1, max_length=2000, description="Updated scene prompt")
+    negativePrompt: Optional[str] = Field(None, max_length=1000, description="Updated negative prompt")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "prompt": "Updated scene description with more details",
+                "negativePrompt": "Updated negative prompt"
+            }
+        }
+
+
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")
@@ -162,8 +176,8 @@ class ProjectUpdateRequest(BaseModel):
         }
 
 
-class SceneUpdateRequest(BaseModel):
-    """Request model for updating scene data."""
+class SceneWorkerUpdateRequest(BaseModel):
+    """Request model for updating scene data (used by workers, not user-facing)."""
     status: Optional[str] = None
     videoClipS3Key: Optional[str] = None
     lipSyncedVideoClipS3Key: Optional[str] = None
