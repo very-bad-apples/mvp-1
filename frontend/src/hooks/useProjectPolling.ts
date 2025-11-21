@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getProject } from '@/lib/api/client'
-import { Project, ProjectStatus } from '@/types/project'
+import { Project } from '@/types/project'
 import { APIError } from '@/lib/api/client'
 
 /**
@@ -63,29 +63,33 @@ interface UseProjectPollingReturn extends UseProjectPollingState {
   refetch: () => Promise<void>
   /** Check if polling is currently active */
   isPolling: boolean
+  /** Optimistically update project state (useful for immediate UI updates) */
+  setOptimisticProject: (project: Project) => void
 }
 
 /**
- * Check if a project status is terminal (should stop polling)
+ * Check if a project requires active polling based on status and scene progress
+ * Only poll when there's actual backend work in progress
  */
-function isTerminalStatus(status: Project['status'] | undefined): boolean {
-  return status === 'completed' || status === 'failed'
-}
+function shouldPollForProject(project: Project | null): boolean {
+  if (!project) return false
 
-/**
- * Check if a project status requires active polling
- * Only poll for statuses that indicate active backend processing
- */
-function shouldPollStatus(status: Project['status'] | undefined): boolean {
-  if (!status) return false
+  const { status, sceneCount, completedScenes, failedScenes } = project
 
-  // Only poll for active processing states
-  // Backend uses 'processing' for all active work
-  const activeStates: Project['status'][] = [
-    'processing'
-  ]
+  // Terminal states - never poll
+  if (status === 'completed' || status === 'failed') {
+    return false
+  }
 
-  return activeStates.includes(status)
+  // Processing state - only poll if scenes are incomplete
+  if (status === 'processing') {
+    const totalFinishedScenes = (completedScenes || 0) + (failedScenes || 0)
+    const hasIncompleteScenes = totalFinishedScenes < (sceneCount || 0)
+    return hasIncompleteScenes
+  }
+
+  // Pending state - poll (in case work starts)
+  return status === 'pending'
 }
 
 /**
@@ -177,13 +181,13 @@ export function useProjectPolling(
           error: null,
         })
 
-        // Check if we should start or stop polling based on status
-        const needsPolling = shouldPollStatus(response.status as ProjectStatus)
+        // Check if we should start or stop polling based on project state
+        const needsPolling = shouldPollForProject(project)
 
         if (!needsPolling) {
-          // Status doesn't require polling - make sure polling is stopped
+          // Project doesn't require polling - make sure polling is stopped
           console.log(
-            `[useProjectPolling] Project status '${response.status}' doesn't require polling`
+            `[useProjectPolling] Project (status: '${response.status}', scenes: ${response.completedScenes}/${response.sceneCount}) doesn't require polling`
           )
           if (isPollingRef.current || intervalRef.current) {
             console.log('[useProjectPolling] Stopping polling')
@@ -196,9 +200,9 @@ export function useProjectPolling(
             pendingTimeoutsRef.current.clear()
           }
         } else if (!isPollingRef.current && !intervalRef.current) {
-          // Status requires polling but we're not polling yet - start it
+          // Project requires polling but we're not polling yet - start it
           console.log(
-            `[useProjectPolling] Project status '${response.status}' requires polling, starting`
+            `[useProjectPolling] Project (status: '${response.status}', scenes: ${response.completedScenes}/${response.sceneCount}) requires polling, starting`
           )
           startPolling()
         }
@@ -348,8 +352,30 @@ export function useProjectPolling(
   }, [fetchProject])
 
   /**
+   * Optimistically update project state
+   * Useful for immediate UI updates before server confirmation
+   */
+  const setOptimisticProject = useCallback((project: Project) => {
+    setState(prev => ({
+      ...prev,
+      project,
+      loading: false,
+      error: null,
+    }))
+
+    // Check if we should start polling based on optimistic project state
+    const needsPolling = shouldPollForProject(project)
+    if (needsPolling && !isPollingRef.current && !intervalRef.current) {
+      console.log(
+        `[useProjectPolling] Optimistic project (status: '${project.status}', scenes: ${project.completedScenes}/${project.sceneCount}) requires polling, starting`
+      )
+      startPolling()
+    }
+  }, [startPolling])
+
+  /**
    * Fetch once on mount, don't start interval polling
-   * Polling will only happen for active processing states via shouldPollStatus check
+   * Polling will only happen for projects with incomplete work via shouldPollForProject check
    */
   useEffect(() => {
     isMountedRef.current = true
@@ -369,5 +395,6 @@ export function useProjectPolling(
     ...state,
     refetch,
     isPolling: isPollingRef.current,
+    setOptimisticProject,
   }
 }
