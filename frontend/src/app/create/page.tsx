@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
@@ -54,6 +55,10 @@ export default function CreatePage() {
   const [directorConfig, setDirectorConfig] = useState<string>('')
   const [availableDirectorConfigs, setAvailableDirectorConfigs] = useState<string[]>([])
   const [isFetchingDirectorConfigs, setIsFetchingDirectorConfigs] = useState(false)
+
+  // Audio trimming state
+  const [startAt, setStartAt] = useState<number>(0)
+  const [isTrimming, setIsTrimming] = useState(false)
 
   // Fetch available config flavors on mount
   useEffect(() => {
@@ -371,6 +376,70 @@ export default function CreatePage() {
     }
   }
 
+  const handleTrimAudio = async () => {
+    // Validate that we have an audio file
+    const audioId = downloadedAudioId || uploadedAudio?.name
+    if (!downloadedAudioId) {
+      toast({
+        title: "Error",
+        description: "No audio file loaded. Please upload or download audio first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate start_at value
+    if (startAt < 0) {
+      toast({
+        title: "Error",
+        description: "Start position must be 0 or greater",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsTrimming(true)
+
+    try {
+      const response = await fetch(`${API_URL}/api/audio/trim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(API_KEY ? { 'X-API-Key': API_KEY } : {})
+        },
+        body: JSON.stringify({
+          audio_id: downloadedAudioId,
+          start_at: startAt
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail?.message || `Trim failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      // Replace audio with trimmed version
+      setDownloadedAudioId(data.audio_id)
+      setDownloadedAudioUrl(data.audio_url)
+
+      toast({
+        title: "Audio Trimmed",
+        description: `Audio trimmed from ${startAt}s. New audio ready to use.`,
+      })
+
+    } catch (error) {
+      console.error("Audio trim error:", error)
+      toast({
+        title: "Trim Failed",
+        description: error instanceof Error ? error.message : "Failed to trim audio",
+        variant: "destructive",
+      })
+    } finally {
+      setIsTrimming(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -528,6 +597,46 @@ export default function CreatePage() {
                         Choose a creative direction template (e.g., Wes-Anderson, David-Lynch)
                       </p>
                     </div>
+
+                    {/* Audio Trim Section - Only show for music-video mode with downloaded audio */}
+                    {mode === 'music-video' && audioSource === 'youtube' && downloadedAudioId && (
+                      <div className="space-y-2 pt-3 border-t border-gray-700">
+                        <Label htmlFor="start-at" className="text-sm font-medium text-white">
+                          Audio Start Position (seconds)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="start-at"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={startAt}
+                            onChange={(e) => setStartAt(parseInt(e.target.value) || 0)}
+                            disabled={isTrimming}
+                            className="flex-1 bg-gray-800 border-gray-600 text-white"
+                            placeholder="0"
+                          />
+                          <Button
+                            type="button"
+                            onClick={handleTrimAudio}
+                            disabled={isTrimming || !downloadedAudioId}
+                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                          >
+                            {isTrimming ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Trimming...
+                              </>
+                            ) : (
+                              'Trim Audio'
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          Trim audio from this start position (in seconds) to the end. Creates a new audio file.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
