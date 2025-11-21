@@ -147,20 +147,34 @@ async def generate_scenes_and_videos_background(
 
         # Start background tasks for video generation
         for i, scene_data in enumerate(scenes[:scenes_created], start=1):
-            asyncio.create_task(
+            sequence_num = i  # Capture in local variable to avoid closure issue
+            task = asyncio.create_task(
                 generate_scene_video_background(
                     project_id=project_id,
-                    sequence=i,
+                    sequence=sequence_num,
                     prompt=scene_data.description,
                     negative_prompt=scene_data.negative_description,
                     character_reference_id=character_reference_id,
                     duration=8.0
                 )
             )
+            # Add error callback to log any unhandled exceptions
+            def task_done_callback(t, seq=sequence_num, proj_id=project_id):
+                try:
+                    t.result()  # This will raise if task had an exception
+                except Exception as e:
+                    logger.error(
+                        "video_generation_task_failed",
+                        project_id=proj_id,
+                        sequence=seq,
+                        error=str(e),
+                        exc_info=True
+                    )
+            task.add_done_callback(task_done_callback)
             logger.info(
                 "video_generation_queued",
                 project_id=project_id,
-                sequence=i
+                sequence=sequence_num
             )
 
     except Exception as e:
@@ -235,15 +249,41 @@ async def generate_scene_video_background(
         from mv.video_generator import generate_video
         from services.s3_storage import get_s3_storage_service
         
-        # Generate video (this is synchronous, so run in thread pool)
-        video_id, video_path, video_url, metadata, character_reference_warning = await asyncio.to_thread(
-            generate_video,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            duration=int(duration),
-            character_reference_id=character_reference_id,
-            backend="replicate",
+        logger.info(
+            "starting_video_generation",
+            project_id=project_id,
+            sequence=sequence,
+            has_character_reference=character_reference_id is not None,
+            character_reference_id=character_reference_id
         )
+        
+        # Generate video (this is synchronous, so run in thread pool)
+        try:
+            video_id, video_path, video_url, metadata, character_reference_warning = await asyncio.to_thread(
+                generate_video,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                duration=int(duration),
+                character_reference_id=character_reference_id,
+                backend="replicate",
+            )
+            logger.info(
+                "video_generation_completed",
+                project_id=project_id,
+                sequence=sequence,
+                video_id=video_id,
+                video_path=video_path,
+                has_video_url=video_url is not None
+            )
+        except Exception as gen_error:
+            logger.error(
+                "video_generation_exception",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(gen_error),
+                exc_info=True
+            )
+            raise  # Re-raise to be caught by outer exception handler
         
         # Upload to S3 if configured
         s3_service = get_s3_storage_service()
@@ -914,7 +954,7 @@ async def start_generation(project_id: str):
 
         # Start background task for scene generation and video generation
         # This runs asynchronously so the endpoint can return immediately
-        asyncio.create_task(
+        task = asyncio.create_task(
             generate_scenes_and_videos_background(
                 project_id=project_id,
                 concept_prompt=project_item.conceptPrompt,
@@ -922,6 +962,19 @@ async def start_generation(project_id: str):
                 character_image_s3_key=project_item.characterImageS3Key
             )
         )
+
+        # Add error callback to log any unhandled exceptions
+        def main_task_done_callback(t):
+            try:
+                t.result()  # This will raise if task had an exception
+            except Exception as e:
+                logger.error(
+                    "main_background_generation_task_failed",
+                    project_id=project_id,
+                    error=str(e),
+                    exc_info=True
+                )
+        task.add_done_callback(main_task_done_callback)
 
         logger.info(
             "background_generation_queued",

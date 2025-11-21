@@ -137,29 +137,41 @@ def get_default_video_parameters(config_flavor: Optional[str] = None) -> dict:
     Returns:
         Dictionary of default video parameters
     """
-    from mv.config_manager import get_config
-
-    image_params_config = get_config(config_flavor, "image_params")
-
-    # Extract video-specific params (prefixed with video_)
-    video_params = {
-        k.replace("video_", ""): v
-        for k, v in image_params_config.items()
-        if k.startswith("video_")
+    # Default parameters (used if config loading fails)
+    defaults = {
+        "model": "google/veo-3.1",
+        "aspect_ratio": "16:9",
+        "duration": 8,
+        "generate_audio": True,
+        "person_generation": "allow_all",
+        "rules_template": "- No subtitles or camera directions.\n- The video should be in {aspect_ratio} aspect ratio.\n- Keep it short, visual, simple, cinematic.",
     }
 
-    # Return with fallback defaults
-    return {
-        "model": video_params.get("model", "google/veo-3.1"),
-        "aspect_ratio": video_params.get("aspect_ratio", "16:9"),
-        "duration": video_params.get("duration", 8),
-        "generate_audio": video_params.get("generate_audio", True),
-        "person_generation": video_params.get("person_generation", "allow_all"),
-        "rules_template": video_params.get(
-            "rules_template",
-            "- No subtitles or camera directions.\n- The video should be in {aspect_ratio} aspect ratio.\n- Keep it short, visual, simple, cinematic."
-        ),
-    }
+    # Try to load from config, but fall back to defaults if unavailable
+    try:
+        from mv.config_manager import get_config
+
+        image_params_config = get_config(config_flavor, "image_params")
+
+        # Extract video-specific params (prefixed with video_)
+        video_params = {
+            k.replace("video_", ""): v
+            for k, v in image_params_config.items()
+            if k.startswith("video_")
+        }
+
+        # Merge with defaults (config takes precedence)
+        return {
+            "model": video_params.get("model", defaults["model"]),
+            "aspect_ratio": video_params.get("aspect_ratio", defaults["aspect_ratio"]),
+            "duration": video_params.get("duration", defaults["duration"]),
+            "generate_audio": video_params.get("generate_audio", defaults["generate_audio"]),
+            "person_generation": video_params.get("person_generation", defaults["person_generation"]),
+            "rules_template": video_params.get("rules_template", defaults["rules_template"]),
+        }
+    except Exception as e:
+        logger.warning(f"Failed to load video config, using defaults: {e}")
+        return defaults
 
 
 def generate_video(
