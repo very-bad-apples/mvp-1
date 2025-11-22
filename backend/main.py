@@ -121,6 +121,7 @@ app.openapi = custom_openapi
 cors_origins = settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS else [
     "http://localhost:3000",
     "http://localhost:3001",
+    "https://badapples.vercel.app"
 ]
 
 app.add_middleware(

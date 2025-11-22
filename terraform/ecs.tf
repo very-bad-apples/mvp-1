@@ -423,6 +423,43 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
+# Policy for DynamoDB access
+resource "aws_iam_role_policy" "ecs_task_dynamodb" {
+  name = "${var.ecs_task_family}-dynamodb-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:DescribeTable",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem"
+        ]
+        Resource = [
+          aws_dynamodb_table.mv_projects.arn,
+          "${aws_dynamodb_table.mv_projects.arn}/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:ListTables"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Optional: ECS Exec policy for debugging
 resource "aws_iam_role_policy" "ecs_exec" {
   count = var.enable_ecs_exec ? 1 : 0
@@ -719,6 +756,22 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "DATABASE_URL"
           value = "sqlite:///./video_generator.db"
+        },
+        {
+          name  = "USE_LOCAL_DYNAMODB"
+          value = "false"
+        },
+        {
+          name  = "DYNAMODB_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "DYNAMODB_TABLE_NAME"
+          value = aws_dynamodb_table.mv_projects.name
+        },
+        {
+          name  = "DYNAMODB_ENDPOINT"
+          value = ""
         }
       ]
 

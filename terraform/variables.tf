@@ -229,3 +229,19 @@ variable "custom_domain" {
   default     = ""
 }
 
+# =============================================================================
+# DynamoDB Configuration
+# =============================================================================
+
+variable "dynamodb_enable_pitr" {
+  description = "Enable Point-in-Time Recovery for DynamoDB"
+  type        = bool
+  default     = true
+}
+
+variable "dynamodb_enable_encryption" {
+  description = "Enable encryption at rest for DynamoDB"
+  type        = bool
+  default     = true
+}
+
