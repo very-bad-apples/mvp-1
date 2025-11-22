@@ -169,6 +169,25 @@ resource "aws_iam_policy" "video_storage_access" {
           "s3:CopyObject"
         ]
         Resource = "${aws_s3_bucket.video_storage.arn}/*"
+      },
+      {
+        Sid    = "DynamoDBAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:DescribeTable"
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.aws_region}:*:table/${var.environment}-MVProjects",
+          "arn:aws:dynamodb:${var.aws_region}:*:table/${var.environment}-MVProjects/index/*"
+        ]
       }
     ]
   })
