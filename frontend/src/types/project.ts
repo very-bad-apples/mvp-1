@@ -105,14 +105,14 @@ export interface Project {
   /** Unique project identifier */
   projectId: string
 
-  /** Project mode: ad-creative or music-video (frontend-only field) */
-  mode?: 'ad-creative' | 'music-video'
+  /** Project mode: ad-creative or music-video */
+  mode: 'ad-creative' | 'music-video'
 
   /** User's original concept/idea prompt (backend: conceptPrompt) */
   conceptPrompt: string
 
-  /** Character description used for scene generation */
-  characterDescription: string
+  /** Character description used for scene generation (for music-video mode) */
+  characterDescription: string | null
 
   /** Character reference image ID - used when creating/updating project */
   characterReferenceImageId?: string | null
@@ -226,7 +226,7 @@ export type UpdateProjectResponse = GetProjectResponse
  * Response from getting a project
  * Note: Backend returns ProjectResponse directly - same structure as Project interface
  */
-export type GetProjectResponse = Omit<Project, 'mode' | 'progress'>
+export type GetProjectResponse = Omit<Project, 'progress'>
 
 /**
  * Request to compose final video

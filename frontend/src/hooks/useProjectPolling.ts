@@ -171,7 +171,6 @@ export function useProjectPolling(
         // Add calculated progress field to backend response
         const project: Project = {
           ...response,
-          mode: 'music-video', // Frontend-only field, default value
           progress: Math.round((response.completedScenes / Math.max(response.sceneCount, 1)) * 100),
         }
 

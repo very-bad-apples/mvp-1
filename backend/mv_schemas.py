@@ -126,7 +126,7 @@ class ProjectResponse(BaseModel):
     audioBackingTrackUrl: Optional[str] = Field(None, description="Presigned S3 URL for audio backing track (expires after configured time)")
     finalOutputUrl: Optional[str] = Field(None, description="Presigned S3 URL for final composed video (expires after configured time)")
     directorConfig: Optional[str] = Field(None, description="Director config name used for this project")
-    mode: Optional[str] = Field(None, description="Project mode: 'music-video' or 'ad-creative'")
+    mode: str = Field(..., description="Project mode: 'music-video' or 'ad-creative'")
     sceneCount: int
     completedScenes: int
     failedScenes: int

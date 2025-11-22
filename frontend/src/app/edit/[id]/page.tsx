@@ -150,9 +150,18 @@ export default function EditPage({ params }: { params: { id: string } }) {
         })
 
         try {
+          // Use productDescription for ad-creative mode, characterDescription for music-video mode
+          const description = project.mode === 'ad-creative'
+            ? project.productDescription
+            : project.characterDescription
+
+          if (!description) {
+            throw new Error(`Missing ${project.mode === 'ad-creative' ? 'product' : 'character'} description`)
+          }
+
           await generateScenes({
             idea: project.conceptPrompt,
-            character_description: project.characterDescription,
+            character_description: description,
             config_flavor: 'default',
             project_id: params.id,
           })
