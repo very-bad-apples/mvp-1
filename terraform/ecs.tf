@@ -735,7 +735,11 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "CORS_ORIGINS"
-          value = "*"
+          value = "https://badapples.vercel.app,https://bigbadapples.com,http://localhost:3000,http://localhost:3001"
+        },
+        {
+          name  = "AUTH_EXEMPT_ORIGINS"
+          value = "https://badapples.vercel.app"
         },
         {
           name  = "SERVE_FROM_CLOUD"
@@ -743,7 +747,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "MOCK_VID_GENS"
-          value = "true"
+          value = "false"
         },
         {
           name  = "DEBUG"
@@ -751,7 +755,19 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "MV_DEBUG_MODE"
-          value = "false"
+          value = "true"
+        },
+        {
+          name  = "REPLICATE_MAX_RETRIES"
+          value = "3"
+        },
+        {
+          name  = "REPLICATE_TIMEOUT"
+          value = "600"
+        },
+        {
+          name  = "ELEVENLABS_VOICE_ID"
+          value = "EXAVITQu4vr4xnSDxMaL"
         },
         {
           name  = "DATABASE_URL"
@@ -834,6 +850,11 @@ resource "aws_ecs_task_definition" "main" {
       }
     }
   ])
+
+  # Ephemeral storage for video processing
+  ephemeral_storage {
+    size_in_gib = 100
+  }
 
   tags = {
     Name        = var.ecs_task_family
