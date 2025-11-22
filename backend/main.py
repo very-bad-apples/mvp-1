@@ -46,14 +46,6 @@ async def lifespan(app: FastAPI):
         logger.error("config_validation_failed", error=str(e))
         raise
 
-    # Initialize database
-    try:
-        from database import init_db
-        init_db()
-        logger.info("database_tables_created", message="Database initialized successfully")
-    except Exception as e:
-        logger.error("database_init_error", error=str(e))
-
     # Initialize DynamoDB tables
     try:
         from dynamodb_config import init_dynamodb_tables
@@ -277,14 +269,12 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models, mv
+from routers import models, mv
 # Note: projects.py router removed - using mv_projects.py instead (duplicate conflict resolved)
 from routers import mv_projects
 from routers import audio_converter
 
-app.include_router(generate.router)
-app.include_router(jobs.router)
-app.include_router(websocket.router)
+# Old SQLite-based routers removed: generate, jobs, websocket
 app.include_router(models.router)
 app.include_router(mv.router)
 app.include_router(audio_converter.router)
@@ -303,9 +293,6 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "endpoints": {
-            "generate": "/api/generate",
-            "job_status": "/api/jobs/{job_id}",
-            "websocket": "/ws/jobs/{job_id}",
             "mv_create_scenes": "/api/mv/create_scenes",
             "mv_generate_character_reference": "/api/mv/generate_character_reference",
             "mv_generate_video": "/api/mv/generate_video",
