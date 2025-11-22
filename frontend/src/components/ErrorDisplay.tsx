@@ -13,7 +13,7 @@
 import React from 'react'
 import type { APIError } from '@/lib/api/client'
 import { getUserFriendlyError } from '@/lib/api/client'
-import type { ErrorSeverity, ErrorCategory } from '@/lib/error-logger'
+import { ErrorSeverity, type ErrorCategory } from '@/lib/error-logger'
 
 export interface ErrorDisplayProps {
   /** The error to display */
@@ -126,7 +126,7 @@ export function ErrorDisplay({
   isRetrying = false,
   onRetry,
   onDismiss,
-  severity = 'medium',
+  severity = ErrorSeverity.MEDIUM,
   category,
   showTechnicalDetails = false,
 }: ErrorDisplayProps): JSX.Element {
