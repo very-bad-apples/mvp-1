@@ -26,6 +26,9 @@ import {
   Music,
 } from 'lucide-react'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+
 // Use relative paths to proxy routes (API key handled server-side)
 const API_BASE = '/api/mv'
 
