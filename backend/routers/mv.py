@@ -1697,6 +1697,113 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                     exc_info=True
                 )
 
+        # DynamoDB integration: Fetch reference images if not provided in request
+        reference_image_to_use = request.reference_image_base64
+        if not reference_image_to_use and request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "fetching_reference_image_for_video_generation",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+
+                # Get scene from database
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+
+                    # Get project metadata for reference images
+                    try:
+                        project_item = MVProjectItem.get(pk, "METADATA")
+
+                        # Prepare reference image (use scene's reference images or project's character/product image)
+                        reference_s3_key = None
+
+                        # First try scene-specific reference images
+                        if scene_item.referenceImageS3Keys and len(scene_item.referenceImageS3Keys) > 0:
+                            reference_s3_key = scene_item.referenceImageS3Keys[0]
+                            logger.info(
+                                "using_scene_reference_image",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                s3_key=reference_s3_key
+                            )
+                        # Fall back to project-level reference image based on mode
+                        elif project_item.mode == "music-video" and project_item.characterImageS3Key:
+                            reference_s3_key = project_item.characterImageS3Key
+                            logger.info(
+                                "using_character_reference_image",
+                                project_id=request.project_id,
+                                s3_key=reference_s3_key
+                            )
+                        elif project_item.mode == "ad-creative" and project_item.productImageS3Key:
+                            reference_s3_key = project_item.productImageS3Key
+                            logger.info(
+                                "using_product_reference_image",
+                                project_id=request.project_id,
+                                s3_key=reference_s3_key
+                            )
+
+                        # Download and encode reference image if available
+                        if reference_s3_key:
+                            try:
+                                import boto3
+                                import base64
+
+                                s3_client = boto3.client(
+                                    's3',
+                                    region_name=settings.AWS_REGION,
+                                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+                                )
+
+                                # Download image from S3
+                                image_obj = s3_client.get_object(
+                                    Bucket=settings.STORAGE_BUCKET,
+                                    Key=reference_s3_key
+                                )
+                                image_bytes = image_obj['Body'].read()
+                                reference_image_to_use = base64.b64encode(image_bytes).decode('utf-8')
+
+                                logger.info(
+                                    "reference_image_loaded_for_video_generation",
+                                    project_id=request.project_id,
+                                    sequence=request.sequence,
+                                    s3_key=reference_s3_key,
+                                    size_bytes=len(image_bytes)
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "reference_image_load_failed_for_video_generation",
+                                    project_id=request.project_id,
+                                    sequence=request.sequence,
+                                    s3_key=reference_s3_key,
+                                    error=str(e)
+                                )
+                                # Continue without reference image
+                    except DoesNotExist:
+                        logger.warning(
+                            "project_metadata_not_found_for_reference_image",
+                            project_id=request.project_id
+                        )
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_reference_image",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+            except Exception as e:
+                logger.error(
+                    "failed_to_fetch_reference_image_for_video_generation",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
+                # Continue without reference image
+
         # Generate video
         video_id, video_path, video_url, metadata, character_reference_warning = generate_video(
             prompt=request.prompt.strip(),
@@ -1706,7 +1813,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             generate_audio=request.generate_audio,
             seed=request.seed,
             character_reference_id=request.character_reference_id,
-            reference_image_base64=request.reference_image_base64,
+            reference_image_base64=reference_image_to_use,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
             config_flavor=request.config_flavor,

@@ -223,9 +223,14 @@ export async function startFullGeneration(
 
     // Check if scenes need to be generated
     if (project.scenes.length === 0) {
+      // Use characterDescription for music-video mode, productDescription for ad-creative mode
+      const description = project.mode === 'ad-creative'
+        ? (project.productDescription || '')
+        : (project.characterDescription || '')
+
       const scenesRequest: CreateScenesRequest = {
         idea: project.conceptPrompt,
-        character_description: project.characterDescription,
+        character_description: description,
         config_flavor: 'default',
         project_id: projectId, // Link scenes to this project in DB
       }
@@ -297,18 +302,6 @@ export async function startFullGeneration(
           // TODO: VALIDATE THIS COMMENT APPLIES TO THE BLOCK BELOW
           // Backend automatically updates the scene in DynamoDB with the video URL
           // No need to manually update - backend handles atomic updates per scene
-
-          // Update project with video URL
-          const updatedScenes = [...project.scenes]
-          updatedScenes[index] = {
-            ...scene,
-            videoClipUrl: videoResponse.video_url,
-            status: 'completed',
-          }
-
-          project = await updateAndRefetch(projectId, { scenes: updatedScenes })
-
-          //////
 
           return videoResponse
         },
@@ -579,9 +572,14 @@ export async function regenerateScenePrompt(
 
     // Generate a new scene using the create_scenes endpoint
     // Request only 1 scene to get a fresh prompt
+    // Use characterDescription for music-video mode, productDescription for ad-creative mode
+    const description = project.mode === 'ad-creative'
+      ? (project.productDescription || '')
+      : (project.characterDescription || '')
+
     const scenesRequest: CreateScenesRequest = {
       idea: project.conceptPrompt,
-      character_description: project.characterDescription,
+      character_description: description,
       config_flavor: 'default',
       // Don't pass project_id to avoid overwriting all scenes
       // We'll manually update just this one scene
