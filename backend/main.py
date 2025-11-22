@@ -166,7 +166,12 @@ async def api_authentication_middleware(request: Request, call_next):
                 "message": "API key missing. Provide X-API-Key header or ?api_key=YOUR_KEY",
                 "detail": "Authentication required for /api/ endpoints"
             },
-            headers={"WWW-Authenticate": "ApiKey"}
+            headers={
+                "WWW-Authenticate": "ApiKey",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
         )
     
     # Verify API key using the auth module's verification function
@@ -178,7 +183,12 @@ async def api_authentication_middleware(request: Request, call_next):
                 "message": "Invalid API key",
                 "detail": "The provided API key is not valid"
             },
-            headers={"WWW-Authenticate": "ApiKey"}
+            headers={
+                "WWW-Authenticate": "ApiKey",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*"
+            }
         )
     
     # Continue to the endpoint

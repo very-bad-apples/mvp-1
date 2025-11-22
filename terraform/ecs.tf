@@ -735,7 +735,7 @@ resource "aws_ecs_task_definition" "main" {
         },
         {
           name  = "CORS_ORIGINS"
-          value = join(",", var.cors_allowed_origins)
+          value = "*"
         },
         {
           name  = "SERVE_FROM_CLOUD"
@@ -839,6 +839,7 @@ resource "aws_ecs_task_definition" "main" {
     Name        = var.ecs_task_family
     Environment = var.environment
     ManagedBy   = "Terraform"
+    DeploymentVersion = "2"
   }
 }
 
@@ -878,6 +879,11 @@ resource "aws_ecs_service" "main" {
   # Deployment configuration - rolling updates
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
+
+  # Force update when task definition changes
+  triggers = {
+    task_definition = aws_ecs_task_definition.main.arn
+  }
 
   tags = {
     Name        = var.ecs_service_name
