@@ -148,7 +148,12 @@ async def api_authentication_middleware(request: Request, call_next):
     # Skip authentication for CORS preflight requests
     if request.method == "OPTIONS":
         return await call_next(request)
-    
+
+    # Skip authentication for exempt origins
+    origin = request.headers.get("origin", "")
+    if origin in settings.auth_exempt_origins_list:
+        return await call_next(request)
+
     # Import here to avoid circular imports
     # Import the verification function (not the FastAPI dependency)
     import auth
@@ -167,7 +172,6 @@ async def api_authentication_middleware(request: Request, call_next):
                 "detail": "Authentication required for /api/ endpoints"
             },
             headers={
-                "WWW-Authenticate": "ApiKey",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*"
@@ -184,7 +188,6 @@ async def api_authentication_middleware(request: Request, call_next):
                 "detail": "The provided API key is not valid"
             },
             headers={
-                "WWW-Authenticate": "ApiKey",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*"

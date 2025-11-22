@@ -27,6 +27,9 @@ class Settings:
     # CORS
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
 
+    # Authentication - Origins that skip API key requirement
+    AUTH_EXEMPT_ORIGINS: str = os.getenv("AUTH_EXEMPT_ORIGINS", "https://badapples.vercel.app")
+
     # Application
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
@@ -130,6 +133,11 @@ class Settings:
     def cors_origins_list(self) -> list:
         """Parse CORS origins into a list"""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+
+    @property
+    def auth_exempt_origins_list(self) -> list:
+        """Parse auth-exempt origins into a list"""
+        return [origin.strip() for origin in self.AUTH_EXEMPT_ORIGINS.split(",")]
 
 
 # Global settings instance
