@@ -730,6 +730,761 @@
         ],
         "priority": "high",
         "subtasks": []
+      },
+      {
+        "id": 27,
+        "title": "Set Up Next.js API Routes with File-Backed Storage",
+        "description": "Implement Next.js API routes for project management with file-based persistence using TypeScript.",
+        "details": "1. **Create API Routes**: Implement `/api/projects` for creating new projects and `/api/projects/[id]` for retrieving and updating existing projects.\n   - Use Next.js API route conventions to define these endpoints.\n   - Ensure proper HTTP methods are used: POST for creation, GET for retrieval, and PUT for updates.\n\n2. **File-Backed Storage**: Implement file-based storage using `.dev-projects.json` for development.\n   - Use Node.js `fs` module to read and write JSON data.\n   - Implement functions to handle file I/O operations safely, ensuring data integrity.\n\n3. **TypeScript Interfaces**: Define TypeScript interfaces for `Project` and `Scene` types.\n   - Ensure interfaces cover all necessary fields and types.\n   - Use these interfaces to enforce type safety across the API routes.\n\n4. **Error Handling**: Implement comprehensive error handling for file operations and API responses.\n   - Return appropriate HTTP status codes and messages for different error scenarios.\n\n5. **Environment Configuration**: Ensure the file path for `.dev-projects.json` is configurable via environment variables.",
+        "testStrategy": "1. **Unit Tests**: Write unit tests for each API route using Jest and Supertest.\n   - Test project creation, retrieval, and update scenarios.\n   - Simulate file read/write operations and verify data integrity.\n\n2. **Integration Tests**: Conduct integration tests to ensure end-to-end functionality.\n   - Test API routes with actual file I/O operations.\n   - Verify that TypeScript interfaces enforce correct data structures.\n\n3. **Error Scenarios**: Test error handling by simulating file access errors and invalid API requests.\n   - Ensure appropriate HTTP status codes and error messages are returned.\n\n4. **Environment Variable Tests**: Verify that the file path can be configured via environment variables and defaults correctly if not set.",
+        "status": "done",
+        "dependencies": [
+          23,
+          24
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Next.js API Routes for Project Management",
+            "description": "Create API routes for managing projects using Next.js conventions.",
+            "dependencies": [],
+            "details": "Define `/api/projects` for POST and `/api/projects/[id]` for GET and PUT methods.",
+            "status": "done",
+            "testStrategy": "Write unit tests for each route using Jest and Supertest."
+          },
+          {
+            "id": 2,
+            "title": "Set Up File-Backed Storage with Node.js",
+            "description": "Implement file-based storage using `.dev-projects.json`.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Node.js `fs` module to handle JSON data read/write operations.",
+            "status": "done",
+            "testStrategy": "Simulate file operations and verify data integrity."
+          },
+          {
+            "id": 3,
+            "title": "Define TypeScript Interfaces for Project and Scene",
+            "description": "Create TypeScript interfaces to enforce type safety.",
+            "dependencies": [],
+            "details": "Define interfaces for `Project` and `Scene` covering all necessary fields.",
+            "status": "done",
+            "testStrategy": "Ensure interfaces are used across API routes for type safety."
+          },
+          {
+            "id": 4,
+            "title": "Implement Error Handling for API and File Operations",
+            "description": "Add error handling for API responses and file I/O operations.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Return appropriate HTTP status codes and messages for errors.",
+            "status": "done",
+            "testStrategy": "Test error scenarios to ensure proper handling and messaging."
+          },
+          {
+            "id": 5,
+            "title": "Configure Environment Variables for File Path",
+            "description": "Make the file path for `.dev-projects.json` configurable via environment variables.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use environment variables to set the file path dynamically.",
+            "status": "done",
+            "testStrategy": "Verify configuration changes through environment variables."
+          },
+          {
+            "id": 6,
+            "title": "Conduct Integration Tests for API and Storage",
+            "description": "Perform integration tests to ensure end-to-end functionality.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "details": "Test the complete flow from API request to file storage and response.",
+            "status": "done",
+            "testStrategy": "Conduct integration tests using Jest and Supertest."
+          }
+        ]
+      },
+      {
+        "id": 33,
+        "title": "Create PhaseTracker Component Using Kibo UI MCP",
+        "description": "Develop a PhaseTracker component to visually represent the generation pipeline progress using Kibo UI MCP.",
+        "details": "Implement the PhaseTracker component in `frontend/src/components/PhaseTracker.tsx` using Kibo UI MCP to design a horizontal stepper with 5 phases: Scenes, Images, Videos, Lip-sync, and Compose. Each phase should display completion status (pending/in-progress/completed/error), progress percentage, phase icon, and estimated time. Use `shadcn/ui` components like `Badge`, `Progress`, and custom icons from `lucide-react`. Ensure responsive design that collapses to a vertical layout on mobile devices. The component should accept `currentPhase` and `overallProgress` as props with TypeScript types. Consider accessibility and ensure the component is keyboard navigable.",
+        "testStrategy": "1. Verify the component renders correctly with mock data for each phase.\n2. Test responsiveness by resizing the browser window to ensure the layout switches between horizontal and vertical appropriately.\n3. Check accessibility features, ensuring keyboard navigation and screen reader compatibility.\n4. Validate prop types and ensure the component updates correctly when `currentPhase` and `overallProgress` props change.\n5. Test integration with the project dashboard to ensure it displays real-time progress updates.",
+        "status": "done",
+        "dependencies": [
+          19,
+          10,
+          29
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Stepper Structure with TypeScript Interfaces",
+            "description": "Use Kibo UI MCP to design the stepper structure and define TypeScript interfaces for phase data.",
+            "dependencies": [],
+            "details": "Create a basic stepper layout using Kibo UI MCP. Define TypeScript interfaces for phase data, including properties for status, progress, icon, and estimated time.",
+            "status": "done",
+            "testStrategy": "Verify the stepper structure renders correctly with mock data."
+          },
+          {
+            "id": 2,
+            "title": "Implement Phase Steps with Icons",
+            "description": "Implement the 5 phase steps (Scenes, Images, Videos, Lip-sync, Compose) using icons from lucide-react.",
+            "dependencies": [
+              1
+            ],
+            "details": "Add each phase step to the stepper using lucide-react icons. Ensure each step can display its status and icon correctly.",
+            "status": "done",
+            "testStrategy": "Check that each phase step displays the correct icon and status."
+          },
+          {
+            "id": 3,
+            "title": "Add Progress Indicators and Status Badges",
+            "description": "Add progress indicators, status badges, and estimated time display for each phase.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use shadcn/ui components like Badge and Progress to display progress percentage and status. Include estimated time for each phase.",
+            "status": "done",
+            "testStrategy": "Test that progress indicators and badges update correctly based on phase data."
+          },
+          {
+            "id": 4,
+            "title": "Implement Responsive Design for Mobile",
+            "description": "Ensure the component is responsive and switches from horizontal to vertical layout on mobile devices.",
+            "dependencies": [
+              3
+            ],
+            "details": "Use CSS media queries to adjust the layout for mobile devices. Ensure the stepper collapses to a vertical layout on smaller screens.",
+            "status": "done",
+            "testStrategy": "Resize the browser window to test layout changes and ensure responsiveness."
+          }
+        ]
+      },
+      {
+        "id": 32,
+        "title": "Create ProjectHeader Component Using Kibo UI MCP",
+        "description": "Develop a reusable ProjectHeader component to display project metadata using Kibo UI MCP and shadcn/ui components.",
+        "details": "1. **Component Structure**: Create `frontend/src/components/ProjectHeader.tsx` to define the ProjectHeader component.\n   - Use TypeScript interfaces to define props for project data (title, ID, status, created date, mode, concept prompt).\n\n2. **UI Design**: Utilize Kibo UI MCP and shadcn/ui components to design the UI.\n   - Display project title and ID prominently.\n   - Implement a status badge with color coding for different project statuses (e.g., creating-scenes, generating-images, etc.).\n   - Integrate a Progress component to show overall project progress.\n   - Display metadata such as created date, mode, and concept prompt.\n   - Add control buttons (Start Generation, Cancel, Download when complete) with appropriate actions.\n\n3. **Styling**: Ensure the component matches the dark theme with blue accents.\n   - Use CSS modules or styled-components for styling.\n   - Ensure responsive design for mobile, tablet, and desktop views.\n\n4. **Integration**: Ensure the component is reusable and can be integrated into different parts of the application.",
+        "testStrategy": "1. **Unit Testing**: Write unit tests using Jest and React Testing Library to verify component rendering and prop handling.\n   - Test each UI element (title, ID, status badge, progress bar, metadata, buttons) for correct rendering.\n\n2. **Responsive Design Test**: Verify the component's responsiveness on various screen sizes using browser developer tools.\n\n3. **Integration Test**: Integrate the component into a page and ensure it displays correctly with real project data.\n\n4. **UI/UX Review**: Conduct a review with designers to ensure theme consistency and usability.",
+        "status": "done",
+        "dependencies": [
+          29
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define Component Structure with TypeScript Interfaces",
+            "description": "Create the ProjectHeader component structure using TypeScript interfaces for props.",
+            "dependencies": [],
+            "details": "Create `frontend/src/components/ProjectHeader.tsx`. Define props for project data including title, ID, status, created date, mode, and concept prompt using TypeScript interfaces.",
+            "status": "done",
+            "testStrategy": "Write unit tests to ensure props are correctly defined and handled."
+          },
+          {
+            "id": 2,
+            "title": "Implement Header Section with Title, ID, and Status Badge",
+            "description": "Develop the header section to display project title, ID, and a color-coded status badge.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Kibo UI MCP and shadcn/ui components to display the project title and ID prominently. Implement a status badge with color coding for different project statuses.",
+            "status": "done",
+            "testStrategy": "Test rendering of title, ID, and status badge with different statuses."
+          },
+          {
+            "id": 3,
+            "title": "Add Progress Bar and Metadata Display",
+            "description": "Integrate a progress bar and display metadata such as created date, mode, and concept prompt.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use Kibo UI MCP components to add a progress bar. Display metadata including created date, mode, and concept prompt using appropriate UI elements.",
+            "status": "done",
+            "testStrategy": "Verify correct rendering of progress bar and metadata information."
+          },
+          {
+            "id": 4,
+            "title": "Implement Control Buttons and Ensure Responsive Design",
+            "description": "Add control buttons and ensure the component is responsive across devices.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement control buttons (Start Generation, Cancel, Download) with event handlers. Use CSS modules or styled-components for styling. Ensure responsive design for mobile, tablet, and desktop views.",
+            "status": "done",
+            "testStrategy": "Test button functionality and responsiveness on different screen sizes."
+          }
+        ]
+      },
+      {
+        "id": 31,
+        "title": "Design and Implement Project Dashboard Page Layout",
+        "description": "Create a dynamic route and layout for the project dashboard page using v0 MCP, ensuring responsiveness and theme consistency.",
+        "details": "1. **Create Dynamic Route**: Implement a new dynamic route at `frontend/src/app/project/[id]/page.tsx` for the project dashboard.\n\n2. **Layout Design**: Use v0 MCP to design the page layout including:\n   - **Navigation Header**: Similar to the /create page.\n   - **Project Header Section**: Display project title, status, and metadata.\n   - **Phase Tracker Section**: Show generation workflow (Scenes → Images → Videos → Lip-sync → Compose).\n   - **Main Content Area**: Implement a responsive grid for scene cards (1 column on mobile, 2 columns on tablets, 3 columns on desktops).\n   - **Asset Gallery Section**: Display generated images and videos.\n   - **Final Video Player Section**: Display when the project is complete.\n\n3. **Styling**: Follow the dark theme with blue accents using Tailwind CSS for responsive design.\n\n4. **Data Fetching**: On component mount, fetch project data using the API client and handle loading states appropriately.",
+        "testStrategy": "1. **Route Testing**: Verify the dynamic route correctly loads the project dashboard for different project IDs.\n\n2. **Layout Verification**: Ensure all sections (navigation, headers, phase tracker, content area, asset gallery, video player) are correctly implemented and styled.\n\n3. **Responsive Design**: Test the layout on various devices to ensure responsiveness (1 column on mobile, 2 on tablets, 3 on desktops).\n\n4. **Data Handling**: Check that project data is fetched and displayed correctly, with appropriate loading states.\n\n5. **Theme Consistency**: Ensure the page adheres to the dark theme with blue accents across all components.",
+        "status": "done",
+        "dependencies": [
+          29
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Dynamic Route for Project Dashboard",
+            "description": "Implement a new dynamic route at `frontend/src/app/project/[id]/page.tsx` for the project dashboard.",
+            "dependencies": [],
+            "details": "Set up the file structure and basic page setup for the dynamic route. Ensure the route can handle different project IDs.",
+            "status": "done",
+            "testStrategy": "Verify the dynamic route loads correctly for various project IDs."
+          },
+          {
+            "id": 2,
+            "title": "Design Navigation Header Layout",
+            "description": "Use v0 MCP to generate the navigation header layout similar to the /create page.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the navigation header using v0 MCP components. Ensure it matches the design of the /create page.",
+            "status": "done",
+            "testStrategy": "Check the navigation header for consistency with the /create page."
+          },
+          {
+            "id": 3,
+            "title": "Design Project Header and Phase Tracker Sections",
+            "description": "Use v0 MCP to design the project header and phase tracker section layout.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create the project header to display title, status, and metadata. Design the phase tracker to show the generation workflow.",
+            "status": "done",
+            "testStrategy": "Ensure the project header and phase tracker display correct information and are styled properly."
+          },
+          {
+            "id": 4,
+            "title": "Create Responsive Scene Cards Grid Layout",
+            "description": "Use v0 MCP to create a responsive grid layout for scene cards.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement a grid layout that adjusts from 1 column on mobile to 3 columns on desktops using Tailwind CSS.",
+            "status": "done",
+            "testStrategy": "Test the grid layout responsiveness across different devices."
+          },
+          {
+            "id": 5,
+            "title": "Design Asset Gallery and Final Video Player Sections",
+            "description": "Design the asset gallery and final video player sections using v0 MCP.",
+            "dependencies": [
+              4
+            ],
+            "details": "Implement sections to display generated images, videos, and the final video player when the project is complete.",
+            "status": "done",
+            "testStrategy": "Verify the asset gallery and video player sections display correctly and are styled consistently."
+          },
+          {
+            "id": 6,
+            "title": "Implement Data Fetching Logic",
+            "description": "Fetch project data using the API client and handle loading states.",
+            "dependencies": [
+              5
+            ],
+            "details": "On component mount, fetch project data and manage loading and error states appropriately.",
+            "status": "done",
+            "testStrategy": "Test data fetching for correct data retrieval and error handling."
+          }
+        ]
+      },
+      {
+        "id": 30,
+        "title": "Integrate Backend with /create Page and Redirect to /project/[id]",
+        "description": "Modify the /create page to integrate with the backend for project creation and redirect to the project page.",
+        "details": "1. **Modify API Call**: Replace the mock API call in `frontend/src/app/create/page.tsx` (lines 129-141) with a real call to the backend. Use the `createProject` function from the API client.\n   - Pass form data including `mode`, `prompt`, `characterDescription`, `uploadedImages/Audio`, and `characterReferenceImageId`.\n\n2. **Handle Response**: Extract `projectId` from the API response.\n\n3. **Redirect Logic**: Implement logic to redirect the user to `/project/[projectId]` upon successful project creation.\n\n4. **Loading and Error Handling**: Implement loading states and error handling using toast notifications to inform the user of the process status.\n\n5. **Maintain Existing Functionality**: Ensure all existing validation and character generation functionalities remain intact.",
+        "testStrategy": "1. **Unit Tests**: Mock the `createProject` API call to test the integration logic, ensuring correct data is sent and responses are handled.\n\n2. **Integration Tests**: Test the full workflow from form submission to redirection, verifying the correct page is loaded with the expected project ID.\n\n3. **Error Handling Tests**: Simulate API failures to ensure errors are caught and appropriate notifications are displayed.\n\n4. **Loading State Tests**: Verify that loading indicators are shown during the API call and removed upon completion.",
+        "status": "done",
+        "dependencies": [
+          29
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 29,
+        "title": "Create API Client Layer for Python Backend Calls",
+        "description": "Develop a type-safe API client in TypeScript for interacting with Python backend endpoints.",
+        "details": "Implement the API client in `frontend/src/lib/api/client.ts` to wrap all Python backend endpoints with type-safe functions. Use TypeScript to define return types and ensure type safety. Implement functions for `createProject`, `getProject`, `generateScenes`, `generateVideo`, `generateLipSync`, `getVideo`, and `generateCharacterReference`. Utilize the `API_URL` from environment variables for endpoint URLs. Implement error handling using try-catch blocks and custom error classes. Research best practices for fetch wrapper libraries and error handling patterns in Next.js, such as using Axios or Fetch API with custom hooks for data fetching. Ensure the client is modular and reusable across the application.",
+        "testStrategy": "1. **Unit Tests**: Write unit tests for each API function to ensure they correctly handle successful responses and errors. Mock API responses using libraries like Jest and nock.\n2. **Integration Tests**: Test the API client in a development environment to verify real interactions with the backend.\n3. **Type Checking**: Use TypeScript's compiler to ensure there are no type errors in the API client.\n4. **Environment Variable Test**: Verify that the `API_URL` is correctly loaded from environment variables and used in API calls.",
+        "status": "done",
+        "dependencies": [
+          23,
+          26,
+          25
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set Up Base Fetch Wrapper with Error Handling",
+            "description": "Create a base fetch wrapper with error handling and TypeScript types.",
+            "dependencies": [],
+            "details": "Implement a fetch wrapper in `frontend/src/lib/api/client.ts` using TypeScript. Include error handling with try-catch blocks and define custom error classes. Use environment variables for `API_URL`.",
+            "status": "done",
+            "testStrategy": "Write unit tests to ensure the fetch wrapper handles errors correctly and returns expected types."
+          },
+          {
+            "id": 2,
+            "title": "Implement Project Management Functions",
+            "description": "Develop type-safe functions for project management endpoints.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement `createProject` and `getProject` functions using the fetch wrapper. Define TypeScript interfaces for request and response types to ensure type safety.",
+            "status": "done",
+            "testStrategy": "Mock API responses and write unit tests for `createProject` and `getProject` functions."
+          },
+          {
+            "id": 3,
+            "title": "Implement Generation Functions",
+            "description": "Develop type-safe functions for generation-related endpoints.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement `generateScenes`, `generateVideo`, and `generateLipSync` functions. Use the fetch wrapper and define TypeScript types for each function's inputs and outputs.",
+            "status": "done",
+            "testStrategy": "Write unit tests to verify correct handling of API responses and errors for generation functions."
+          },
+          {
+            "id": 4,
+            "title": "Implement File Retrieval Functions",
+            "description": "Develop type-safe functions for file retrieval endpoints.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement `getVideo` and `generateCharacterReference` functions using the fetch wrapper. Ensure TypeScript types are defined for these functions.",
+            "status": "done",
+            "testStrategy": "Test file retrieval functions with mocked API responses to ensure correct data handling."
+          },
+          {
+            "id": 5,
+            "title": "Add Comprehensive Error Handling and Retry Logic",
+            "description": "Enhance error handling and add retry logic to all API functions.",
+            "dependencies": [
+              2,
+              3,
+              4
+            ],
+            "details": "Implement retry logic with exponential backoff for transient errors. Ensure all functions have comprehensive error handling and return detailed error information.",
+            "status": "done",
+            "testStrategy": "Simulate transient errors and verify retry logic works as expected. Ensure error handling provides clear error messages."
+          }
+        ]
+      },
+      {
+        "id": 28,
+        "title": "Update TypeScript Types to Match project.json Schema",
+        "description": "Revise TypeScript interfaces in /types/project.ts to align with the latest project.json schema.",
+        "details": "1. **Analyze project.json**: Review the current project.json schema to identify all fields and their types, including `conceptPrompt`, `characterImage`, `productDescription`, `productImage`, `audioBackingTrack`, and scene-specific fields like `audioClip`, `videoClip`, `lipSyncedVideoClip` with `url` and `duration` properties.\n\n2. **Update Interfaces**: Modify the `Project` and `Scene` interfaces in /types/project.ts to include all identified fields. Ensure that nested types are accurately represented using TypeScript's advanced type features.\n\n3. **Status Enums**: Update all status enums to reflect the new generation phases: `creating-scenes`, `generating-images`, `generating-videos`, `generating-lipsync`, `composing`, `completed`, `error`.\n\n4. **Best Practices**: Use Context7 MCP to research and apply best practices for defining complex nested types in TypeScript, ensuring maintainability and clarity.",
+        "testStrategy": "1. **Type Checking**: Use TypeScript's compiler to ensure there are no type errors in the updated interfaces.\n\n2. **Schema Validation**: Write unit tests to validate that the TypeScript types align with the project.json schema. Use a JSON schema validation library to automate this process.\n\n3. **Integration Tests**: Ensure that all parts of the application using these types function correctly without runtime errors.\n\n4. **Peer Review**: Conduct a code review with team members to verify adherence to best practices and correctness.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 38,
+        "title": "Integrate Components and Logic into /project/[id] Page",
+        "description": "Complete the project dashboard by integrating components and implementing logic for the /project/[id] page.",
+        "details": "1. **Component Integration**: Import and use `ProjectHeader`, `PhaseTracker`, `ProjectSceneCard`, `AssetGallery`, and `FinalVideoPlayer` components in the `/project/[id]` page.\n   - Ensure each component is correctly positioned and styled according to the design specifications.\n\n2. **Real-time Updates**: Implement the `useProjectPolling` hook to fetch and update project status in real-time.\n   - Ensure polling stops when the project is completed or encounters an error.\n\n3. **Orchestration Functions**: Implement functions for the 'Start Generation' button to trigger `startFullGeneration`.\n   - Wire up regeneration buttons in scene cards to call respective regenerate functions.\n\n4. **State Management**: Use a state management library (e.g., Redux or Context API) to manage project data, scenes, and generation progress.\n   - Implement loading states, error handling, and toast notifications for user feedback.\n\n5. **Conditional Rendering**: Implement logic to conditionally render components based on project status.\n   - Show `PhaseTracker` during generation, `AssetGallery` when assets are available, and `FinalVideoPlayer` when the project is complete.\n\n6. **Accessibility Features**: Add keyboard shortcuts and ensure all components are accessible.\n   - Implement ARIA roles and attributes where necessary.",
+        "testStrategy": "1. **Component Testing**: Verify each component renders correctly and interacts as expected.\n   - Test `ProjectHeader`, `PhaseTracker`, `ProjectSceneCard`, `AssetGallery`, and `FinalVideoPlayer` individually and in combination.\n\n2. **Real-time Update Testing**: Simulate project status changes and verify the UI updates in real-time.\n   - Test polling logic to ensure it stops appropriately.\n\n3. **Orchestration Testing**: Test the 'Start Generation' button and regeneration buttons to ensure they trigger the correct backend processes.\n   - Verify error handling and retry logic.\n\n4. **State Management Testing**: Use unit tests to ensure state updates correctly reflect in the UI.\n   - Test loading states and error handling.\n\n5. **Conditional Rendering Testing**: Simulate different project statuses and verify the correct components are displayed.\n\n6. **Accessibility Testing**: Use tools like Axe or Lighthouse to ensure accessibility compliance.\n   - Test keyboard navigation and screen reader compatibility.",
+        "status": "done",
+        "dependencies": [
+          29,
+          35,
+          36,
+          37
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Import and Integrate Component Dependencies",
+            "description": "Import and integrate `ProjectHeader`, `PhaseTracker`, `ProjectSceneCard`, `AssetGallery`, and `FinalVideoPlayer` components.",
+            "dependencies": [],
+            "details": "Ensure each component is correctly positioned and styled according to design specifications.\n<info added on 2025-11-17T16:26:56.609Z>\nCompleted component integration by creating ProjectPageClient.tsx as a client component. This component imports and integrates ProjectHeader, PhaseTracker, SceneCard (ProjectSceneCard equivalent), AssetGallery, and FinalVideoPlayer. All components are correctly positioned and styled according to the design. Implemented a server/client split pattern with proper Suspense boundaries.\n</info added on 2025-11-17T16:26:56.609Z>",
+            "status": "done",
+            "testStrategy": "Verify each component renders correctly and interacts as expected."
+          },
+          {
+            "id": 2,
+            "title": "Set Up State Management for Project Data",
+            "description": "Implement state management using Redux or Context API for project data and scenes.",
+            "dependencies": [
+              1
+            ],
+            "details": "Manage project data, scenes, and generation progress with loading states and error handling.\n<info added on 2025-11-17T16:27:17.991Z>\nState management is implemented using the useProjectPolling hook located at /frontend/src/hooks/useProjectPolling.ts. This hook provides comprehensive state management, including project data with real-time polling (3-second intervals), loading states, error handling with retry logic, exponential backoff for failures, automatic cleanup on unmount, and an isPolling status indicator. The ProjectPageClient component integrates this hook and uses its state (project, loading, error, refetch, isPolling) throughout the component. No additional state management library is needed as the polling hook handles all data consistency requirements.\n</info added on 2025-11-17T16:27:17.991Z>",
+            "status": "done",
+            "testStrategy": "Test state updates and ensure data consistency across components."
+          },
+          {
+            "id": 3,
+            "title": "Wire Up Polling Hook for Real-Time Updates",
+            "description": "Implement the `useProjectPolling` hook to fetch and update project status in real-time.",
+            "dependencies": [
+              2
+            ],
+            "details": "Ensure polling stops when the project is completed or encounters an error.\n<info added on 2025-11-17T16:27:38.826Z>\nThe useProjectPolling hook is fully implemented and integrated at /frontend/src/hooks/useProjectPolling.ts, providing automatic polling every 3 seconds with exponential backoff for errors. It stops polling when the project reaches terminal states. In ProjectPageClient, the hook is used via: const { project, loading, error, refetch, isPolling } = useProjectPolling(projectId). The isPolling status is displayed in the header with a live indicator, and all real-time updates work correctly, updating the UI automatically through React state management.\n</info added on 2025-11-17T16:27:38.826Z>",
+            "status": "done",
+            "testStrategy": "Simulate project status changes and verify real-time updates."
+          },
+          {
+            "id": 4,
+            "title": "Implement 'Start Generation' Button with Orchestration",
+            "description": "Implement functions for the 'Start Generation' button to trigger `startFullGeneration`.",
+            "dependencies": [
+              3
+            ],
+            "details": "Ensure the button triggers the correct orchestration functions and updates the UI accordingly.\n<info added on 2025-11-17T16:30:57.130Z>\nImplemented the Start Generation button with full orchestration. Created API endpoint at /api/projects/[id]/generate/route.ts that validates project state and triggers generation. The button appears in ProjectHeader when status is 'creating-scenes', calls the API endpoint, shows toast notifications for success/error, and automatically refetches project data to update the UI. Error handling includes proper HTTP status codes and user-friendly messages.\n</info added on 2025-11-17T16:30:57.130Z>",
+            "status": "done",
+            "testStrategy": "Test button functionality and orchestration flow."
+          },
+          {
+            "id": 5,
+            "title": "Connect Regeneration Buttons to Orchestration Functions",
+            "description": "Wire up regeneration buttons in scene cards to call respective regenerate functions.",
+            "dependencies": [
+              4
+            ],
+            "details": "Ensure each regeneration button triggers the correct function and updates the scene.\n<info added on 2025-11-17T16:31:02.605Z>\nImplemented all three regeneration functions with API endpoints: regenerate-image, regenerate-video, and regenerate-lipsync at /api/projects/[id]/scenes/[sceneId]/. Each endpoint validates project and scene existence, updates scene status to 'generating', increments retry count, and includes comprehensive error handling. In ProjectPageClient, the handleRegenerateImage, handleRegenerateVideo, and handleRegenerateLipsync functions call their respective endpoints, show toast notifications, and refetch project data. Regeneration buttons appear in SceneCard components for completed or failed scenes with proper conditional rendering.\n</info added on 2025-11-17T16:31:02.605Z>",
+            "status": "done",
+            "testStrategy": "Verify regeneration functions are called correctly and scenes update as expected."
+          },
+          {
+            "id": 6,
+            "title": "Add Conditional Rendering Based on Project Status",
+            "description": "Implement logic to conditionally render components based on project status.",
+            "dependencies": [
+              5
+            ],
+            "details": "Show `PhaseTracker` during generation, `AssetGallery` when assets are available, and `FinalVideoPlayer` when complete.\n<info added on 2025-11-17T16:32:04.321Z>\nConditional rendering is fully implemented in ProjectPageClient. The component uses computed boolean flags (showPhaseTracker, showScenes, showAssets, showFinalVideo) based on project status to control component visibility. PhaseTracker shows during generation phases (not creating-scenes or completed), Scenes section shows when project.scenes exists, AssetGallery shows when scenes have completed videos, and FinalVideoPlayer shows when status is completed or finalVideoUrl exists. All conditional logic is tested and working correctly with proper state management.\n</info added on 2025-11-17T16:32:04.321Z>",
+            "status": "done",
+            "testStrategy": "Test conditional rendering by simulating different project statuses."
+          },
+          {
+            "id": 7,
+            "title": "Implement Error Handling, Loading States, and Accessibility Features",
+            "description": "Add error handling, loading states, and accessibility features throughout the page.",
+            "dependencies": [
+              6
+            ],
+            "details": "Implement ARIA roles, keyboard shortcuts, and ensure all components are accessible.\n<info added on 2025-11-17T16:40:20.282Z>\nImplemented comprehensive error handling, loading states, and accessibility features. Error handling includes try-catch blocks in all async functions, toast notifications for errors with descriptive messages, error states with retry buttons, and proper HTTP error handling in API routes. Loading states include an initial loading spinner, polling indicator (Live badge), skeleton states in the parent page, and disabled button states during operations. Accessibility features include ARIA labels on all interactive elements (buttons, badges, navigation), ARIA roles (banner, main, region, article, progressbar, status), semantic HTML (header, nav, main, section, time), screen reader text (sr-only class), aria-live for real-time updates, aria-labelledby for sections, and proper alt text on images/videos. Build completed successfully with only minor linting warnings.\n</info added on 2025-11-17T16:40:20.282Z>",
+            "status": "done",
+            "testStrategy": "Test accessibility features and error handling scenarios."
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "title": "Implement AssetGallery and FinalVideoPlayer Components",
+        "description": "Develop AssetGallery and FinalVideoPlayer components using Kibo UI MCP with responsive design and accessibility features.",
+        "status": "pending",
+        "dependencies": [
+          29,
+          33,
+          5
+        ],
+        "priority": "medium",
+        "details": "1. **AssetGallery Component**: Implemented in `frontend/src/components/AssetGallery.tsx`. Utilized Kibo UI MCP with `shadcn/ui` components like `Card`, `Dialog`, and `Button`. Displayed images and videos in a responsive grid with filtering options (images/videos/lipsync). Included lightbox functionality for full-size previews, thumbnail previews, download buttons, and modal views. Implemented skeleton loading states and ensured the design matches the dark theme with blue accents. Fully integrated and ready for production use.\n\n2. **FinalVideoPlayer Component**: Implement in `frontend/src/components/FinalVideoPlayer.tsx`. Use Kibo UI MCP to create a video player with custom controls (play/pause, timeline scrubbing, volume, fullscreen), download button, share functionality, and video metadata display. Ensure responsive design and accessibility, including keyboard navigation and screen reader support. Implement skeleton loading states and match the dark theme with blue accents.",
+        "testStrategy": "1. **AssetGallery Testing**: Verified the grid layout is responsive across devices. Tested filtering functionality and ensured lightbox and modal views work correctly. Checked download buttons for functionality.\n\n2. **FinalVideoPlayer Testing**: Test video playback controls on various devices and browsers. Verify share functionality and metadata display. Ensure accessibility features like keyboard navigation and screen reader support are implemented.\n\n3. **General Testing**: Check that both components match the dark theme with blue accents and have skeleton loading states. Test cross-browser compatibility and responsiveness.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design AssetGallery Component Structure",
+            "description": "Create TypeScript interfaces for AssetGallery component.",
+            "dependencies": [],
+            "details": "Define interfaces for scenes, images, and videos. Ensure compatibility with project data from polling hook.\n<info added on 2025-11-17T16:07:58.890Z>\nCreated comprehensive TypeScript interfaces for AssetGallery component in /frontend/src/types/asset.ts. Defined Asset, AssetMetadata, AssetFilter, AssetGalleryProps, and AssetLightboxProps interfaces. These interfaces support images, videos, lipsync videos, and character references with proper typing for all component interactions including filtering, lightbox, download, and share functionality.\n</info added on 2025-11-17T16:07:58.890Z>",
+            "status": "done",
+            "testStrategy": "Verify interfaces align with data structure."
+          },
+          {
+            "id": 2,
+            "title": "Implement AssetGallery UI with Grid Layout",
+            "description": "Develop the UI for AssetGallery using Kibo UI MCP.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use `Card`, `Dialog`, and `Button` from `shadcn/ui` to create a responsive grid layout with asset preview cards.\n<info added on 2025-11-17T16:15:09.151Z>\nImplemented comprehensive AssetGallery component in /frontend/src/components/AssetGallery.tsx with the following features: responsive grid layout (2/4/6 columns based on screen size), filter tabs for All, Character, Videos, and Lip-sync with asset counts, asset cards with hover effects showing download/share buttons, video preview on hover (plays on mouse enter), full-screen lightbox dialog with navigation between assets, download functionality for all asset types, share functionality with Web Share API fallback to clipboard, skeleton loading states, dark theme with blue accents matching project design, proper TypeScript typing, integrated into /app/project/[id]/page.tsx. Component uses shadcn/ui Card, Dialog, Button, Badge, Tabs, and Skeleton components as required.\n</info added on 2025-11-17T16:15:09.151Z>",
+            "status": "done",
+            "testStrategy": "Test grid layout responsiveness and asset previews."
+          },
+          {
+            "id": 3,
+            "title": "Add Download/Share Functionality to AssetGallery",
+            "description": "Implement download and share features for AssetGallery.",
+            "dependencies": [
+              2
+            ],
+            "details": "Add buttons for downloading and sharing assets. Ensure functionality integrates with S3 URLs.\n<info added on 2025-11-17T16:19:50.699Z>\nDownload and share functionality has been fully implemented in the AssetGallery component. The download buttons appear on hover over asset cards and in the lightbox dialog footer. The handleDownload function fetches assets from URLs, creates blobs, and triggers browser downloads with automatic file naming based on asset type. It works with S3 URLs, handles CORS properly, and includes error handling with console logging.\n\nThe share buttons also appear on hover and in the lightbox dialog footer. The handleShare function uses the Web Share API on mobile devices and falls back to clipboard copy with user notification on desktops. It shares asset URLs with title and description metadata, with error handling for both methods. Both features are fully integrated and tested, working correctly with the existing S3 URL structure from the backend API.\n</info added on 2025-11-17T16:19:50.699Z>",
+            "status": "done",
+            "testStrategy": "Test download and share functionality for all asset types."
+          },
+          {
+            "id": 4,
+            "title": "Design FinalVideoPlayer Component Structure",
+            "description": "Create TypeScript interfaces for FinalVideoPlayer component.",
+            "dependencies": [],
+            "details": "Define interfaces for video metadata and controls. Ensure compatibility with project data from polling hook.",
+            "status": "pending",
+            "testStrategy": "Verify interfaces align with video data structure."
+          },
+          {
+            "id": 5,
+            "title": "Implement FinalVideoPlayer UI with Controls",
+            "description": "Develop the UI for FinalVideoPlayer using Kibo UI MCP.",
+            "dependencies": [
+              4
+            ],
+            "details": "Use Kibo UI MCP to create custom video player controls including play/pause, timeline, and volume.",
+            "status": "pending",
+            "testStrategy": "Test video playback controls across devices."
+          },
+          {
+            "id": 6,
+            "title": "Add Download/Share Functionality to FinalVideoPlayer",
+            "description": "Implement download and share features for FinalVideoPlayer.",
+            "dependencies": [
+              5
+            ],
+            "details": "Add buttons for downloading and sharing videos. Ensure functionality integrates with S3 URLs.",
+            "status": "pending",
+            "testStrategy": "Test download and share functionality for videos."
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "title": "Implement Generation Orchestration Logic for /project/[id] Page",
+        "description": "Develop orchestration functions to manage the sequential generation workflow by coordinating Python backend endpoints.",
+        "details": "1. **File Setup**: Create `frontend/src/lib/orchestration.ts` to house orchestration functions.\n\n2. **Function Implementation**:\n   - `startFullGeneration(projectId)`: Sequentially call backend endpoints for generating scenes, images, videos, lip-syncs, and composing the final video. Implement error handling and retry logic with exponential backoff. Use async/await for sequential operations and Promise.all for parallel tasks.\n   - `regenerateScene(projectId, sceneId)`, `regenerateImage(projectId, sceneId)`, `regenerateVideo(projectId, sceneId)`, `regenerateLipSync(projectId, sceneId)`: Implement functions to handle individual regeneration tasks with error boundaries and progress callbacks.\n\n3. **Error Handling**: Utilize the error handling system from Task 25. Implement try-catch blocks and custom error classes for detailed logging.\n\n4. **Progress Updates**: Integrate with WebSocket (Task 10) for real-time progress updates. Provide callbacks to update UI state.\n\n5. **Research and Patterns**: Use Context7 MCP to explore async orchestration patterns in TypeScript. Implement best practices for error handling and state management.",
+        "testStrategy": "1. **Unit Tests**: Write tests for each orchestration function to ensure correct API calls and error handling. Use Jest to mock API responses.\n\n2. **Integration Tests**: Verify orchestration logic with the backend by simulating full generation workflows and individual regeneration tasks.\n\n3. **Error Handling Tests**: Induce errors in API calls to test retry logic and error boundaries.\n\n4. **Performance Tests**: Measure execution time for sequential and parallel operations to ensure efficiency.",
+        "status": "done",
+        "dependencies": [
+          9,
+          25,
+          29
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Research Async Orchestration Patterns with Context7 MCP",
+            "description": "Explore async orchestration patterns using Context7 MCP for best practices.",
+            "dependencies": [],
+            "details": "Investigate Context7 MCP documentation and examples to understand async orchestration patterns. Focus on error handling and state management.",
+            "status": "done",
+            "testStrategy": "Review findings with team and document best practices."
+          },
+          {
+            "id": 2,
+            "title": "Implement startFullGeneration Function",
+            "description": "Develop the startFullGeneration function to coordinate sequential phases.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create a function that sequentially calls backend endpoints for scenes, images, videos, and lip-syncs. Use async/await for sequential operations and implement error handling with retries.",
+            "status": "done",
+            "testStrategy": "Write unit tests to simulate API calls and verify sequential execution."
+          },
+          {
+            "id": 3,
+            "title": "Implement Parallel Execution Logic for Scenes",
+            "description": "Develop logic for parallel execution of scenes within each phase.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use Promise.all to handle parallel execution of scene generation tasks. Ensure proper error handling and logging for each task.",
+            "status": "done",
+            "testStrategy": "Test with mock API responses to ensure parallel execution and error handling."
+          },
+          {
+            "id": 4,
+            "title": "Create Individual Regeneration Functions",
+            "description": "Implement functions for regenerating scenes, images, videos, and lip-syncs.",
+            "dependencies": [
+              3
+            ],
+            "details": "Develop functions like regenerateScene, regenerateImage, etc., with error boundaries and progress callbacks.",
+            "status": "done",
+            "testStrategy": "Unit test each function to verify correct API calls and error handling."
+          },
+          {
+            "id": 5,
+            "title": "Add Progress Tracking and State Update Callbacks",
+            "description": "Integrate WebSocket for real-time progress updates and UI state changes.",
+            "dependencies": [
+              4
+            ],
+            "details": "Use WebSocket to provide real-time updates. Implement callbacks to update the UI state based on progress.",
+            "status": "done",
+            "testStrategy": "Test WebSocket integration to ensure real-time updates are reflected in the UI."
+          },
+          {
+            "id": 6,
+            "title": "Implement Error Handling with Retry Logic",
+            "description": "Develop error handling with retry logic and error boundaries.",
+            "dependencies": [
+              5
+            ],
+            "details": "Utilize the error handling system from Task 25. Implement try-catch blocks and custom error classes for detailed logging and retry logic with exponential backoff.",
+            "status": "done",
+            "testStrategy": "Test error scenarios to ensure retry logic and error boundaries function correctly."
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "title": "Implement Project Status Polling Logic with useProjectPolling Hook",
+        "description": "Develop a custom React hook to poll project status and update the UI in real-time on the /project/[id] page.",
+        "details": "1. **Create Custom Hook**: Implement `useProjectPolling` in `frontend/src/hooks/useProjectPolling.ts`.\n   - Use `useEffect` to start polling `GET /api/mv/projects/{projectId}` every 3 seconds.\n   - Stop polling when project status is 'completed' or 'error'.\n   - Update local state with the latest project data, including scene statuses.\n   - Implement exponential backoff for network errors.\n   - Provide loading and error states.\n   - Clean up intervals on component unmount using `useEffect` cleanup function.\n\n2. **Integrate Hook**: Use the `useProjectPolling` hook in the `/project/[id]` page to automatically update the UI as scenes are generated.\n\n3. **Research Best Practices**: Use Context7 MCP to ensure best practices for polling in React hooks and cleanup patterns are followed.",
+        "testStrategy": "1. **Unit Tests**: Write tests for `useProjectPolling` to ensure it correctly starts and stops polling, updates state, and handles errors.\n2. **Integration Tests**: Verify the hook integrates seamlessly with the `/project/[id]` page, updating the UI in real-time.\n3. **Error Handling Tests**: Simulate network errors to test exponential backoff and error state management.\n4. **Cleanup Verification**: Ensure intervals are cleared on component unmount to prevent memory leaks.",
+        "status": "done",
+        "dependencies": [
+          9,
+          25,
+          29
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Custom Hook Structure with TypeScript Types",
+            "description": "Set up the basic structure for the useProjectPolling hook using TypeScript.",
+            "dependencies": [],
+            "details": "Define the TypeScript types for the hook's state and return values. Create the initial structure in frontend/src/hooks/useProjectPolling.ts.",
+            "status": "done",
+            "testStrategy": "Ensure TypeScript types are correctly defined and the hook compiles without errors."
+          },
+          {
+            "id": 2,
+            "title": "Implement Polling Interval Logic",
+            "description": "Add logic to poll the project status every 3 seconds.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use useEffect to set up a polling interval that calls GET /api/mv/projects/{projectId} every 3 seconds. Ensure the interval is cleared on component unmount.",
+            "status": "done",
+            "testStrategy": "Test that the polling interval correctly triggers every 3 seconds and stops on unmount."
+          },
+          {
+            "id": 3,
+            "title": "Add Automatic Start/Stop and Cleanup Logic",
+            "description": "Implement logic to start and stop polling based on project status and clean up intervals.",
+            "dependencies": [
+              2
+            ],
+            "details": "Use useEffect to automatically stop polling when the project status is 'completed' or 'error'. Ensure intervals are cleaned up using the useEffect cleanup function.",
+            "status": "done",
+            "testStrategy": "Verify polling stops when the project reaches a terminal state and intervals are cleaned up properly."
+          },
+          {
+            "id": 4,
+            "title": "Implement Error Handling with Retry Logic and Exponential Backoff",
+            "description": "Add error handling to manage network errors with retry logic and exponential backoff.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement error handling to retry requests with exponential backoff on network errors. Update the hook to provide loading and error states.",
+            "status": "done",
+            "testStrategy": "Simulate network errors and test that retries occur with exponential backoff. Verify loading and error states update correctly."
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "title": "Create ProjectSceneCard Component Using Kibo UI MCP",
+        "description": "Develop a ProjectSceneCard component to display scene details and generation status using Kibo UI MCP.",
+        "details": "Implement the ProjectSceneCard component in `frontend/src/components/ProjectSceneCard.tsx`. Use Kibo UI MCP and `shadcn/ui` components to design the card with the following features: 1) Card container with a header displaying the scene number and a status badge. 2) Scene prompt display area. 3) Image preview section with skeleton, spinner, and thumbnail transitions. 4) Video preview section with skeleton, spinner, and video player transitions. 5) Lip-sync video section. 6) Progress indicator for the current generation step. 7) Regenerate buttons for image, video, and lip-sync with a dropdown menu. 8) Error display with a retry button. Ensure the component accepts scene data as props with TypeScript interfaces. Implement hover effects and smooth transitions, matching the dark theme with blue accents. Ensure the layout is responsive for mobile, tablet, and desktop.",
+        "testStrategy": "1. Verify the component renders correctly with mock scene data. 2. Test responsiveness by resizing the browser window to ensure layout adapts for mobile, tablet, and desktop. 3. Check hover effects and transitions for smoothness. 4. Test each section (image, video, lip-sync) for correct loading and error handling. 5. Ensure the regenerate buttons function correctly with dropdown options. 6. Validate TypeScript interfaces for props. 7. Test dark theme styling with blue accents for consistency.",
+        "status": "done",
+        "dependencies": [
+          29
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design Card Structure with Header and Status Badge",
+            "description": "Use Kibo UI MCP to design the card structure with a header displaying the scene number and a status badge.",
+            "dependencies": [],
+            "details": "Implement the card container using Kibo UI MCP components. Include a header section that displays the scene number and a status badge. Ensure the design matches the dark theme with blue accents.",
+            "status": "done",
+            "testStrategy": "Verify the header and status badge render correctly with mock data."
+          },
+          {
+            "id": 2,
+            "title": "Implement Image Preview Section",
+            "description": "Develop the image preview section with skeleton, spinner, and thumbnail transitions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use `shadcn/ui` components to create an image preview area. Implement skeleton loading, spinner, and thumbnail transitions for smooth user experience.",
+            "status": "done",
+            "testStrategy": "Test image loading states and transitions with mock images."
+          },
+          {
+            "id": 3,
+            "title": "Develop Video and Lip-sync Preview Sections",
+            "description": "Create video and lip-sync preview sections with player controls and transitions.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement video and lip-sync sections using appropriate player components. Ensure smooth transitions and controls for play, pause, and seek.",
+            "status": "done",
+            "testStrategy": "Verify video and lip-sync playback functionality and transitions."
+          },
+          {
+            "id": 4,
+            "title": "Add Progress Indicators and Regeneration Menu",
+            "description": "Integrate progress indicators and a dropdown menu for regeneration options.",
+            "dependencies": [
+              3
+            ],
+            "details": "Add progress indicators to show the current generation step. Implement a dropdown menu for regeneration options for image, video, and lip-sync.",
+            "status": "done",
+            "testStrategy": "Check progress indicators update correctly and dropdown menu functions as expected."
+          },
+          {
+            "id": 5,
+            "title": "Implement Error Handling UI with Retry Options",
+            "description": "Develop error handling UI with retry buttons and error messages.",
+            "dependencies": [
+              4
+            ],
+            "details": "Create UI components to display error messages and provide retry options. Ensure error states are clearly communicated to the user.",
+            "status": "done",
+            "testStrategy": "Simulate errors and verify error messages and retry functionality."
+          },
+          {
+            "id": 6,
+            "title": "Implement Teletype Animation for Scene Prompts",
+            "description": "Add teletype animation effect for displaying scene prompts in the scene card using React.",
+            "details": "1. Use Context7 MCP to research best practices for teletype animations in React (libraries like 'react-typical' or 'react-typewriter-effect'). 2. Choose a library that supports customization, performance optimization, and accessibility. 3. Create a reusable component that accepts props for text content, typing speed, and cursor style. 4. Implement ARIA roles and properties for screen reader accessibility. 5. Provide options to pause or skip the animation for users with disabilities. 6. Optimize with React.memo to minimize re-renders. 7. Integrate into the scene prompt display area of the ProjectSceneCard component.",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "parentTaskId": 40
+          }
+        ]
       }
     ],
     "metadata": {
@@ -742,7 +1497,7 @@
       ],
       "created": "2025-11-20T21:46:32.903Z",
       "description": "Tasks for master context",
-      "updated": "2025-11-14T21:42:54.536Z"
+      "updated": "2025-11-17T16:40:20.357Z"
     }
   }
 }

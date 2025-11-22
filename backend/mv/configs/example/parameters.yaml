@@ -1,0 +1,6 @@
+# Example flavor - Modified parameters for testing config flavors
+character_characteristics: "comedic, energetic, quirky, and adventurous"
+video_type: "short film"
+video_characteristics: "dramatic, moody, film noir, black and white aesthetic"
+camera_angle: "wide"
+number_of_scenes: 6

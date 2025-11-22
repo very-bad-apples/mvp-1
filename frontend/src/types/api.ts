@@ -57,7 +57,7 @@ export interface GenerateCharacterReferenceRequest {
 export interface CharacterReferenceImage {
   id: string
   path: string
-  cloud_url: string | null
+  cloud_url?: string | null
 }
 
 export interface GenerateCharacterReferenceResponse {
@@ -70,6 +70,17 @@ export interface GenerateCharacterReferenceResponse {
     parameters_used: Record<string, any>
     generation_timestamp: string
   }
+}
+
+/**
+ * Upload character reference image response
+ */
+export interface UploadCharacterReferenceResponse {
+  image_id: string
+  image_url?: string | null
+  filename?: string | null
+  content_type?: string | null
+  file_size?: number
 }
 
 /**

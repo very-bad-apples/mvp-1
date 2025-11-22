@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import {
   Video,
   ChevronLeft,
@@ -69,6 +71,7 @@ interface QuickJobData {
   audioId?: string
   audioUrl?: string
   audioTitle?: string
+  configFlavor?: string
 }
 
 interface Scene {
@@ -124,6 +127,12 @@ export default function QuickGenPage() {
   // Input data collapse state
   const [isInputDataExpanded, setIsInputDataExpanded] = useState(true)
 
+  // Config flavor state
+  const [isConfigExpanded, setIsConfigExpanded] = useState(false)
+  const [configFlavor, setConfigFlavor] = useState<string>('default')
+  const [availableFlavors, setAvailableFlavors] = useState<string[]>(['default'])
+  const [isFetchingFlavors, setIsFetchingFlavors] = useState(false)
+
   // Character reference image state
   const [characterImageUrl, setCharacterImageUrl] = useState<string | null>(null)
   const [characterImageLoading, setCharacterImageLoading] = useState(false)
@@ -134,12 +143,43 @@ export default function QuickGenPage() {
   const [stitchedVideo, setStitchedVideo] = useState<StitchedVideo | null>(null)
   const [stitchingError, setStitchingError] = useState<string | null>(null)
   const [estimatedStitchTime, setEstimatedStitchTime] = useState(0)
+  const [isRestitching, setIsRestitching] = useState(false)
   const hasStartedStitchingRef = useRef(false)
   const stitchedVideoRef = useRef<HTMLDivElement>(null)
 
   // Teletype animation state
   const [teletypeStates, setTeletypeStates] = useState<{ [key: number]: string }>({})
   const teletypeTimersRef = useRef<{ [key: number]: NodeJS.Timeout }>({})
+
+  // Lipsync state
+  const [lipsyncEnabled, setLipsyncEnabled] = useState<{ [key: number]: boolean }>({})
+  const [lipsyncProcessing, setLipsyncProcessing] = useState<{ [key: number]: boolean }>({})
+  const [lipsyncError, setLipsyncError] = useState<{ [key: number]: string | null }>({})
+
+  // Fetch available config flavors on mount
+  useEffect(() => {
+    const fetchConfigFlavors = async () => {
+      setIsFetchingFlavors(true)
+      try {
+        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
+          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.flavors && Array.isArray(data.flavors)) {
+            setAvailableFlavors(data.flavors)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch config flavors:', error)
+        // Keep default fallback
+      } finally {
+        setIsFetchingFlavors(false)
+      }
+    }
+
+    fetchConfigFlavors()
+  }, [])
 
   // Load job data from sessionStorage
   useEffect(() => {
@@ -154,7 +194,12 @@ export default function QuickGenPage() {
           audioId: parsed.audioId || undefined,
           audioUrl: parsed.audioUrl || undefined,
           audioTitle: parsed.audioTitle || undefined,
+          configFlavor: parsed.configFlavor,
         })
+        // Initialize configFlavor from sessionStorage
+        if (parsed.configFlavor) {
+          setConfigFlavor(parsed.configFlavor)
+        }
       } catch (error) {
         console.error('Failed to parse quickJobData from sessionStorage:', error)
       }
@@ -168,7 +213,11 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`)
+        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false&api_key=${API_KEY}`, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+        })
 
         if (!response.ok) {
           throw new Error(`Failed to fetch image ${imageId}`)
@@ -197,15 +246,20 @@ export default function QuickGenPage() {
 
     if (jobData.characterReferenceImageId) {
       fetchCharacterImage(jobData.characterReferenceImageId)
+    } else {
+      // Clear image URL if no reference image ID
+      setCharacterImageUrl(null)
     }
+  }, [jobData.characterReferenceImageId])
 
-    // Cleanup function to revoke object URLs
+  // Cleanup effect for character image object URLs
+  useEffect(() => {
     return () => {
       if (characterImageUrl && characterImageUrl.startsWith('blob:')) {
         URL.revokeObjectURL(characterImageUrl)
       }
     }
-  }, [jobData.characterReferenceImageId])
+  }, [characterImageUrl])
 
   // Initialize placeholder cards and start scene generation
   useEffect(() => {
@@ -235,6 +289,7 @@ export default function QuickGenPage() {
 
     // Start scene generation
     generateScenes()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobData])
 
   // Start video generation when all scenes are ready
@@ -248,6 +303,7 @@ export default function QuickGenPage() {
       hasStartedVideoGenRef.current = true
       generateVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates])
 
   // Start video stitching when all videos complete
@@ -269,6 +325,7 @@ export default function QuickGenPage() {
       hasStartedStitchingRef.current = true
       stitchVideos()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneVideoStates, stitchingStatus])
 
   // Auto-scroll to stitched video when completed
@@ -293,9 +350,9 @@ export default function QuickGenPage() {
         setIsInputDataExpanded(false)
       }, 500)
     }
-  }, [sceneVideoStates])
+  }, [sceneVideoStates, isInputDataExpanded])
 
-  const generateScenes = async () => {
+  const generateScenes = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/create_scenes`, {
         method: 'POST',
@@ -305,6 +362,7 @@ export default function QuickGenPage() {
         body: JSON.stringify({
           idea: jobData.videoDescription,
           character_description: jobData.characterDescription,
+          config_flavor: configFlavor,
         }),
       })
 
@@ -347,7 +405,7 @@ export default function QuickGenPage() {
         }))
       )
     }
-  }
+  }, [jobData.videoDescription, jobData.characterDescription, configFlavor])
 
   const startTeletypeAnimations = (scenes: Scene[]) => {
     // Calculate total characters across all scenes
@@ -391,38 +449,36 @@ export default function QuickGenPage() {
     }))
   }
 
-  const generateVideos = async () => {
-    // Set all videos to loading
-    setSceneVideoStates(prev =>
-      prev.map(s => ({
-        ...s,
-        video: { ...s.video, status: 'loading' },
-      }))
-    )
-
-    // Generate videos in parallel
-    const videoPromises = sceneVideoStates.map((state) =>
-      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
-    )
-
-    await Promise.allSettled(videoPromises)
-  }
-
-  const generateSingleVideo = async (
+  const generateSingleVideo = useCallback(async (
     prompt: string,
     negativePrompt: string,
     sceneIndex: number
   ) => {
     try {
-      const response = await fetch(`${API_BASE}/generate_video`, {
+      // Build request body, conditionally including character_reference_id only if it's a non-empty string
+      const requestBody: {
+        prompt: string
+        negative_prompt: string
+        character_reference_id?: string
+        config_flavor: string
+      } = {
+        prompt,
+        negative_prompt: negativePrompt,
+        config_flavor: configFlavor,
+      }
+
+      // Only include character_reference_id if it's a valid non-empty string
+      if (jobData.characterReferenceImageId && jobData.characterReferenceImageId.trim()) {
+        requestBody.character_reference_id = jobData.characterReferenceImageId.trim()
+        console.log(`[Scene ${sceneIndex + 1}] Using character reference image: ${requestBody.character_reference_id}`)
+      }
+
+      const response = await fetch(`${API_URL}/api/mv/generate_video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          negative_prompt: negativePrompt,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -467,7 +523,24 @@ export default function QuickGenPage() {
         )
       )
     }
-  }
+  }, [jobData.characterReferenceImageId, configFlavor])
+
+  const generateVideos = useCallback(async () => {
+    // Set all videos to loading
+    setSceneVideoStates(prev =>
+      prev.map(s => ({
+        ...s,
+        video: { ...s.video, status: 'loading' },
+      }))
+    )
+
+    // Generate videos in parallel
+    const videoPromises = sceneVideoStates.map((state) =>
+      generateSingleVideo(state.scene.description, state.scene.negative_description, state.sceneIndex)
+    )
+
+    await Promise.allSettled(videoPromises)
+  }, [sceneVideoStates, generateSingleVideo])
 
   const regenerateScene = async (sceneIndex: number) => {
     // Set scene to loading
@@ -491,6 +564,7 @@ export default function QuickGenPage() {
         body: JSON.stringify({
           idea: jobData.videoDescription,
           character_description: jobData.characterDescription,
+          config_flavor: configFlavor,
         }),
       })
 
@@ -548,6 +622,12 @@ export default function QuickGenPage() {
     const state = sceneVideoStates[sceneIndex]
     if (!state) return
 
+    // Check if lipsync is enabled for this scene
+    if (lipsyncEnabled[sceneIndex] && jobData.audioId) {
+      await regenerateVideoWithLipsync(sceneIndex)
+      return
+    }
+
     // Set video to loading
     setSceneVideoStates(prev =>
       prev.map(s =>
@@ -566,6 +646,123 @@ export default function QuickGenPage() {
       state.scene.negative_description,
       sceneIndex
     )
+  }
+
+  const regenerateVideoWithLipsync = async (sceneIndex: number) => {
+    const state = sceneVideoStates[sceneIndex]
+    if (!state || !state.video.videoId || !jobData.audioId) return
+
+    // Set lipsync processing state
+    setLipsyncProcessing(prev => ({ ...prev, [sceneIndex]: true }))
+    setLipsyncError(prev => ({ ...prev, [sceneIndex]: null }))
+
+    try {
+      // Calculate start and end time based on scene position (8 seconds per clip)
+      const startTime = sceneIndex * 8
+      const endTime = startTime + 8
+
+      const response = await fetch(`${API_URL}/api/mv/lipsync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          video_id: state.video.videoId,
+          audio_id: jobData.audioId,
+          start_time: startTime,
+          end_time: endTime,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.detail?.message || `Lipsync failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      // Update the video with the new lipsynced version
+      setSceneVideoStates(prev =>
+        prev.map(s =>
+          s.sceneIndex === sceneIndex
+            ? {
+                ...s,
+                video: {
+                  ...s.video,
+                  videoId: data.video_id,
+                  videoUrl: resolveVideoUrl(data.video_url),
+                },
+              }
+            : s
+        )
+      )
+
+      // Auto-trigger re-stitch with updated videos
+      await autoRestitch()
+
+    } catch (error) {
+      console.error('Lipsync error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to apply lipsync'
+      setLipsyncError(prev => ({ ...prev, [sceneIndex]: errorMessage }))
+    } finally {
+      setLipsyncProcessing(prev => ({ ...prev, [sceneIndex]: false }))
+    }
+  }
+
+  const autoRestitch = async () => {
+    // Collect all current video IDs
+    const videoIds = sceneVideoStates
+      .filter(state => state.video.videoId)
+      .map(state => state.video.videoId as string)
+
+    if (videoIds.length === 0) return
+
+    setIsRestitching(true)
+
+    try {
+      // Build request body with optional audio parameters
+      const requestBody: {
+        video_ids: string[]
+        audio_overlay_id?: string
+        suppress_video_audio?: boolean
+      } = {
+        video_ids: videoIds,
+      }
+
+      // Add audio overlay parameters if audio is available
+      if (jobData.audioId) {
+        requestBody.audio_overlay_id = jobData.audioId
+        requestBody.suppress_video_audio = true
+      }
+
+      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Re-stitch failed: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      // Update stitched video
+      setStitchedVideo({
+        videoId: data.video_id,
+        videoUrl: resolveVideoUrl(data.video_url),
+        metadata: data.metadata,
+      })
+    } catch (error) {
+      console.error('Auto re-stitch error:', error)
+      // Don't show error to user for auto-restitch, they can manually restitch if needed
+    } finally {
+      setIsRestitching(false)
+    }
   }
 
   const startEditingScene = (sceneIndex: number) => {
@@ -639,7 +836,7 @@ export default function QuickGenPage() {
     )
   }
 
-  const stitchVideos = async () => {
+  const stitchVideos = useCallback(async () => {
     const successfulVideoIds = sceneVideoStates
       .filter(s => s.video.status === 'completed' && s.video.videoId)
       .sort((a, b) => a.sceneIndex - b.sceneIndex)
@@ -700,7 +897,7 @@ export default function QuickGenPage() {
       setStitchingStatus('error')
       console.error('Video stitching error:', err)
     }
-  }
+  }, [sceneVideoStates, jobData.audioId])
 
   const retryStitching = () => {
     hasStartedStitchingRef.current = false
@@ -749,6 +946,58 @@ export default function QuickGenPage() {
           </div>
 
           <div className="space-y-6">
+            {/* Configuration Card - Collapsible */}
+            <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
+              <CardHeader className="cursor-pointer" onClick={() => setIsConfigExpanded(!isConfigExpanded)}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white">Configuration</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Adjust generation settings
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+                    {isConfigExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </Button>
+                </div>
+              </CardHeader>
+              {isConfigExpanded && (
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quick-config-flavor" className="text-sm font-medium text-white">
+                      Config Flavor
+                    </Label>
+                    <Select
+                      value={configFlavor}
+                      onValueChange={setConfigFlavor}
+                      disabled={isFetchingFlavors}
+                    >
+                      <SelectTrigger
+                        id="quick-config-flavor"
+                        className="w-full bg-gray-800 border-gray-600 text-white"
+                      >
+                        <SelectValue placeholder={isFetchingFlavors ? "Loading..." : "Select flavor"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-800 border-gray-600">
+                        {availableFlavors.map((flavor) => (
+                          <SelectItem
+                            key={flavor}
+                            value={flavor}
+                            className="text-white hover:bg-gray-700"
+                          >
+                            {flavor}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-400">
+                      Config flavor affects prompts and generation parameters
+                    </p>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
             {/* Input Data Card - Collapsible */}
             <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
               <CardHeader className="cursor-pointer" onClick={() => setIsInputDataExpanded(!isInputDataExpanded)}>
@@ -825,6 +1074,18 @@ export default function QuickGenPage() {
                       </div>
                     </div>
 
+                    {/* Config Flavor Display */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-400">
+                        Config Flavor
+                      </label>
+                      <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                        <p className="text-white text-sm">
+                          {jobData.configFlavor || configFlavor || 'default'}
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Audio Track Section */}
                     {jobData.audioId && (
                       <div>
@@ -841,7 +1102,7 @@ export default function QuickGenPage() {
                           )}
                           <audio
                             controls
-                            src={`/api/audio/get/${jobData.audioId}`}
+                            src={`${API_URL}/api/audio/get/${jobData.audioId}?api_key=${API_KEY}`}
                             className="w-full h-10"
                           />
                           <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>
@@ -892,6 +1153,10 @@ export default function QuickGenPage() {
                     onSaveEditing={() => saveEditedScene(state.sceneIndex)}
                     onCancelEditing={() => cancelEditingScene(state.sceneIndex)}
                     onUpdateEditing={(value) => updateEditedDescription(state.sceneIndex, value)}
+                    lipsyncEnabled={lipsyncEnabled[state.sceneIndex] || false}
+                    lipsyncProcessing={lipsyncProcessing[state.sceneIndex] || false}
+                    lipsyncError={lipsyncError[state.sceneIndex] || null}
+                    onToggleLipsync={() => setLipsyncEnabled(prev => ({ ...prev, [state.sceneIndex]: !prev[state.sceneIndex] }))}
                   />
                 ))}
               </div>
@@ -983,6 +1248,29 @@ export default function QuickGenPage() {
                             )}
                           </div>
                         )}
+
+                        {/* Re-stitch button */}
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => autoRestitch()}
+                            variant="outline"
+                            size="sm"
+                            disabled={isRestitching}
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50"
+                          >
+                            {isRestitching ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Re-stitching...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="mr-2 h-3 w-3" />
+                                Re-stitch with current clips
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
 
@@ -1037,6 +1325,10 @@ interface SceneVideoCardProps {
   onSaveEditing: () => void
   onCancelEditing: () => void
   onUpdateEditing: (value: string) => void
+  lipsyncEnabled: boolean
+  lipsyncProcessing: boolean
+  lipsyncError: string | null
+  onToggleLipsync: () => void
 }
 
 function SceneVideoCard({
@@ -1050,6 +1342,10 @@ function SceneVideoCard({
   onSaveEditing,
   onCancelEditing,
   onUpdateEditing,
+  lipsyncEnabled,
+  lipsyncProcessing,
+  lipsyncError,
+  onToggleLipsync,
 }: SceneVideoCardProps) {
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false)
   const [sceneSnippetIndex, setSceneSnippetIndex] = useState(0)
@@ -1229,17 +1525,59 @@ function SceneVideoCard({
               <div className="flex items-center justify-between">
                 <label className="text-sm font-semibold text-gray-300">Video Clip</label>
                 {state.video.status === 'completed' && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={onRegenerateVideo}
-                    className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Regenerate
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    {/* Lipsync checkbox - only show if audio is available */}
+                    {jobData.audioId && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`lipsync-${state.sceneIndex}`}
+                          checked={lipsyncEnabled}
+                          onChange={onToggleLipsync}
+                          disabled={lipsyncProcessing}
+                          className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 disabled:opacity-50"
+                        />
+                        <label
+                          htmlFor={`lipsync-${state.sceneIndex}`}
+                          className="text-xs text-gray-400 cursor-pointer select-none"
+                        >
+                          with lipsync
+                        </label>
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onRegenerateVideo}
+                      disabled={lipsyncProcessing}
+                      className="border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3 w-3 mr-1 ${lipsyncProcessing ? 'animate-spin' : ''}`} />
+                      {lipsyncEnabled && jobData.audioId ? 'Regenerate with lipsync' : 'Regenerate'}
+                    </Button>
+                  </div>
                 )}
               </div>
+
+              {/* Lipsync processing status */}
+              {lipsyncProcessing && (
+                <Alert className="bg-blue-950/50 border-blue-900">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <AlertDescription className="text-blue-300">
+                    Applying lipsync to video...
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Lipsync error */}
+              {lipsyncError && (
+                <Alert variant="destructive" className="bg-red-950/50 border-red-900">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-red-300">
+                    {lipsyncError}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Video Idle State */}
               {state.video.status === 'idle' && (

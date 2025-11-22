@@ -5,6 +5,8 @@ Implements CRUD endpoints for project management with DynamoDB.
 """
 
 import uuid
+import os
+import asyncio
 import structlog
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -23,7 +25,10 @@ from mv_schemas import (
 from mv_models import (
     MVProjectItem,
     create_project_metadata,
+    create_scene_item,
 )
+from mv.scene_generator import generate_scenes, generate_scenes_legacy
+from mv.video_generator import generate_video
 from services.s3_storage import (
     get_s3_storage_service,
     generate_s3_key,
@@ -36,6 +41,421 @@ import json
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/mv", tags=["MV Projects"])
+
+
+async def generate_scenes_and_videos_background(
+    project_id: str,
+    concept_prompt: str,
+    character_description: str,
+    character_image_s3_key: Optional[str] = None
+):
+    """
+    Background task to generate scenes and then videos for a project.
+    
+    This function:
+    1. Generates scene descriptions using Gemini (may take 10-30+ seconds)
+    2. Creates scene records in DynamoDB
+    3. Triggers video generation for each scene
+    """
+    try:
+        # Retrieve director config and mode from project metadata
+        pk = f"PROJECT#{project_id}"
+        director_config = None
+        project_mode = None
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+            director_config = project_item.directorConfig  # May be None
+            project_mode = project_item.mode  # May be None
+        except DoesNotExist:
+            logger.warning(
+                "project_not_found_for_director_config",
+                project_id=project_id
+            )
+            # Continue without director config (graceful fallback)
+
+        logger.info(
+            "background_scene_generation_started",
+            project_id=project_id,
+            director_config=director_config,
+            project_mode=project_mode
+        )
+
+        # Generate scenes using new simplified API or legacy fallback
+        if project_mode and project_mode in ["music-video", "ad-creative"]:
+            # Use new mode-based template system
+            logger.info(
+                "using_new_scene_generator",
+                project_id=project_id,
+                mode=project_mode
+            )
+            scenes, _output_files = generate_scenes(
+                mode=project_mode,
+                concept_prompt=concept_prompt,
+                personality_profile=character_description,
+                director_config=director_config,
+            )
+        else:
+            # Fallback to legacy generator for projects without mode (backward compatibility)
+            logger.warning(
+                "using_legacy_scene_generator",
+                project_id=project_id,
+                project_mode=project_mode,
+                reason="Mode not set or invalid, using legacy generator"
+            )
+            scenes, _output_files = generate_scenes_legacy(
+                idea=concept_prompt,
+                character_description=character_description,
+                number_of_scenes=None,  # Will use default from config
+                director_config=director_config,
+                project_mode=project_mode,  # May be None
+            )
+
+        # Validate scenes were generated
+        if not scenes or len(scenes) == 0:
+            logger.error("no_scenes_generated", project_id=project_id)
+            pk = f"PROJECT#{project_id}"
+            try:
+                project_item = MVProjectItem.get(pk, "METADATA")
+                project_item.status = "failed"
+                project_item.GSI1PK = "failed"
+                project_item.updatedAt = datetime.now(timezone.utc)
+                project_item.save()
+            except DoesNotExist:
+                logger.error("project_not_found_for_failure_status", project_id=project_id)
+            return
+
+        # Create scene items in DynamoDB
+        scenes_created = 0
+        reference_image_s3_keys = []
+        if character_image_s3_key:
+            reference_image_s3_keys = [character_image_s3_key]
+
+        for i, scene_data in enumerate(scenes, start=1):
+            scene_item = create_scene_item(
+                project_id=project_id,
+                sequence=i,
+                prompt=scene_data.description,
+                negative_prompt=scene_data.negative_description,
+                duration=8.0,  # Default duration
+                needs_lipsync=True,  # TODO: Determine based on mode
+                reference_image_s3_keys=reference_image_s3_keys
+            )
+
+            try:
+                scene_item.save()
+                scenes_created += 1
+                logger.info(
+                    "scene_created",
+                    project_id=project_id,
+                    sequence=i
+                )
+            except PutError as e:
+                logger.error(
+                    "scene_save_failed",
+                    project_id=project_id,
+                    sequence=i,
+                    error=str(e)
+                )
+                # Continue with other scenes even if one fails
+
+        # Update project with scene count
+        pk = f"PROJECT#{project_id}"
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+            project_item.sceneCount = scenes_created
+            project_item.updatedAt = datetime.now(timezone.utc)
+            project_item.save()
+        except DoesNotExist:
+            logger.error("project_not_found_for_scene_count_update", project_id=project_id)
+
+        logger.info(
+            "scenes_created",
+            project_id=project_id,
+            scenes_created=scenes_created
+        )
+
+        # Extract character reference ID from S3 key if available
+        character_reference_id = None
+        if character_image_s3_key:
+            # Extract UUID from S3 key (format: character_references/{uuid}.{ext})
+            try:
+                parts = character_image_s3_key.split('/')
+                if len(parts) >= 2 and parts[-2] == 'character_references':
+                    character_reference_id = parts[-1].split('.')[0]  # Remove extension
+            except Exception:
+                pass  # If extraction fails, character_reference_id stays None
+
+        # Start background tasks for video generation
+        for i, scene_data in enumerate(scenes[:scenes_created], start=1):
+            sequence_num = i  # Capture in local variable to avoid closure issue
+            task = asyncio.create_task(
+                generate_scene_video_background(
+                    project_id=project_id,
+                    sequence=sequence_num,
+                    prompt=scene_data.description,
+                    negative_prompt=scene_data.negative_description,
+                    character_reference_id=character_reference_id,
+                    duration=8.0
+                )
+            )
+            # Add error callback to log any unhandled exceptions
+            def task_done_callback(t, seq=sequence_num, proj_id=project_id):
+                try:
+                    t.result()  # This will raise if task had an exception
+                except Exception as e:
+                    logger.error(
+                        "video_generation_task_failed",
+                        project_id=proj_id,
+                        sequence=seq,
+                        error=str(e),
+                        exc_info=True
+                    )
+            task.add_done_callback(task_done_callback)
+            logger.info(
+                "video_generation_queued",
+                project_id=project_id,
+                sequence=sequence_num
+            )
+
+    except Exception as e:
+        logger.error(
+            "background_scene_generation_failed",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        # Mark project as failed
+        try:
+            pk = f"PROJECT#{project_id}"
+            project_item = MVProjectItem.get(pk, "METADATA")
+            project_item.status = "failed"
+            project_item.GSI1PK = "failed"
+            project_item.updatedAt = datetime.now(timezone.utc)
+            project_item.save()
+        except Exception as update_error:
+            logger.error(
+                "failed_to_update_project_status_on_error",
+                project_id=project_id,
+                error=str(update_error),
+                exc_info=True
+            )
+
+
+async def generate_scene_video_background(
+    project_id: str,
+    sequence: int,
+    prompt: str,
+    negative_prompt: Optional[str],
+    character_reference_id: Optional[str] = None,
+    duration: float = 8.0
+):
+    """
+    Background task to generate video for a single scene.
+    
+    This function:
+    1. Calls generate_video with project_id and sequence
+    2. The generate_video endpoint will handle status updates
+    3. Errors are logged but don't break the workflow
+    """
+    try:
+        logger.info(
+            "background_video_generation_started",
+            project_id=project_id,
+            sequence=sequence
+        )
+        
+        # Mark scene as processing before generation starts
+        pk = f"PROJECT#{project_id}"
+        sk = f"SCENE#{sequence:03d}"
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+            scene_item.status = "processing"
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+            logger.info(
+                "scene_marked_as_processing",
+                project_id=project_id,
+                sequence=sequence
+            )
+        except DoesNotExist:
+            logger.warning(
+                "scene_not_found_for_processing",
+                project_id=project_id,
+                sequence=sequence
+            )
+            return  # Can't proceed if scene doesn't exist
+        
+        # Import here to avoid circular dependency
+        from mv.video_generator import generate_video
+        from services.s3_storage import get_s3_storage_service
+        
+        logger.info(
+            "starting_video_generation",
+            project_id=project_id,
+            sequence=sequence,
+            has_character_reference=character_reference_id is not None,
+            character_reference_id=character_reference_id
+        )
+        
+        # Generate video (this is synchronous, so run in thread pool)
+        try:
+            video_id, video_path, video_url, metadata, character_reference_warning = await asyncio.to_thread(
+                generate_video,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                duration=int(duration),
+                character_reference_id=character_reference_id,
+                backend="replicate",
+            )
+            logger.info(
+                "video_generation_completed",
+                project_id=project_id,
+                sequence=sequence,
+                video_id=video_id,
+                video_path=video_path,
+                has_video_url=video_url is not None
+            )
+        except Exception as gen_error:
+            logger.error(
+                "video_generation_exception",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(gen_error),
+                exc_info=True
+            )
+            raise  # Re-raise to be caught by outer exception handler
+        
+        # Upload to S3 if configured
+        s3_service = get_s3_storage_service()
+        if s3_service and video_path and os.path.exists(video_path):
+            try:
+                # Generate S3 key for scene video
+                from services.s3_storage import generate_scene_s3_key
+                s3_key = generate_scene_s3_key(
+                    project_id=project_id,
+                    sequence=sequence,
+                    asset_type="video"
+                )
+                
+                # Upload video to S3 (using upload_file_from_path for simplicity)
+                s3_service.upload_file_from_path(
+                    file_path=video_path,
+                    s3_key=s3_key,
+                    content_type="video/mp4"
+                )
+                
+                logger.info(
+                    "scene_video_uploaded_to_s3",
+                    project_id=project_id,
+                    sequence=sequence,
+                    s3_key=s3_key
+                )
+                
+                # Update scene record with S3 key
+                pk = f"PROJECT#{project_id}"
+                sk = f"SCENE#{sequence:03d}"
+                
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+                    scene_item.videoClipS3Key = s3_key
+                    scene_item.status = "completed"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+                    
+                    # Increment completed scenes counter
+                    from mv_models import increment_completed_scene
+                    increment_completed_scene(project_id)
+                    
+                    logger.info(
+                        "scene_video_generation_completed",
+                        project_id=project_id,
+                        sequence=sequence,
+                        s3_key=s3_key
+                    )
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_video_update",
+                        project_id=project_id,
+                        sequence=sequence
+                    )
+                    
+            except Exception as e:
+                logger.error(
+                    "failed_to_upload_scene_video",
+                    project_id=project_id,
+                    sequence=sequence,
+                    error=str(e),
+                    exc_info=True
+                )
+                # Mark scene as failed
+                try:
+                    pk = f"PROJECT#{project_id}"
+                    sk = f"SCENE#{sequence:03d}"
+                    scene_item = MVProjectItem.get(pk, sk)
+                    scene_item.status = "failed"
+                    scene_item.errorMessage = f"Failed to upload video: {str(e)}"
+                    scene_item.updatedAt = datetime.now(timezone.utc)
+                    scene_item.save()
+                    
+                    from mv_models import increment_failed_scene
+                    increment_failed_scene(project_id)
+                except Exception:
+                    pass
+        else:
+            # No S3 configured, just update status to completed
+            try:
+                pk = f"PROJECT#{project_id}"
+                sk = f"SCENE#{sequence:03d}"
+                scene_item = MVProjectItem.get(pk, sk)
+                scene_item.status = "completed"
+                scene_item.updatedAt = datetime.now(timezone.utc)
+                scene_item.save()
+                
+                from mv_models import increment_completed_scene
+                increment_completed_scene(project_id)
+                
+                logger.info(
+                    "scene_video_generation_completed_no_s3",
+                    project_id=project_id,
+                    sequence=sequence,
+                    video_url=video_url
+                )
+            except DoesNotExist:
+                logger.warning(
+                    "scene_not_found_for_completion",
+                    project_id=project_id,
+                    sequence=sequence
+                )
+                
+    except Exception as e:
+        logger.error(
+            "background_video_generation_failed",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        
+        # Mark scene as failed
+        try:
+            pk = f"PROJECT#{project_id}"
+            sk = f"SCENE#{sequence:03d}"
+            scene_item = MVProjectItem.get(pk, sk)
+            scene_item.status = "failed"
+            scene_item.errorMessage = f"Video generation failed: {str(e)}"
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+            
+            from mv_models import increment_failed_scene
+            increment_failed_scene(project_id)
+        except Exception as update_error:
+            logger.error(
+                "failed_to_update_scene_status_on_error",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(update_error),
+                exc_info=True
+            )
 
 
 @router.post(
@@ -53,8 +473,7 @@ This endpoint:
 4. Returns project ID for subsequent operations
 
 **Files:**
-- `images[]`: Product images (ad-creative mode, required)
-- `audio`: Music file (music-video mode, required)
+- `audio`: Music file (music-video mode required, ad-creative mode optional)
 
 **Form Data:**
 - `mode`: "ad-creative" or "music-video"
@@ -67,9 +486,11 @@ This endpoint:
 async def create_project(
     mode: str = Form(...),
     prompt: str = Form(...),
-    characterDescription: str = Form(...),
+    characterDescription: Optional[str] = Form(None),
     characterReferenceImageId: Optional[str] = Form(None),
     productDescription: Optional[str] = Form(None),
+    productReferenceImageId: Optional[str] = Form(None),
+    directorConfig: Optional[str] = Form(None),
     images: Optional[List[UploadFile]] = File(None),
     audio: Optional[UploadFile] = File(None)
 ):
@@ -82,6 +503,7 @@ async def create_project(
         characterDescription: Character description
         characterReferenceImageId: Optional pre-generated character image UUID
         productDescription: Optional product description
+        directorConfig: Optional director config name (e.g., "Wes-Anderson")
         images: Optional list of product images
         audio: Optional audio file
 
@@ -94,7 +516,8 @@ async def create_project(
             mode=mode,
             has_images=images is not None and len(images) > 0 if images else False,
             has_audio=audio is not None,
-            has_character_ref=characterReferenceImageId is not None
+            has_character_ref=characterReferenceImageId is not None,
+            director_config=directorConfig
         )
 
         # Validate mode
@@ -109,16 +532,6 @@ async def create_project(
             )
 
         # Validate mode-specific requirements
-        if mode == 'ad-creative' and (not images or len(images) == 0):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Product images required for ad-creative mode",
-                    "details": "At least one product image must be provided"
-                }
-            )
-
         if mode == 'music-video' and not audio:
             raise HTTPException(
                 status_code=400,
@@ -138,11 +551,42 @@ async def create_project(
         product_image_s3_key = None
         audio_s3_key = None
 
-        # Handle character reference image
+        # Handle character reference image (for music-video mode)
         if characterReferenceImageId:
-            # Reference to existing character image in character_reference directory
-            # For now, store the reference path - actual copy can be done later if needed
-            character_image_s3_key = f"mv/outputs/character_reference/{characterReferenceImageId}.png"
+            # Validate UUID format
+            try:
+                uuid.UUID(characterReferenceImageId)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Invalid character reference ID format",
+                        "details": "Character reference ID must be a valid UUID"
+                    }
+                )
+            # Reference to existing character image in character_references directory
+            # Note: Extension may vary (png, jpg, webp), default to png for compatibility
+            # The actual file extension is determined when the image was uploaded/generated
+            character_image_s3_key = f"character_references/{characterReferenceImageId}.png"
+
+        # Handle product reference image (for ad-creative mode)
+        if productReferenceImageId:
+            # Validate UUID format
+            try:
+                uuid.UUID(productReferenceImageId)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": "Invalid product reference ID format",
+                        "details": "Product reference ID must be a valid UUID"
+                    }
+                )
+            # Reference to existing product image in character_references directory
+            # (we reuse the same directory for both character and product references)
+            product_image_s3_key = f"character_references/{productReferenceImageId}.png"
 
         # Upload product images
         if images and len(images) > 0:
@@ -194,7 +638,9 @@ async def create_project(
             product_description=productDescription,
             character_image_s3_key=character_image_s3_key,
             product_image_s3_key=product_image_s3_key,
-            audio_backing_track_s3_key=audio_s3_key
+            audio_backing_track_s3_key=audio_s3_key,
+            director_config=directorConfig,
+            mode=mode
         )
 
         try:
@@ -348,6 +794,8 @@ async def get_project(project_id: str):
             productImageUrl=product_url,
             audioBackingTrackUrl=audio_url,
             finalOutputUrl=final_url,
+            directorConfig=project_item.directorConfig,
+            mode=project_item.mode,
             sceneCount=project_item.sceneCount or 0,
             completedScenes=project_item.completedScenes or 0,
             failedScenes=project_item.failedScenes or 0,
@@ -609,6 +1057,176 @@ async def update_scene(
             detail={
                 "error": "InternalError",
                 "message": "Failed to update scene",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/projects/{project_id}/generate",
+    response_model=ProjectResponse,
+    summary="Start Project Generation",
+    description="""
+Start the generation workflow for a project.
+
+This endpoint:
+1. Validates the project exists
+2. Checks if scenes already exist (returns error if they do)
+3. Updates project status to "processing" immediately
+4. Returns the updated project immediately (for UI responsiveness)
+5. Generates scene descriptions using Gemini in the background
+6. Creates scene records in DynamoDB
+7. Triggers video generation for each scene
+
+**Note:** This endpoint returns immediately. Scene generation and video generation
+happen asynchronously in the background. Use polling to track progress.
+"""
+)
+async def start_generation(project_id: str):
+    """
+    Start generation workflow for a project.
+
+    Args:
+        project_id: Project UUID
+
+    Returns:
+        ProjectResponse with generated scenes
+    """
+    try:
+        logger.info("start_generation_request", project_id=project_id)
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Retrieve project metadata
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Check if scenes already exist
+        existing_scenes = MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        )
+        scene_count = sum(1 for _ in existing_scenes)
+
+        if scene_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Scenes already exist for this project",
+                    "details": f"Project already has {scene_count} scene(s). Generation can only be started once."
+                }
+            )
+
+        # Check if project is in valid state
+        if project_item.status not in ["pending", "failed"]:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": f"Project is in '{project_item.status}' status",
+                    "details": "Generation can only be started for projects in 'pending' or 'failed' status"
+                }
+            )
+
+        # Validate that project has mode field (required for new system)
+        if not project_item.mode or project_item.mode not in ["music-video", "ad-creative"]:
+            logger.warning(
+                "start_generation_missing_mode",
+                project_id=project_id,
+                mode=project_item.mode
+            )
+            # For legacy projects without mode, we'll use legacy generator as fallback
+            # But log a warning
+            if project_item.mode:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "ValidationError",
+                        "message": f"Invalid mode: {project_item.mode}",
+                        "details": "Project mode must be 'music-video' or 'ad-creative'"
+                    }
+                )
+
+        # Update project status to processing IMMEDIATELY
+        # This allows the UI to update before the long-running Gemini call
+        project_item.status = "processing"
+        project_item.GSI1PK = "processing"
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+
+        logger.info(
+            "generation_started_status_updated",
+            project_id=project_id,
+            status="processing"
+        )
+
+        # Return updated project IMMEDIATELY so UI can show "processing" state
+        # Scene generation will happen in background
+        response = await get_project(project_id)
+
+        # Start background task for scene generation and video generation
+        # This runs asynchronously so the endpoint can return immediately
+        task = asyncio.create_task(
+            generate_scenes_and_videos_background(
+                project_id=project_id,
+                concept_prompt=project_item.conceptPrompt,
+                character_description=project_item.characterDescription,
+                character_image_s3_key=project_item.characterImageS3Key
+            )
+        )
+
+        # Add error callback to log any unhandled exceptions
+        def main_task_done_callback(t):
+            try:
+                t.result()  # This will raise if task had an exception
+            except Exception as e:
+                logger.error(
+                    "main_background_generation_task_failed",
+                    project_id=project_id,
+                    error=str(e),
+                    exc_info=True
+                )
+        task.add_done_callback(main_task_done_callback)
+
+        logger.info(
+            "background_generation_queued",
+            project_id=project_id
+        )
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("start_generation_error", project_id=project_id, error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to start generation",
                 "details": str(e)
             }
         )

@@ -96,6 +96,8 @@ class MVProjectItem(BaseDynamoModel):
     productImageS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     audioBackingTrackS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     finalOutputS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    directorConfig = UnicodeAttribute(null=True)  # Director config name (e.g., "Wes-Anderson")
+    mode = UnicodeAttribute(null=True)  # Project mode: "music-video" or "ad-creative"
     sceneCount = NumberAttribute(null=True, default=0)
     completedScenes = NumberAttribute(null=True, default=0)
     failedScenes = NumberAttribute(null=True, default=0)
@@ -154,6 +156,8 @@ class MVProjectItem(BaseDynamoModel):
                 "productImageS3Key": self.productImageS3Key,
                 "audioBackingTrackS3Key": self.audioBackingTrackS3Key,
                 "finalOutputS3Key": self.finalOutputS3Key,
+                "directorConfig": self.directorConfig,
+                "mode": self.mode,
                 "sceneCount": self.sceneCount,
                 "completedScenes": self.completedScenes,
                 "failedScenes": self.failedScenes,
@@ -181,11 +185,13 @@ class MVProjectItem(BaseDynamoModel):
 def create_project_metadata(
     project_id: str,
     concept_prompt: str,
-    character_description: str,
+    character_description: Optional[str] = None,
     product_description: Optional[str] = None,
     character_image_s3_key: Optional[str] = None,
     product_image_s3_key: Optional[str] = None,
     audio_backing_track_s3_key: Optional[str] = None,
+    director_config: Optional[str] = None,
+    mode: Optional[str] = None,
 ) -> MVProjectItem:
     """
     Create a new project metadata item.
@@ -193,18 +199,20 @@ def create_project_metadata(
     Args:
         project_id: Unique project UUID
         concept_prompt: User's video concept description
-        character_description: Character description
-        product_description: Optional product description
+        character_description: Optional character description (for music-video mode)
+        product_description: Optional product description (for ad-creative mode)
         character_image_s3_key: S3 object key for character reference image 
             (e.g., "mv/projects/{id}/character.png"), NOT a URL
         product_image_s3_key: S3 object key for product image, NOT a URL
         audio_backing_track_s3_key: S3 object key for audio file, NOT a URL
+        director_config: Director config name (e.g., "Wes-Anderson")
+        mode: Project mode - "music-video" or "ad-creative" (optional, defaults to None)
 
     Returns:
         MVProjectItem instance
         
     Raises:
-        ValueError: If any S3 key parameter is a URL instead of a key
+        ValueError: If any S3 key parameter is a URL instead of a key, or if mode is invalid
     """
     now = datetime.now(timezone.utc)
 
@@ -223,6 +231,11 @@ def create_project_metadata(
     item.characterImageS3Key = validate_s3_key(character_image_s3_key, "character_image_s3_key")
     item.productImageS3Key = validate_s3_key(product_image_s3_key, "product_image_s3_key")
     item.audioBackingTrackS3Key = validate_s3_key(audio_backing_track_s3_key, "audio_backing_track_s3_key")
+    item.directorConfig = director_config
+    # Validate mode if provided
+    if mode is not None and mode not in ["music-video", "ad-creative"]:
+        raise ValueError(f"mode must be 'music-video' or 'ad-creative', got '{mode}'")
+    item.mode = mode
     item.sceneCount = 0
     item.completedScenes = 0
     item.failedScenes = 0

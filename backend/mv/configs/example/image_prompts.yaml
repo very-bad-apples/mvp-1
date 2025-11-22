@@ -1,0 +1,7 @@
+# Prompt templates for image generation
+# These templates use Python string formatting with {variable_name} placeholders
+
+# Character reference image prompt template
+# Used to generate a consistent character reference for video generation
+character_reference_prompt: |
+  A full-body character reference image of {character_description}. Clear, well-lit, neutral background, professional quality, detailed features, front-facing view.

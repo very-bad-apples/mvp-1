@@ -101,9 +101,9 @@ export interface OrchestrationOptions {
  * Default orchestration options
  */
 const DEFAULT_OPTIONS: Required<OrchestrationOptions> = {
-  onProgress: () => {},
-  onError: () => {},
-  onRetry: () => {},
+  onProgress: () => { },
+  onError: () => { },
+  onRetry: () => { },
   maxRetries: 3,
   initialRetryDelay: 1000,
   maxRetryDelay: 10000,
@@ -218,7 +218,7 @@ export async function startFullGeneration(
     let project = projectResponse
 
     // Phase 1: Generate all scenes
-    opts.onProgress('scenes', 0, 1, 'Starting scene generation...')
+    opts.onProgress('scenes', 0, project.scenes.length, 'Starting scene generation...')
     await updateProject(projectId, { status: 'processing' })
 
     // Check if scenes need to be generated
@@ -293,8 +293,21 @@ export async function startFullGeneration(
 
           const videoResponse = await generateVideo(videoRequest)
 
+          // TODO: VALIDATE THIS COMMENT APPLIES TO THE BLOCK BELOW
           // Backend automatically updates the scene in DynamoDB with the video URL
           // No need to manually update - backend handles atomic updates per scene
+
+          // Update project with video URL
+          const updatedScenes = [...project.scenes]
+          updatedScenes[index] = {
+            ...scene,
+            videoClipUrl: videoResponse.video_url,
+            status: 'completed',
+          }
+
+          project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+
+          //////
 
           return videoResponse
         },
@@ -359,10 +372,16 @@ export async function startFullGeneration(
     await Promise.all(lipsyncPromises)
     opts.onProgress('lipsync', project.scenes.length, project.scenes.length, 'All lip-syncs generated')
 
-    // Phase 5: Verify completion and update status
-    opts.onProgress('compose', 0, 1, 'Verifying all videos generated...')
+    // Phase 5: Compose final video (sequential)
+    opts.onProgress('compose', 0, 1, 'Starting final composition...')
+    await updateProject(projectId, { status: 'processing' })
 
-    // Refetch project to get final state with all video URLs
+    // TODO: Implement video composition endpoint
+    // For now, mark as completed
+    await updateProject(projectId, { status: 'completed' })
+    opts.onProgress('compose', 1, 1, 'Final video composed')
+
+    // Fetch final project state
     const finalProject = await getProject(projectId)
     if (!finalProject.projectId) {
       throw new Error('Failed to fetch final project state')
@@ -657,6 +676,7 @@ export async function regenerateVideo(
 
         const videoResponse = await generateVideo(videoRequest)
 
+        // ZENOS
         // Backend automatically updates the scene in DynamoDB with the video URL
         // Just refetch the project to get the updated scene
         project = await getProject(projectId)
@@ -664,6 +684,18 @@ export async function regenerateVideo(
           throw new Error('Failed to refetch project after video generation')
         }
 
+        // END ZENOS
+        // NOAHS
+        // Update project with new video URL
+        // const updatedScenes = [...project.scenes]
+        // updatedScenes[sceneIndex] = {
+        //   ...scene,
+        //   videoClipUrl: videoResponse.video_url,
+        //   status: 'completed',
+        // }
+
+        // project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+        // END NOAHS
         return videoResponse
       },
       `Regenerate video for scene ${sceneIndex + 1}`,

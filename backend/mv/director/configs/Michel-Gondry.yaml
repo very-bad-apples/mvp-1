@@ -1,0 +1,60 @@
+# Michel Gondry Director Configuration
+# Signature Style: Practical effects, in-camera tricks, handmade quality, forced perspective, whimsical surrealism
+
+camera:
+  shotType: medium_shot
+  movement: handheld  # Unstable, dreamlike camera movement
+  lens: wide_angle  # For forced perspective tricks and playful distortion
+  angle: eye_level  # Normal perspective made extraordinary through practical effects
+
+lighting:
+  type: soft
+  direction: front  # Diffused, dreamy lighting with occasional spot lighting
+
+style:
+  visualStyle: documentary  # Handmade, authentic quality despite surreal content
+  mood: romantic  # Whimsical, nostalgic, emotionally rich
+  colorGrading: warm_tones  # Soft, nostalgic color palette with dreamlike quality
+
+motion:
+  intensity: 0.5  # Moderate movement for playful camera tricks
+  guidanceScale: 8  # Allow creative freedom for surreal elements
+  cfgScale: 7  # Moderate guidance to maintain handmade aesthetic
+
+audio:
+  music:
+    style: acoustic  # Organic, handmade quality in sound
+    mood: uplifting  # Whimsical yet emotionally resonant
+    intensity: moderate
+
+quality:
+  negativePrompts:
+    - CGI effects
+    - digital polish
+    - slick production
+    - sterile aesthetic
+    - low quality
+    - blurry
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: dissolve  # In-camera transitions and creative practical effects
+
+# Additional Gondry Characteristics:
+# - Practical effects over CGI (in-camera editing, stop-motion)
+# - Forced perspective for scale manipulation
+# - Handmade props and sets with visible craftsmanship
+# - Giant-sized sets for child-size adult illusions
+# - Distortions of focus for memory/dream sequences
+# - Unsynced sounds and intrusive spot lighting
+# - Murky, dreamlike hazes in cinematography
+# - Whimsical and surreal visual elements
+# - Unexpected narrative twists
+# - Master of optical illusion
+# - Lo-fi aesthetic despite high concept
+# - Visible technique (cardboard, paper crafts)
+# - Music video roots (White Stripes, Björk collaborations)
+# - Emotional core beneath playful exterior
+# - Memory and consciousness themes
+# - Frame-by-frame animation techniques
+# - Rotoscoping and drawing on film

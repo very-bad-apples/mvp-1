@@ -1,0 +1,56 @@
+# David Lynch Director Configuration
+# Signature Style: Surreal, dreamlike, stark contrast lighting, floating camera, red-blue color motifs
+
+camera:
+  shotType: medium_close_up  # Unsettling framing of subjects
+  movement: dolly  # Constantly floating, eerie camera movement
+  lens: standard  # Natural perspective that feels slightly off
+  angle: eye_level  # Creates uncanny valley effect with normal perspective in abnormal situations
+
+lighting:
+  type: dramatic
+  direction: side  # Stark contrasts between light and shadow, expressionistic
+
+style:
+  visualStyle: cinematic
+  mood: mysterious  # Dreamlike, uncanny, existential
+  colorGrading: desaturated  # Muted with strategic use of red and blue
+
+motion:
+  intensity: 0.5  # Slow, unsettling movement that builds dread
+  guidanceScale: 11  # Strong adherence to atmospheric vision
+  cfgScale: 10  # High guidance for specific surreal aesthetic
+
+audio:
+  music:
+    style: electronic  # Atmospheric, industrial soundscapes
+    mood: tense  # Constant underlying dread
+    intensity: prominent  # Sound design is crucial to atmosphere
+
+quality:
+  negativePrompts:
+    - blurry  # Unless intentional for surreal effect
+    - low quality
+    - bright cheerful colors
+    - conventional beauty
+    - clear narrative
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: dissolve  # Disjunctive editing, elliptical storytelling
+
+# Additional Lynch Characteristics:
+# - Lynchian: sublime, dreamlike, ambiguous, uncanny, existential
+# - Expressionistic lighting creating bizarre shadows
+# - Recurring red and blue color contrasts
+# - Alternating sharp and blurred images for disorientation
+# - Constantly floating camera (Peter Deming collaboration)
+# - High contrast chiaroscuro lighting
+# - Meticulous sound design with industrial/ambient noise
+# - Disjunctive editing and elliptical storytelling
+# - Dream logic narrative structure
+# - Duality themes (good vs evil, surface vs beneath)
+# - Retro Americana with dark undercurrent
+# - Long, uncomfortable holds on shots
+# - Practical effects and makeup for uncanny visuals
+# - Tools of cinema bent to create dreamlike unreality

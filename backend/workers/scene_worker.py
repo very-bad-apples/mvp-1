@@ -52,13 +52,53 @@ async def process_scene_generation_job(project_id: str) -> Dict[str, Any]:
         project_item.updatedAt = datetime.now(timezone.utc)
         project_item.save()
 
+        # Determine number_of_scenes from config flavor (if project has one)
+        # For now, use default config flavor since projects don't store config_flavor
+        config_flavor = "default"  # TODO: Store config_flavor in project metadata if needed
+        from mv.config_manager import get_config
+        
+        parameters_config = get_config(config_flavor, "parameters")
+        number_of_scenes = parameters_config.get("number_of_scenes", 1)
+        
+        # If number_of_scenes is None or 0, set to None to let Gemini decide
+        if number_of_scenes is None or number_of_scenes == 0:
+            number_of_scenes = None
+        
+        # Determine max_scenes based on project mode
+        project_mode = project_item.mode or "music-video"  # Default to music-video for backward compatibility
+        if project_mode == "music-video":
+            max_scenes = 8
+        elif project_mode == "ad-creative":
+            max_scenes = 4
+        else:
+            # Fallback to music-video max if mode is invalid
+            logger.warning(
+                "invalid_project_mode",
+                project_id=project_id,
+                mode=project_mode,
+                defaulting_to="music-video"
+            )
+            max_scenes = 8
+        
+        logger.info(
+            "scene_generation_parameters",
+            project_id=project_id,
+            number_of_scenes=number_of_scenes,
+            max_scenes=max_scenes,
+            project_mode=project_mode,
+            config_flavor=config_flavor
+        )
+
         # Generate scenes using existing logic
         # Note: generate_scenes is synchronous and makes external API calls (Gemini)
         # For MVP, blocking is acceptable. Consider async wrapper in Phase 2.
         scenes, _output_files = generate_scenes(
             idea=project_item.conceptPrompt,
             character_description=project_item.characterDescription,
-            number_of_scenes=4,  # TODO: Make configurable
+            number_of_scenes=number_of_scenes,
+            project_mode=project_mode,
+            max_scenes=max_scenes,
+            director_config=project_item.directorConfig,
         )
 
         # Validate scenes were generated

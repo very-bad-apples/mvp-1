@@ -7,51 +7,84 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ImageUploadZone } from '@/components/ImageUploadZone'
 import { AudioUploadZone } from '@/components/AudioUploadZone'
 import { YouTubeAudioDownloader } from '@/components/YouTubeAudioDownloader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Sparkles, Video, ChevronLeft, Loader2, ImageIcon, RefreshCw, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
-
-type Mode = 'ad-creative' | 'music-video'
+import { useToast } from '@/hooks/useToast'
+import { createProject, getDirectorConfigs, generateCharacterReference, uploadCharacterReference } from '@/lib/api/client'
 
 // Use relative paths to proxy routes (API key handled server-side)
 const API_BASE = '/api/mv'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+
+type Mode = 'ad-creative' | 'music-video'
 
 export default function CreatePage() {
   const router = useRouter()
   const { toast } = useToast()
   const [mode, setMode] = useState<Mode>('music-video')
   const [prompt, setPrompt] = useState('')
+  const [personality, setPersonality] = useState('')
   const [characterDescription, setCharacterDescription] = useState('')
-  const [uploadedImages, setUploadedImages] = useState<File[]>([])
+  const [uploadedCharacterImage, setUploadedCharacterImage] = useState<File | null>(null)
   const [uploadedAudio, setUploadedAudio] = useState<File | null>(null)
   const [downloadedAudioId, setDownloadedAudioId] = useState<string>('')
   const [downloadedAudioUrl, setDownloadedAudioUrl] = useState<string>('')
-  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('youtube')
+  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
+  const [imageSource, setImageSource] = useState<'upload' | 'generate'>('generate')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [useAICharacter, setUseAICharacter] = useState(true)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
   const [generatedImageIds, setGeneratedImageIds] = useState<string[]>([])
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
   const [imageGenerationError, setImageGenerationError] = useState<string | null>(null)
   const [generationAttempts, setGenerationAttempts] = useState(0)
-  const [imageLoadingStates, setImageLoadingStates] = useState<{ [imageId: string]: 'loading' | 'loaded' | 'error' }>({})
 
-  // Update useAICharacter default when mode changes
+  // Director config state
+  const [directorConfig, setDirectorConfig] = useState<string>('')
+  const [availableDirectorConfigs, setAvailableDirectorConfigs] = useState<string[]>([])
+  const [isFetchingDirectorConfigs, setIsFetchingDirectorConfigs] = useState(false)
+
+  // Fetch available director configs on mount
   useEffect(() => {
-    if (mode === 'music-video') {
-      setUseAICharacter(true)
-    } else if (mode === 'ad-creative') {
-      setUseAICharacter(false)
+    const fetchDirectorConfigs = async () => {
+      setIsFetchingDirectorConfigs(true)
+      try {
+        const data = await getDirectorConfigs()
+        if (data.configs && Array.isArray(data.configs)) {
+          setAvailableDirectorConfigs(data.configs)
+        } else {
+          console.warn('Director configs response missing or invalid:', data)
+          setAvailableDirectorConfigs([])
+        }
+      } catch (error) {
+        console.error('Failed to fetch director configs:', error)
+        // Keep empty array as fallback - backend may not be running
+        // This is non-critical, so we silently fail
+        setAvailableDirectorConfigs([])
+      } finally {
+        setIsFetchingDirectorConfigs(false)
+      }
     }
-  }, [mode])
 
-  // Note: Blob URL cleanup removed in v10 - images now fetched directly from backend
+    fetchDirectorConfigs()
+  }, [])
+
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      generatedImages.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url)
+        }
+      })
+    }
+  }, [generatedImages])
 
   // Check if form is valid and ready to submit
   const isFormValid = () => {
@@ -59,15 +92,13 @@ export default function CreatePage() {
     if (!prompt.trim()) return false
 
     // Check mode-specific requirements
-    if (mode === 'ad-creative' && uploadedImages.length === 0) return false
     if (mode === 'music-video') {
+      // Music video requires audio
       if (audioSource === 'upload' && !uploadedAudio) return false
       if (audioSource === 'youtube' && !downloadedAudioId) return false
     }
 
-    // Check AI character requirements - only required for ad-creative mode
-    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) return false
-
+    // Note: Reference image is optional for both modes
     return true
   }
 
@@ -79,15 +110,6 @@ export default function CreatePage() {
       toast({
         title: "Error",
         description: "Please provide a video description",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (mode === 'ad-creative' && uploadedImages.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please upload at least one product image",
         variant: "destructive",
       })
       return
@@ -112,65 +134,96 @@ export default function CreatePage() {
       }
     }
 
-    // Character image selection only required for ad-creative mode
-    if (mode === 'ad-creative' && useAICharacter && selectedImageIndex === null) {
-      toast({
-        title: "Error",
-        description: "Please generate and select a character image",
-        variant: "destructive",
-      })
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
-      // Prepare FormData for the API
-      const formData = new FormData()
-      formData.append('mode', mode)
-      formData.append('prompt', prompt)
-      formData.append('characterDescription', characterDescription)
-
-      if (mode === 'ad-creative') {
-        uploadedImages.forEach((image, index) => {
-          formData.append(`images`, image)
-        })
-      } else {
-        if (uploadedAudio) {
-          formData.append('audio', uploadedAudio)
+      // Get character reference image ID based on image source
+      let characterReferenceImageId: string | null = null
+      
+      if (imageSource === 'generate') {
+        // Use generated character image if selected
+        characterReferenceImageId = selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
+          ? generatedImageIds[selectedImageIndex]
+          : null
+      } else if (imageSource === 'upload' && uploadedCharacterImage) {
+        // Upload character image to get an ID
+        try {
+          const uploadResponse = await uploadCharacterReference(uploadedCharacterImage)
+          characterReferenceImageId = uploadResponse.image_id
+          
+          toast({
+            title: "Image uploaded",
+            description: "Character reference image uploaded successfully",
+          })
+        } catch (error) {
+          console.error('Error uploading character image:', error)
+          toast({
+            title: "Upload failed",
+            description: error instanceof Error ? error.message : "Failed to upload character image. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
         }
       }
 
-      // Add selected character reference image ID if using AI character
-      if (useAICharacter && selectedImageIndex !== null && generatedImageIds[selectedImageIndex]) {
-        formData.append('characterReferenceImageId', generatedImageIds[selectedImageIndex])
+      // Prepare files for upload (for both modes - music-video requires it, ad-creative optional)
+      let audioFile: File | undefined = undefined
+
+      if (audioSource === 'upload' && uploadedAudio) {
+        // Use uploaded audio file directly
+        audioFile = uploadedAudio
+      } else if (audioSource === 'youtube' && downloadedAudioId) {
+        // Fetch YouTube audio file from backend and convert to File
+        try {
+          const audioResponse = await fetch(`${API_URL}/api/audio/get/${downloadedAudioId}`, {
+            headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+          })
+
+          if (!audioResponse.ok) {
+            throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`)
+          }
+
+          const audioBlob = await audioResponse.blob()
+          // Create a File from the blob with a proper filename
+          audioFile = new File([audioBlob], `${downloadedAudioId}.mp3`, { type: 'audio/mpeg' })
+        } catch (error) {
+          console.error('Error fetching YouTube audio:', error)
+          toast({
+            title: "Error",
+            description: "Failed to fetch audio file. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       // Call the createProject API
+      // Combine personality and visual appearance for the description field
+      const combinedDescription = [
+        personality.trim(),
+        characterDescription.trim()
+      ].filter(Boolean).join('\n\n') || 'No description provided'
+
+      // Route data to correct database fields based on mode
       const response = await createProject({
         mode,
         prompt: prompt.trim(),
-        characterDescription: characterDescription.trim() || 'No character description provided',
-        characterReferenceImageId,
+        // For music-video: use characterDescription + characterImageUrl
+        // For ad-creative: use productDescription + productImageUrl
+        characterDescription: mode === 'music-video' ? combinedDescription : undefined,
+        productDescription: mode === 'ad-creative' ? combinedDescription : undefined,
+        characterReferenceImageId: mode === 'music-video' ? characterReferenceImageId : undefined,
+        productReferenceImageId: mode === 'ad-creative' ? characterReferenceImageId : undefined,
         directorConfig: directorConfig || undefined,
-        configFlavor,
-        images: mode === 'ad-creative' ? uploadedImages : undefined,
         audio: audioFile,
       })
       
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        const errorMessage = errorData.detail?.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
-      const projectId = data.projectId
-
       toast({
         title: "Project created successfully!",
-        description: `Project ID: ${projectId}`,
+        description: response.message,
       })
 
       // Navigate to the edit page
@@ -179,7 +232,7 @@ export default function CreatePage() {
       console.error('Error submitting form:', error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start video generation",
+        description: error instanceof Error ? error.message : "Failed to create project",
         variant: "destructive",
       })
     } finally {
@@ -188,43 +241,24 @@ export default function CreatePage() {
   }
 
   const handleQuickJob = () => {
+    // Get character reference image ID if character image is selected
+    const characterReferenceImageId = selectedImageIndex !== null && generatedImageIds[selectedImageIndex]
+      ? generatedImageIds[selectedImageIndex]
+      : undefined
+
     // Store form data in sessionStorage before navigating
     const quickJobData = {
       videoDescription: prompt,
+      personality: personality,
       characterDescription: characterDescription,
-      characterReferenceImageId: selectedImageIndex !== null ? generatedImageIds[selectedImageIndex] : '',
+      characterReferenceImageId,
       // Include audio data if YouTube audio was downloaded
       audioId: audioSource === 'youtube' ? downloadedAudioId : undefined,
       audioUrl: audioSource === 'youtube' ? downloadedAudioUrl : undefined,
+      directorConfig: directorConfig || undefined,
     }
     sessionStorage.setItem('quickJobData', JSON.stringify(quickJobData))
     router.push('/quick-gen-page')
-  }
-
-  /**
-   * Fetch a single character reference image by ID.
-   * Uses redirect=false to get JSON response (cloud) or direct file (local).
-   */
-  const fetchCharacterImage = async (imageId: string): Promise<string> => {
-    const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`)
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image ${imageId}`)
-    }
-
-    // For cloud storage: response is JSON with image_url
-    // For local storage: response is the image file directly
-    const contentType = response.headers.get('content-type')
-
-    if (contentType?.includes('application/json')) {
-      // Cloud storage mode - get presigned URL from JSON
-      const data = await response.json()
-      return data.image_url || data.video_url // video_url is legacy field name
-    } else {
-      // Local storage mode - create object URL from blob
-      const blob = await response.blob()
-      return URL.createObjectURL(blob)
-    }
   }
 
   const handleGenerateImages = async () => {
@@ -240,78 +274,81 @@ export default function CreatePage() {
     setIsGeneratingImages(true)
     setSelectedImageIndex(null) // Reset selection
     setImageGenerationError(null) // Clear previous errors
+
+    // Clean up previous blob URLs to prevent memory leaks
+    generatedImages.forEach(url => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url)
+      }
+    })
     setGeneratedImages([])
     setGeneratedImageIds([])
-    setImageLoadingStates({})
 
     try {
-      // Step 1: Generate images and get image IDs (no base64 in v10)
-      const response = await fetch(`${API_BASE}/generate_character_reference`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          character_description: characterDescription.trim(),
-          num_images: 4, // Request 4 images for selection
-        }),
+      const data = await generateCharacterReference({
+        character_description: characterDescription.trim(),
+        num_images: 4, // Request 4 images for selection
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(errorData.detail?.message || errorData.error || 'Failed to generate character images')
+      // Fetch images using their IDs (backend no longer returns base64 for performance)
+      const blobUrls: string[] = []
+      const imageIds: string[] = []
+
+      for (const image of data.images) {
+        imageIds.push(image.id)
+        
+        // If cloud_url is available, use it directly
+        if (image.cloud_url) {
+          blobUrls.push(image.cloud_url)
+        } else {
+          // Otherwise, fetch the image from the backend
+          try {
+            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
+              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
+            })
+
+            if (!response.ok) {
+              throw new Error(`Failed to fetch image ${image.id}`)
+            }
+
+            const contentType = response.headers.get('content-type')
+            
+            if (contentType?.includes('application/json')) {
+              // Cloud storage mode - get presigned URL from JSON
+              const jsonData = await response.json()
+              blobUrls.push(jsonData.image_url || jsonData.video_url)
+            } else {
+              // Local storage mode - create object URL from blob
+              const blob = await response.blob()
+              const objectUrl = URL.createObjectURL(blob)
+              blobUrls.push(objectUrl)
+            }
+          } catch (fetchError) {
+            console.error(`Failed to fetch image ${image.id}:`, fetchError)
+            // Continue with other images, but this one will be missing
+            blobUrls.push('') // Placeholder to maintain array index alignment
+          }
+        }
       }
 
-      const data = await response.json()
-      const imageIds = data.images.map((img: any) => img.id)
+      // Filter out any failed image fetches
+      const validPairs = imageIds.map((id, index) => ({ id, url: blobUrls[index] }))
+        .filter(pair => pair.url)
+      
+      const validIds = validPairs.map(pair => pair.id)
+      const validUrls = validPairs.map(pair => pair.url)
 
-      // Initialize image IDs and placeholder URLs
-      setGeneratedImageIds(imageIds)
-      setGeneratedImages(new Array(imageIds.length).fill('')) // Placeholder empty strings
+      if (validIds.length === 0) {
+        throw new Error('Failed to fetch any character reference images')
+      }
 
-      // Initialize all images as loading
-      const initialLoadingStates: { [key: string]: 'loading' | 'loaded' | 'error' } = {}
-      imageIds.forEach((id: string) => {
-        initialLoadingStates[id] = 'loading'
-      })
-      setImageLoadingStates(initialLoadingStates)
-
-      // Step 2: Fetch all images in parallel
-      const fetchPromises = imageIds.map(async (imageId: string, index: number) => {
-        try {
-          const imageUrl = await fetchCharacterImage(imageId)
-
-          // Update the specific image URL
-          setGeneratedImages(prev => {
-            const newImages = [...prev]
-            newImages[index] = imageUrl
-            return newImages
-          })
-
-          // Update loading state to loaded
-          setImageLoadingStates(prev => ({
-            ...prev,
-            [imageId]: 'loaded'
-          }))
-        } catch (error) {
-          console.error(`Failed to fetch image ${imageId}:`, error)
-
-          // Update loading state to error
-          setImageLoadingStates(prev => ({
-            ...prev,
-            [imageId]: 'error'
-          }))
-        }
-      })
-
-      // Wait for all fetches to complete
-      await Promise.allSettled(fetchPromises)
-
+      setGeneratedImages(validUrls)
+      setGeneratedImageIds(validIds)
       setGenerationAttempts(prev => prev + 1)
 
       toast({
         title: "Character Images Generated",
-        description: `${imageIds.length} character references ready. Click to select one.`,
+        description: `${validIds.length} character references ready. Click to select one.`,
       })
     } catch (error) {
       console.error('Error generating images:', error)
@@ -373,43 +410,20 @@ export default function CreatePage() {
                 >
                   <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-900/50">
                     <TabsTrigger
-                      value="ad-creative"
-                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
-                    >
-                      Ad Creative
-                    </TabsTrigger>
-                    <TabsTrigger
                       value="music-video"
                       className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                     >
                       Music Video
                     </TabsTrigger>
+                    <TabsTrigger
+                      value="ad-creative"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                    >
+                      Ad Creative
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
-
-              {/* Mode-Specific Upload Zone */}
-              {mode === 'ad-creative' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-1">
-                    <Label className="text-sm font-medium text-white">
-                      Product Images
-                    </Label>
-                    <span className="text-red-400 text-sm">*</span>
-                  </div>
-                  <div>
-                    <ImageUploadZone
-                      onFilesChange={setUploadedImages}
-                      files={uploadedImages}
-                    />
-                    {uploadedImages.length === 0 && (
-                      <p className="text-xs text-red-400 mt-2">
-                        At least one product image is required
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* User Prompt */}
               <div className="space-y-3">
@@ -436,46 +450,114 @@ export default function CreatePage() {
                 </p>
               </div>
 
-              {/* Character Description with AI Toggle */}
+              {/* Personality Field */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="character" className="text-sm font-medium text-white">
-                    Character & Style{mode === 'music-video' ? ' (Optional)' : ''}
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="ai-toggle" className="text-sm text-gray-400 cursor-pointer">
-                      Use AI Generation
-                    </Label>
-                    <Switch
-                      id="ai-toggle"
-                      checked={useAICharacter}
-                      onCheckedChange={setUseAICharacter}
-                      className="data-[state=checked]:bg-blue-600"
-                    />
-                  </div>
-                </div>
+                <Label htmlFor="personality" className="text-sm font-medium text-white">
+                  {mode === 'ad-creative' ? 'Brand Personality (Optional)' : 'Artist/Band Personality (Optional)'}
+                </Label>
+                <Textarea
+                  id="personality"
+                  placeholder={
+                    mode === 'ad-creative'
+                      ? 'Describe the brand personality and vibe... e.g., "Bold, innovative, and eco-conscious. Appeals to millennials who value sustainability and style"'
+                      : 'Describe the artist/band personality and vibe... e.g., "Moody and introspective, with a dreamy, ethereal atmosphere"'
+                  }
+                  value={personality}
+                  onChange={(e) => setPersonality(e.target.value)}
+                  className="min-h-[100px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
+                />
+                <p className="text-xs text-gray-400">
+                  {mode === 'ad-creative'
+                    ? 'Describe the brand personality, target audience, and overall vibe'
+                    : 'Describe the artist personality, mood, and overall vibe'}
+                </p>
+              </div>
 
-                {(useAICharacter || mode === 'music-video') && (
-                  <div className="space-y-4">
-                    {/* Character Description Input */}
-                    <Textarea
-                      id="character"
-                      placeholder={
-                        mode === 'ad-creative'
-                          ? 'Describe visual style, colors, mood... e.g., "Modern minimalist aesthetic with bold colors and clean backgrounds"'
-                          : 'Describe performers, setting, atmosphere... e.g., "Solo artist in black and white cinematography with moody lighting"'
-                      }
-                      value={characterDescription}
-                      onChange={(e) => {
-                        setCharacterDescription(e.target.value)
-                        // Reset generated images when description changes
-                        if (generatedImages.length > 0) {
-                          setGeneratedImages([])
-                          setSelectedImageIndex(null)
-                        }
+              {/* Image Source */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-white">
+                  {mode === 'ad-creative' ? 'Product/Brand Reference Image' : 'Character Reference Image'}
+                </Label>
+                
+                {/* Image Source Tabs */}
+                <Tabs
+                  value={imageSource}
+                  onValueChange={(value) => {
+                    setImageSource(value as 'upload' | 'generate')
+                    // Clear the other source when switching
+                    if (value === 'upload') {
+                      setGeneratedImages([])
+                      setSelectedImageIndex(null)
+                      setCharacterDescription('')
+                    } else {
+                      setUploadedCharacterImage(null)
+                    }
+                  }}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
+                    <TabsTrigger
+                      value="upload"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                    >
+                      Upload Image
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="generate"
+                      className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                    >
+                      Generate Image
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
+                {/* Upload Image Option */}
+                {imageSource === 'upload' && (
+                  <div>
+                    <ImageUploadZone
+                      onFilesChange={(files) => {
+                        // Only take the first file for character image
+                        setUploadedCharacterImage(files.length > 0 ? files[0] : null)
                       }}
-                      className="min-h-[100px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
+                      files={uploadedCharacterImage ? [uploadedCharacterImage] : []}
                     />
+                    {!uploadedCharacterImage && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        {mode === 'ad-creative'
+                          ? 'Upload a product/brand reference image (optional)'
+                          : 'Upload a character reference image (optional)'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Generate Image Option */}
+                {imageSource === 'generate' && (
+                  <div className="space-y-4">
+                    {/* Visual Appearance Input */}
+                    <div>
+                      <Label htmlFor="character" className="text-sm font-medium text-white mb-2 block">
+                        {mode === 'ad-creative' ? 'Product/Brand Visual Style' : 'Artist/Band Visual Appearance'}
+                      </Label>
+                      <Textarea
+                        id="character"
+                        placeholder={
+                          mode === 'ad-creative'
+                            ? 'Describe product appearance, colors, packaging... e.g., "Sleek aluminum bottle with minimalist label, shot against natural backgrounds with soft lighting"'
+                            : 'Describe visual appearance of performers, setting, atmosphere... e.g., "Solo artist in black and white cinematography with moody lighting"'
+                        }
+                        value={characterDescription}
+                        onChange={(e) => {
+                          setCharacterDescription(e.target.value)
+                          // Reset generated images when description changes
+                          if (generatedImages.length > 0) {
+                            setGeneratedImages([])
+                            setSelectedImageIndex(null)
+                          }
+                        }}
+                        className="min-h-[100px] resize-none bg-gray-900/50 border-gray-600 text-white placeholder:text-gray-500"
+                      />
+                    </div>
 
                     {/* Error Display */}
                     {imageGenerationError && !isGeneratingImages && (
@@ -503,76 +585,46 @@ export default function CreatePage() {
                     )}
 
                     {/* Generated Images Grid - Above the button */}
-                    {generatedImageIds.length > 0 && !isGeneratingImages && (
+                    {generatedImages.length > 0 && !isGeneratingImages && (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                          {generatedImageIds.map((imageId, index) => {
-                            const imageUrl = generatedImages[index]
-                            const loadingState = imageLoadingStates[imageId]
-
-                            return (
-                              <button
-                                key={imageId}
-                                type="button"
-                                onClick={() => {
-                                  if (loadingState === 'loaded') {
-                                    setSelectedImageIndex(index)
-                                  }
-                                }}
-                                disabled={loadingState !== 'loaded'}
-                                className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                                  selectedImageIndex === index && loadingState === 'loaded'
-                                    ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
-                                    : 'border-gray-600 hover:border-gray-500'
-                                } ${loadingState !== 'loaded' ? 'cursor-not-allowed' : ''}`}
-                              >
-                                {/* Loading State */}
-                                {loadingState === 'loading' && (
-                                  <div className="absolute inset-0 bg-gray-800/50 flex items-center justify-center">
-                                    <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
+                          {generatedImages.map((imageUrl, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => setSelectedImageIndex(index)}
+                              className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                selectedImageIndex === index
+                                  ? 'border-blue-500 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900'
+                                  : 'border-gray-600 hover:border-gray-500'
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={imageUrl}
+                                alt={`Character option ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              {selectedImageIndex === index && (
+                                <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                                  <div className="bg-blue-500 rounded-full p-2">
+                                    <CheckCircle2 className="h-6 w-6 text-white" />
                                   </div>
-                                )}
-
-                                {/* Error State */}
-                                {loadingState === 'error' && (
-                                  <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center p-4">
-                                    <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
-                                    <span className="text-xs text-red-300 text-center">Failed to load image</span>
-                                  </div>
-                                )}
-
-                                {/* Loaded Image */}
-                                {loadingState === 'loaded' && imageUrl && (
-                                  <>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={imageUrl}
-                                      alt={`Character option ${index + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    {selectedImageIndex === index && (
-                                      <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                                        <div className="bg-blue-500 rounded-full p-2">
-                                          <CheckCircle2 className="h-6 w-6 text-white" />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-
-                                {/* Image Label */}
-                                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
-                                  <span className="text-xs text-white">Option {index + 1}</span>
                                 </div>
-                              </button>
-                            )
-                          })}
+                              )}
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2 text-center">
+                                <span className="text-xs text-white">Option {index + 1}</span>
+                              </div>
+                            </button>
+                          ))}
                         </div>
 
                         {selectedImageIndex !== null && (
                           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-center">
                             <p className="text-sm text-blue-400 font-medium">
-                              Character image selected! You can now generate your video.
+                              {mode === 'ad-creative'
+                                ? 'Product reference image selected! You can now generate your video.'
+                                : 'Character image selected! You can now generate your video.'}
                             </p>
                           </div>
                         )}
@@ -597,12 +649,12 @@ export default function CreatePage() {
                             {generatedImages.length > 0 ? (
                               <>
                                 <RefreshCw className="mr-2 h-4 w-4" />
-                                Regenerate Character Images
+                                {mode === 'ad-creative' ? 'Regenerate Product Images' : 'Regenerate Character Images'}
                               </>
                             ) : (
                               <>
                                 <ImageIcon className="mr-2 h-4 w-4" />
-                                Generate Character Images
+                                {mode === 'ad-creative' ? 'Generate Product Images' : 'Generate Character Images'}
                               </>
                             )}
                           </>
@@ -612,33 +664,31 @@ export default function CreatePage() {
 
                     <p className="text-xs text-gray-400">
                       {!characterDescription.trim()
-                        ? "Enter character style details, then click 'Generate Character Images'"
+                        ? `Enter visual appearance details, then click 'Generate ${mode === 'ad-creative' ? 'Product' : 'Character'} Images'`
                         : generatedImages.length === 0
-                        ? "Click 'Generate Character Images' to create visual options"
+                        ? `Click 'Generate ${mode === 'ad-creative' ? 'Product' : 'Character'} Images' to create visual options`
                         : "Select an image to proceed, or click the button to regenerate"}
                     </p>
                   </div>
                 )}
-
-                {!useAICharacter && mode === 'ad-creative' && (
-                  <p className="text-xs text-gray-400">
-                    Enable &quot;Use AI Generation&quot; to add character and style details
-                  </p>
-                )}
               </div>
 
-              {/* Music Source for Music Video Mode */}
-              {mode === 'music-video' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-1">
-                    <Label className="text-sm font-medium text-white">
-                      Music Source
-                    </Label>
-                    <span className="text-red-400 text-sm">*</span>
-                  </div>
-                  <div className="space-y-4">
-                    {/* Audio Source Tabs */}
-                    <Tabs
+              {/* Music Source - Available for Both Modes */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1">
+                  <Label className="text-sm font-medium text-white">
+                    {mode === 'ad-creative' ? 'Background Music (Optional)' : 'Music Source'}
+                  </Label>
+                  {mode === 'music-video' && <span className="text-red-400 text-sm">*</span>}
+                </div>
+                {mode === 'ad-creative' && (
+                  <p className="text-xs text-gray-400">
+                    Add background music to your ad creative (optional)
+                  </p>
+                )}
+                <div className="space-y-4">
+                  {/* Audio Source Tabs */}
+                  <Tabs
                       value={audioSource}
                       onValueChange={(value) => {
                         setAudioSource(value as 'upload' | 'youtube')
@@ -675,7 +725,7 @@ export default function CreatePage() {
                           onFileChange={setUploadedAudio}
                           file={uploadedAudio}
                         />
-                        {!uploadedAudio && (
+                        {!uploadedAudio && mode === 'music-video' && (
                           <p className="text-xs text-red-400 mt-2">
                             Music file is required
                           </p>
@@ -694,9 +744,58 @@ export default function CreatePage() {
                         />
                       </div>
                     )}
-                  </div>
                 </div>
-              )}
+              </div>
+
+              {/* Director Style Selector */}
+              <div className="space-y-2">
+                <Label htmlFor="director-config" className="text-sm font-medium text-white">
+                  Director Style (Optional)
+                </Label>
+                <Select
+                  value={directorConfig || undefined}
+                  onValueChange={(value) => {
+                    // Allow clearing selection by setting to empty string
+                    setDirectorConfig(value === "none" ? '' : value)
+                  }}
+                  disabled={isFetchingDirectorConfigs}
+                >
+                  <SelectTrigger
+                    id="director-config"
+                    className="w-full bg-gray-800 border-gray-600 text-white"
+                  >
+                    <SelectValue placeholder={isFetchingDirectorConfigs ? "Loading..." : "None (optional)"} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    {isFetchingDirectorConfigs ? (
+                      <SelectItem value="loading" disabled className="text-gray-500">
+                        Loading...
+                      </SelectItem>
+                    ) : availableDirectorConfigs.length > 0 ? (
+                      availableDirectorConfigs.map((config) => (
+                        <SelectItem
+                          key={config}
+                          value={config}
+                          className="text-white hover:bg-gray-700"
+                        >
+                          {config}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem
+                        value="no-configs"
+                        disabled
+                        className="text-gray-500"
+                      >
+                        No configs available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-400">
+                  Choose a creative direction template (e.g., Wes-Anderson, David-Lynch)
+                </p>
+              </div>
 
               {/* Submit Button */}
               <div className="space-y-2">
@@ -738,11 +837,6 @@ export default function CreatePage() {
                         Video description is required
                       </p>
                     )}
-                    {mode === 'ad-creative' && uploadedImages.length === 0 && (
-                      <p className="text-xs text-yellow-400 text-center">
-                        Please upload at least one product image
-                      </p>
-                    )}
                     {mode === 'music-video' && (
                       <>
                         {audioSource === 'upload' && !uploadedAudio && (
@@ -752,20 +846,10 @@ export default function CreatePage() {
                         )}
                         {audioSource === 'youtube' && !downloadedAudioId && (
                           <p className="text-xs text-yellow-400 text-center">
-                            Audio is required
+                            Please download audio from YouTube
                           </p>
                         )}
                       </>
-                    )}
-                    {mode === 'ad-creative' && useAICharacter && selectedImageIndex === null && generatedImages.length > 0 && (
-                      <p className="text-xs text-yellow-400 text-center">
-                        Please select a character image to continue
-                      </p>
-                    )}
-                    {mode === 'ad-creative' && useAICharacter && generatedImages.length === 0 && characterDescription.trim() && (
-                      <p className="text-xs text-yellow-400 text-center">
-                        Please generate and select a character image to continue
-                      </p>
                     )}
                   </div>
                 )}

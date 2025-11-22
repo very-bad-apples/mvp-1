@@ -71,6 +71,7 @@ class ProjectCreateRequest(BaseModel):
     characterDescription: str = Field(..., min_length=1, description="Character description")
     characterReferenceImageId: Optional[str] = Field(None, description="UUID of selected character image")
     productDescription: Optional[str] = Field(None, description="Product description (for ad-creative mode)")
+    directorConfig: Optional[str] = Field(None, description="Director config name (e.g., 'Wes-Anderson')")
 
     @field_validator('mode')
     @classmethod
@@ -110,7 +111,7 @@ class ProjectCreateResponse(BaseModel):
 class ProjectResponse(BaseModel):
     """
     Response model for project retrieval.
-    
+
     Note: All *Url fields contain presigned S3 URLs (e.g., "https://bucket.s3.amazonaws.com/...?X-Amz-Signature=..."),
     NOT S3 object keys. These URLs are generated on-demand from S3 keys stored in the database.
     Presigned URLs expire after a configured time (default: 1 hour).
@@ -118,12 +119,14 @@ class ProjectResponse(BaseModel):
     projectId: str
     status: str
     conceptPrompt: str
-    characterDescription: str
+    characterDescription: Optional[str] = None
     characterImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for character image (expires after configured time)")
     productDescription: Optional[str] = None
     productImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for product image (expires after configured time)")
     audioBackingTrackUrl: Optional[str] = Field(None, description="Presigned S3 URL for audio backing track (expires after configured time)")
     finalOutputUrl: Optional[str] = Field(None, description="Presigned S3 URL for final composed video (expires after configured time)")
+    directorConfig: Optional[str] = Field(None, description="Director config name used for this project")
+    mode: Optional[str] = Field(None, description="Project mode: 'music-video' or 'ad-creative'")
     sceneCount: int
     completedScenes: int
     failedScenes: int

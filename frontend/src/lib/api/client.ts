@@ -13,6 +13,7 @@ import {
   CreateScenesResponse,
   GenerateCharacterReferenceRequest,
   GenerateCharacterReferenceResponse,
+  UploadCharacterReferenceResponse,
   GenerateVideoRequest,
   GenerateVideoResponse,
   VideoInfoResponse,
@@ -439,7 +440,10 @@ export async function createProject(
   const formData = new FormData()
   formData.append('mode', data.mode)
   formData.append('prompt', data.prompt)
-  formData.append('characterDescription', data.characterDescription)
+
+  if (data.characterDescription) {
+    formData.append('characterDescription', data.characterDescription)
+  }
 
   if (data.characterReferenceImageId) {
     formData.append('characterReferenceImageId', data.characterReferenceImageId)
@@ -449,12 +453,12 @@ export async function createProject(
     formData.append('productDescription', data.productDescription)
   }
 
-  if (data.directorConfig) {
-    formData.append('directorConfig', data.directorConfig)
+  if (data.productReferenceImageId) {
+    formData.append('productReferenceImageId', data.productReferenceImageId)
   }
 
-  if (data.configFlavor) {
-    formData.append('configFlavor', data.configFlavor)
+  if (data.directorConfig) {
+    formData.append('directorConfig', data.directorConfig)
   }
 
   // Add product images if provided (for ad-creative mode)
@@ -603,6 +607,47 @@ export async function generateCharacterReference(
       maxRetries: 2, // Reduce retries for long-running operations
     }
   )
+}
+
+/**
+ * Upload a character reference image file
+ * @param file Image file to upload
+ * @returns Upload response with image_id (UUID)
+ */
+export async function uploadCharacterReference(
+  file: File
+): Promise<UploadCharacterReferenceResponse> {
+  const url = `${getAPIUrl()}/api/mv/upload_character_reference`
+  
+  // Create FormData for multipart/form-data request
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  // Build headers with API key (don't set Content-Type - browser will set it with boundary)
+  const headers: Record<string, string> = {}
+  const apiKey = getAPIKey()
+  if (apiKey) {
+    headers['X-API-Key'] = apiKey
+  }
+  
+  // Use fetch directly for file uploads (FormData sets its own Content-Type with boundary)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+    throw new APIError(
+      errorData.message || 'Failed to upload character reference image',
+      response.status,
+      errorData.error,
+      errorData.details
+    )
+  }
+  
+  return response.json()
 }
 
 /**

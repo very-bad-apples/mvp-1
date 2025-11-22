@@ -172,14 +172,17 @@ export interface CreateProjectRequest {
   /** User's concept/idea */
   prompt: string
 
-  /** Character description */
-  characterDescription: string
+  /** Character description (for music-video mode) */
+  characterDescription?: string | null
 
-  /** Character reference image ID */
+  /** Character reference image ID (for music-video mode) */
   characterReferenceImageId?: string | null
 
   /** Product description (for ad-creative mode) */
   productDescription?: string | null
+
+  /** Product reference image ID (for ad-creative mode) */
+  productReferenceImageId?: string | null
 
   /** Director config name (e.g., "Wes-Anderson") */
   directorConfig?: string | null
