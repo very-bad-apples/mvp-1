@@ -51,6 +51,9 @@ backend/mv/outputs/*/*
 # wills ignores
 .notes
 .ref-pipeline
+.env.production
+frontend/deploy.sh
+frontend/next-app.tar.gz
 
 # Terraform secrets
 terraform/terraform.tfvars

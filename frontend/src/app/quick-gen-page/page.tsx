@@ -161,9 +161,7 @@ export default function QuickGenPage() {
     const fetchConfigFlavors = async () => {
       setIsFetchingFlavors(true)
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
-          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-        })
+        const response = await fetch(`${API_BASE}/get_config_flavors`)
         if (response.ok) {
           const data = await response.json()
           if (data.flavors && Array.isArray(data.flavors)) {
@@ -213,7 +211,7 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false&api_key=${API_KEY}`, {
+        const response = await fetch(`${API_BASE}/get_character_reference/${imageId}?redirect=false`, {
           headers: {
             'Content-Type': 'application/json'
           },
@@ -473,7 +471,7 @@ export default function QuickGenPage() {
         console.log(`[Scene ${sceneIndex + 1}] Using character reference image: ${requestBody.character_reference_id}`)
       }
 
-      const response = await fetch(`${API_URL}/api/mv/generate_video`, {
+      const response = await fetch(`${API_BASE}/generate_video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -664,11 +662,10 @@ export default function QuickGenPage() {
       const startTime = sceneIndex * 8
       const endTime = startTime + 8
 
-      const response = await fetch(`${API_URL}/api/mv/lipsync`, {
+      const response = await fetch(`${API_BASE}/lipsync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           video_id: state.video.videoId,
@@ -739,11 +736,10 @@ export default function QuickGenPage() {
         requestBody.suppress_video_audio = true
       }
 
-      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+      const response = await fetch(`${API_BASE}/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify(requestBody),
       })
@@ -1105,7 +1101,7 @@ export default function QuickGenPage() {
                           )}
                           <audio
                             controls
-                            src={`${API_URL}/api/audio/get/${jobData.audioId}?api_key=${API_KEY}`}
+                            src={`/api/audio/get/${jobData.audioId}`}
                             className="w-full h-10"
                           />
                           <p className="text-xs text-gray-500 font-mono mt-2">ID: {jobData.audioId}</p>

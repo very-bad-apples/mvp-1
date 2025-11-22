@@ -68,9 +68,7 @@ export default function CreatePage() {
     const fetchConfigFlavors = async () => {
       setIsFetchingFlavors(true)
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
-          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-        })
+        const response = await fetch(`${API_BASE}/get_config_flavors`)
         if (response.ok) {
           const data = await response.json()
           if (data.flavors && Array.isArray(data.flavors)) {
@@ -93,9 +91,7 @@ export default function CreatePage() {
     const fetchDirectorConfigs = async () => {
       setIsFetchingDirectorConfigs(true)
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_director_configs`, {
-          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-        })
+        const response = await fetch(`${API_BASE}/get_director_configs`)
         if (response.ok) {
           const data = await response.json()
           if (data.configs && Array.isArray(data.configs)) {
@@ -879,11 +875,10 @@ export default function CreatePage() {
 
                                 setIsConvertingAudio(true)
                                 try {
-                                  const response = await fetch(`${API_URL}/api/audio/convert-youtube`, {
+                                  const response = await fetch(`/api/audio/convert-youtube`, {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
-                                      'X-API-Key': API_KEY,
                                     },
                                     body: JSON.stringify({ url: youtubeUrl }),
                                   })
