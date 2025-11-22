@@ -116,6 +116,15 @@ class Settings:
 
     # FFmpeg Configuration (for audio processing)
     FFMPEG_PATH: Optional[str] = os.getenv("FFMPEG_PATH", None)  # Optional path to ffmpeg executable
+    
+    # YouTube Download Configuration (for yt-dlp)
+    # Use cookies to bypass YouTube bot detection
+    # Options for YTDLP_COOKIES_FROM_BROWSER: "chrome", "firefox", "edge", "safari", "opera", "brave"
+    # If set, yt-dlp will automatically extract cookies from the specified browser
+    YTDLP_COOKIES_FROM_BROWSER: Optional[str] = os.getenv("YTDLP_COOKIES_FROM_BROWSER", None)
+    # Alternative: Path to a cookies file (Netscape format or JSON)
+    # Can be exported using: yt-dlp --cookies-from-browser chrome --cookies cookies.txt
+    YTDLP_COOKIES_FILE: Optional[str] = os.getenv("YTDLP_COOKIES_FILE", None)
 
     # Job Queue
     JOB_QUEUE_NAME: str = "video_generation_queue"

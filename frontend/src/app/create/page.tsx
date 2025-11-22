@@ -892,8 +892,11 @@ export default function CreatePage() {
                                   })
 
                                   if (!response.ok) {
-                                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-                                    throw new Error(errorData.detail?.message || errorData.detail || 'Failed to convert audio')
+                                    const errorData = await response.json().catch(() => ({ detail: { message: 'Unknown error', details: 'No error details available' } }))
+                                    const errorMsg = errorData.detail?.message || errorData.detail || 'Failed to convert audio'
+                                    const errorDetails = errorData.detail?.details || ''
+                                    console.error('Backend error:', errorData)
+                                    throw new Error(errorDetails ? `${errorMsg}: ${errorDetails}` : errorMsg)
                                   }
 
                                   const blob = await response.blob()

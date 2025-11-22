@@ -11,10 +11,11 @@ from pathlib import Path
 import tempfile
 import asyncio
 import os
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
-from backend.config import settings
+from pydantic import BaseModel, Field
+from config import settings
 
 logger = structlog.get_logger()
 
@@ -61,7 +62,7 @@ async def _download_cookies_from_s3(s3_path: str) -> str:
         bucket_name, key = parts
         
         # Import S3 service
-        from backend.services.s3_storage import S3StorageService
+        from services.s3_storage import S3StorageService
         s3_service = S3StorageService()
         
         # Create temporary file
@@ -92,7 +93,7 @@ async def _download_cookies_from_gcs(gcs_path: str) -> str:
         bucket_name, key = parts
         
         # Import storage backend
-        from backend.services.storage_backend import get_storage_backend
+        from services.storage_backend import get_storage_backend
         storage = get_storage_backend()
         
         # Create temporary file
@@ -256,68 +257,113 @@ async def convert_youtube_to_mp3(request: ConvertYouTubeRequest):
         
         logger.info("using_yt_dlp", path=yt_dlp_path)
         
-        command = [
+        base_command = [
             yt_dlp_path,
-            '-f', 'bestaudio[ext=m4a]/bestaudio',  # Prefer m4a (faster, no conversion needed)
+            '-f', 'bestaudio/best',  # Get best available audio format
             '-o', '-',  # Output to stdout (memory)
             '--no-warnings',
             '--no-playlist',  # Don't download playlist
             '--quiet',
             '--progress',  # Show progress for debugging
-            # Automatic bot detection bypass: Use Android client
-            '--extractor-args', 'youtube:player_client=android',
-            '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
         ]
         
-        # Optional: Add cookie options if provided (fallback if Android client fails)
+        extractor_strategies = [
+            {
+                "name": "android",
+                "args": [
+                    '--extractor-args', 'youtube:player_client=android',
+                    '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+                ]
+            },
+            {
+                "name": "tv_html5",
+                "args": [
+                    '--extractor-args', 'youtube:player_client=tv',
+                    '--user-agent', 'Mozilla/5.0 (ChromiumStyle; Android TV 12.1.1; SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+                ]
+            },
+            {
+                "name": "web_fallback",
+                "args": [
+                    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+                ]
+            }
+        ]
+        
+        # Collect cookie args separately so we can reuse them for fallbacks
         cookies_temp_file = None
+        cookie_args: list[str] = []
+        
+        # Optional: Add cookie options if provided (fallback if Android client fails)
         if request.cookies:
             try:
                 # Save user-provided cookies to temp file
                 cookies_temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
                 cookies_temp_file.write(request.cookies)
                 cookies_temp_file.close()
-                command.extend(['--cookies', cookies_temp_file.name])
+                cookie_args.extend(['--cookies', cookies_temp_file.name])
                 logger.info("using_cookies_from_request", temp_file=cookies_temp_file.name)
             except Exception as e:
                 logger.warning("failed_to_save_cookies", error=str(e))
-        elif settings.YTDLP_COOKIES_FROM_BROWSER:
+        elif hasattr(settings, 'YTDLP_COOKIES_FROM_BROWSER') and settings.YTDLP_COOKIES_FROM_BROWSER:
             browser = settings.YTDLP_COOKIES_FROM_BROWSER.lower()
-            command.extend(['--cookies-from-browser', browser])
+            cookie_args.extend(['--cookies-from-browser', browser])
             logger.info("using_cookies_from_browser", browser=browser)
-        elif settings.YTDLP_COOKIES_FILE:
+        elif hasattr(settings, 'YTDLP_COOKIES_FILE') and settings.YTDLP_COOKIES_FILE:
             cookies_path = await _resolve_cookies_file_for_subprocess(settings.YTDLP_COOKIES_FILE)
             if cookies_path:
-                command.extend(['--cookies', cookies_path])
+                cookie_args.extend(['--cookies', cookies_path])
                 logger.info("using_cookies_file", path=cookies_path)
         
-        # Add URL at the end
-        command.append(url)
-
-        # Run yt-dlp and capture output in memory
-        process = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=180  # 3 minute timeout
-        )
-
-        if process.returncode != 0:
+        def run_command(cmd: list[str]):
+            return subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=180  # 3 minute timeout
+            )
+        
+        successful_process = None
+        current_command: list[str] = []
+        errors = []
+        
+        for strategy in extractor_strategies:
+            current_command = base_command + strategy["args"] + cookie_args + [url]
+            logger.info("youtube_download_attempt", strategy=strategy["name"])
+            process = run_command(current_command)
+            
+            if process.returncode == 0:
+                logger.info("youtube_download_strategy_success", strategy=strategy["name"])
+                successful_process = process
+                break
+            
             error_message = process.stderr.decode('utf-8', errors='ignore')
+            stdout_message = process.stdout.decode('utf-8', errors='ignore')[:500] if process.stdout else ""
+            errors.append({
+                "strategy": strategy["name"],
+                "stderr": error_message,
+                "stdout": stdout_message,
+                "return_code": process.returncode,
+                "command": " ".join(current_command[:6]) + "..."
+            })
+        else:
+            # All strategies failed
+            first_error = errors[0] if errors else {}
+            error_details = "; ".join(f"[{err['strategy']}] {err['stderr'] or err['stdout'] or 'Unknown error'}" for err in errors)
             logger.error(
-                "youtube_download_failed",
-                url=url[:100],
-                error=error_message,
-                return_code=process.returncode
+                "youtube_download_failed_all_strategies",
+                errors=errors
             )
             raise HTTPException(
                 status_code=500,
                 detail={
                     "error": "DownloadError",
                     "message": "Failed to download audio from YouTube",
-                    "details": error_message or "Unknown error occurred"
+                    "details": error_details or "All extractor strategies failed."
                 }
             )
+        
+        process = successful_process
 
         # Audio data is now in memory (process.stdout)
         audio_data = process.stdout

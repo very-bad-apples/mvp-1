@@ -14,9 +14,10 @@ import uuid
 from datetime import datetime
 import tempfile
 import os
+import copy
 
 import yt_dlp
-from backend.config import settings
+from config import settings
 
 # pydub is optional - only needed if FFmpeg is available for conversion
 try:
@@ -66,8 +67,8 @@ class AudioDownloader:
         logger.info(
             "AudioDownloader initialized",
             ffmpeg_available=self.ffmpeg_available,
-            cookies_from_browser=settings.YTDLP_COOKIES_FROM_BROWSER,
-            cookies_file=settings.YTDLP_COOKIES_FILE
+            cookies_from_browser=getattr(settings, 'YTDLP_COOKIES_FROM_BROWSER', None),
+            cookies_file=getattr(settings, 'YTDLP_COOKIES_FILE', None)
         )
 
     def _check_ffmpeg(self) -> None:
@@ -118,21 +119,24 @@ class AudioDownloader:
         
         # Priority 1: Use cookies from browser (automatic extraction)
         # NOTE: Only works in local development, not in containers/serverless
-        if settings.YTDLP_COOKIES_FROM_BROWSER:
-            browser = settings.YTDLP_COOKIES_FROM_BROWSER.lower()
+        browser_setting = getattr(settings, 'YTDLP_COOKIES_FROM_BROWSER', None)
+        cookies_file_setting = getattr(settings, 'YTDLP_COOKIES_FILE', None)
+        
+        if browser_setting:
+            browser = browser_setting.lower()
             cookie_opts['cookiesfrombrowser'] = (browser,)
             logger.info("using_cookies_from_browser", browser=browser)
         
         # Priority 2: Use cookies file (local, S3, GCS, or HTTP)
-        elif settings.YTDLP_COOKIES_FILE:
-            cookies_path = await self._resolve_cookies_file(settings.YTDLP_COOKIES_FILE)
+        elif cookies_file_setting:
+            cookies_path = await self._resolve_cookies_file(cookies_file_setting)
             if cookies_path:
                 cookie_opts['cookiefile'] = cookies_path
                 logger.info("using_cookies_file", path=cookies_path)
             else:
                 logger.warning(
                     "cookies_file_not_found",
-                    path=settings.YTDLP_COOKIES_FILE,
+                    path=cookies_file_setting,
                     message="Cookies file specified but not found. Downloads may fail."
                 )
         
@@ -188,7 +192,7 @@ class AudioDownloader:
             bucket_name, key = parts
             
             # Import S3 service
-            from backend.services.s3_storage import S3StorageService
+            from services.s3_storage import S3StorageService
             s3_service = S3StorageService()
             
             # Create temporary file
@@ -218,7 +222,7 @@ class AudioDownloader:
             bucket_name, key = parts
             
             # Import storage backend
-            from backend.services.storage_backend import get_storage_backend
+            from services.storage_backend import get_storage_backend
             storage = get_storage_backend()
             
             # Create temporary file
@@ -306,8 +310,8 @@ class AudioDownloader:
         audio_id = str(uuid.uuid4())
         output_template = str(output_dir / f"{audio_id}.%(ext)s")
 
-        # Configure yt-dlp options
-        ydl_opts = {
+        # Configure base yt-dlp options
+        base_ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': output_template,
             'quiet': True,  # Suppress yt-dlp output
@@ -316,39 +320,56 @@ class AudioDownloader:
             'noplaylist': True,  # Only download single video, not playlists
         }
         
-        # Automatic bot detection bypass: Use Android client to avoid bot detection
-        # This makes requests look like they're from the YouTube mobile app
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'player_client': ['android'],  # Use Android client (less bot detection)
-                'player_skip': ['webpage'],  # Skip webpage parsing
+        client_profiles = [
+            {
+                "name": "android",
+                "extractor_args": {
+                    'youtube': {
+                        'player_client': ['android'],
+                        'player_skip': ['webpage'],
+                    }
+                },
+                "user_agent": 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+            },
+            {
+                "name": "tv_html5",
+                "extractor_args": {
+                    'youtube': {
+                        'player_client': ['tvhtml5'],
+                        'player_skip': ['webpage'],
+                    }
+                },
+                "user_agent": 'Mozilla/5.0 (ChromiumStyle; Android TV 12.1.1; SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+            },
+            {
+                "name": "web_fallback",
+                "extractor_args": None,
+                "user_agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
             }
-        }
-        
-        # Add realistic user agent for Android
-        ydl_opts['user_agent'] = 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+        ]
         
         # Add cookie options to bypass YouTube bot detection (optional fallback)
         # Priority: Use cookies from request if provided
         cookies_temp_file = None
+        cookie_opts = {}
+
         if cookies:
             try:
                 # Save user-provided cookies to temp file
                 cookies_temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
                 cookies_temp_file.write(cookies)
                 cookies_temp_file.close()
-                ydl_opts['cookiefile'] = cookies_temp_file.name
+                cookie_opts['cookiefile'] = cookies_temp_file.name
                 logger.info("using_cookies_from_request", temp_file=cookies_temp_file.name)
             except Exception as e:
                 logger.warning("failed_to_save_cookies", error=str(e))
         else:
             # Fall back to environment-based cookies (if configured)
             cookie_opts = await self._get_cookie_options()
-            ydl_opts.update(cookie_opts)
         
         # Add FFmpeg path if specified
         if self.ffmpeg_path:
-            ydl_opts['ffmpeg_location'] = self.ffmpeg_path
+            base_ydl_opts['ffmpeg_location'] = self.ffmpeg_path
         elif self.ffmpeg_available:
             # If FFmpeg is in PATH, yt-dlp will find it automatically
             # But we can also explicitly set it if needed
@@ -356,37 +377,51 @@ class AudioDownloader:
             if ffmpeg_cmd:
                 # Extract directory from full path (remove ffmpeg.exe)
                 ffmpeg_dir = str(Path(ffmpeg_cmd).parent)
-                ydl_opts['ffmpeg_location'] = ffmpeg_dir
+                base_ydl_opts['ffmpeg_location'] = ffmpeg_dir
         
         # Always try to convert to MP3 if FFmpeg is available
         # If not available, we'll try pydub conversion after download
         if self.ffmpeg_available:
-            ydl_opts['postprocessors'] = [{
+            base_ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': audio_quality,
             }]
 
         try:
-            # Run yt-dlp in thread pool to avoid blocking
-            # Try with Android client first (best for avoiding bot detection)
-            try:
-                result = await asyncio.to_thread(self._download_with_ytdlp, url, ydl_opts)
-            except Exception as android_error:
-                # If Android client fails, try iOS client as fallback
-                logger.warning(
-                    "android_client_failed",
-                    error=str(android_error),
-                    message="Trying iOS client as fallback"
+            result = None
+            download_errors = []
+            
+            for profile in client_profiles:
+                profile_opts = copy.deepcopy(base_ydl_opts)
+                profile_opts.update(cookie_opts)
+                
+                if profile['extractor_args']:
+                    profile_opts['extractor_args'] = profile['extractor_args']
+                else:
+                    profile_opts.pop('extractor_args', None)
+                
+                profile_opts['user_agent'] = profile['user_agent']
+                
+                try:
+                    logger.info("audio_download_profile_attempt", profile=profile['name'])
+                    result = await asyncio.to_thread(self._download_with_ytdlp, url, profile_opts)
+                    logger.info("audio_download_profile_success", profile=profile['name'])
+                    break
+                except Exception as profile_error:
+                    error_msg = str(profile_error)
+                    download_errors.append(f"{profile['name']}: {error_msg}")
+                    logger.warning(
+                        "audio_download_profile_failed",
+                        profile=profile['name'],
+                        error=error_msg
+                    )
+                    result = None
+            
+            if result is None:
+                raise AudioDownloadError(
+                    "All extractor profiles failed: " + " | ".join(download_errors)
                 )
-                ydl_opts['extractor_args'] = {
-                    'youtube': {
-                        'player_client': ['ios'],  # Try iOS client
-                        'player_skip': ['webpage'],
-                    }
-                }
-                ydl_opts['user_agent'] = 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
-                result = await asyncio.to_thread(self._download_with_ytdlp, url, ydl_opts)
 
             # Find the downloaded audio file (check MP3 first, then other formats)
             # Priority: MP3 first (if yt-dlp converted it), then other formats
