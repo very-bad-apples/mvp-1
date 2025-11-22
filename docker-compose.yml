@@ -38,6 +38,13 @@ services:
       - DYNAMODB_TABLE_NAME=MVProjects
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      # Ensure cloud storage settings are passed through (without overriding)
+      - SERVE_FROM_CLOUD=${SERVE_FROM_CLOUD:-true}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-video-generator-storage}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
       - ./backend:/app
       - backend_data:/app/data
