@@ -201,36 +201,36 @@ variable "redirect_http_to_https" {
 
 # =============================================================================
 # WAF (Web Application Firewall) Configuration
+# NOTE: WAF resources not implemented yet - these variables are not used
 # =============================================================================
-
-variable "enable_waf" {
-  description = "Enable AWS WAF for ALB protection"
-  type        = bool
-  default     = false
-}
-
-variable "waf_rate_limit" {
-  description = "Rate limit per IP (requests per 5 minutes). Set to 0 to disable. Recommended: 2000"
-  type        = number
-  default     = 0
-  
-  validation {
-    condition     = var.waf_rate_limit >= 0 && var.waf_rate_limit <= 100000
-    error_message = "Rate limit must be between 0 and 100000."
-  }
-}
-
-variable "waf_allowed_ips" {
-  description = "List of IP addresses/CIDR blocks to whitelist (e.g., [\"1.2.3.4/32\", \"5.6.7.0/24\"])"
-  type        = list(string)
-  default     = []
-}
-
-variable "waf_blocked_ips" {
-  description = "List of IP addresses/CIDR blocks to blacklist"
-  type        = list(string)
-  default     = []
-}
+# 
+# Commented out unused WAF variables:
+# 
+# variable "enable_waf" {
+#   description = "Enable AWS WAF for ALB protection"
+#   type        = bool
+#   default     = false
+# }
+# 
+# variable "waf_rate_limit" {
+#   description = "Rate limit per IP (requests per 5 minutes)"
+#   type        = number
+#   default     = 0
+# }
+# 
+# variable "waf_allowed_ips" {
+#   description = "List of allowed IP addresses/CIDR blocks"
+#   type        = list(string)
+#   default     = []
+# }
+# 
+# variable "waf_blocked_ips" {
+#   description = "List of blocked IP addresses/CIDR blocks"
+#   type        = list(string)
+#   default     = []
+# }
+#
+# To add WAF protection, you need to create aws_wafv2_web_acl resources
 
 # =============================================================================
 # ALB Authentication Configuration

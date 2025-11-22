@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Disable caching for audio info endpoint (dynamic content)
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -10,39 +9,42 @@ const API_KEY = process.env.API_KEY || ''
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { audioId: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { audioId } = params
+    const { id } = params
 
-    if (!audioId || audioId.length < 10) {
+    if (!id) {
       return NextResponse.json(
         {
           error: 'ValidationError',
-          message: 'Invalid audio_id format',
-          details: 'audio_id must be a valid identifier'
+          message: 'Invalid job ID',
+          details: 'Job ID is required'
         },
         { status: 400 }
       )
     }
 
-    // Call backend API
-    const response = await fetch(`${BACKEND_URL}/api/audio/info/${audioId}`, {
+    // Proxy the request to backend
+    const response = await fetch(`${BACKEND_URL}/api/jobs/${id}`, {
       method: 'GET',
       headers: {
         'X-API-Key': API_KEY,
       },
     })
 
-    const data = await response.json()
-
     if (!response.ok) {
-      return NextResponse.json(data, { status: response.status })
+      const errorData = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: 'Failed to retrieve job'
+      }))
+      return NextResponse.json(errorData, { status: response.status })
     }
 
-    return NextResponse.json(data, { status: 200 })
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
-    console.error('Error in audio info API route:', error)
+    console.error('Error in jobs API route:', error)
     return NextResponse.json(
       {
         error: 'InternalError',
