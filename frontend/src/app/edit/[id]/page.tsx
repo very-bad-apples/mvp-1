@@ -332,17 +332,40 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
   }, [isPlaying, project?.audioBackingTrackUrl])
 
-  // Sync audio currentTime with video currentTime for seeking
+  // Sync audio currentTime with video currentTime
+  // Only sync when paused (user seeking) or when playback starts
+  // During normal playback, let audio play naturally without constant syncing to avoid choppiness
+  const lastSyncedTimeRef = useRef<number>(0)
+  const wasPlayingRef = useRef<boolean>(false)
+  
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !project?.audioBackingTrackUrl) return
 
-    // Only sync if difference is significant (>0.1s) to avoid micro-adjustments
-    const diff = Math.abs(audio.currentTime - currentTime)
-    if (diff > 0.1) {
+    // Sync when playback starts (to ensure audio starts at correct position)
+    if (isPlaying && !wasPlayingRef.current) {
       audio.currentTime = currentTime
+      lastSyncedTimeRef.current = currentTime
+      wasPlayingRef.current = true
+      return
     }
-  }, [currentTime, project?.audioBackingTrackUrl])
+    
+    // Update ref when playback stops
+    if (!isPlaying) {
+      wasPlayingRef.current = false
+    }
+
+    // Only sync when paused (user is seeking) - don't sync during playback
+    if (!isPlaying) {
+      const diff = Math.abs(audio.currentTime - currentTime)
+      if (diff > 0.1) {
+        audio.currentTime = currentTime
+        lastSyncedTimeRef.current = currentTime
+      }
+    }
+    // During playback, don't sync - let audio play naturally
+    // The audio will stay in sync because both started at the same time
+  }, [currentTime, isPlaying, project?.audioBackingTrackUrl])
 
   // Sync audio volume with state
   useEffect(() => {
