@@ -287,13 +287,49 @@ async def create_scenes(request: CreateScenesRequest):
                 }
             )
 
-        # Validate project_id format if provided
+        # Validate project_id format if provided and retrieve mode
         project_id = None
+        project_mode = "music-video"  # Default mode
+        director_config = None
+        cached_project_item = None
+
         if request.project_id:
             try:
                 # Validate UUID format
                 uuid.UUID(request.project_id)
                 project_id = request.project_id
+
+                # Retrieve project from database
+                pk = f"PROJECT#{project_id}"
+                try:
+                    cached_project_item = MVProjectItem.get(pk, "METADATA")
+                    if cached_project_item.mode:
+                        project_mode = cached_project_item.mode
+                        logger.info(
+                            "using_project_mode_for_scene_generation",
+                            project_id=project_id,
+                            mode=project_mode
+                        )
+                    if cached_project_item.directorConfig:
+                        director_config = cached_project_item.directorConfig
+                        logger.info(
+                            "using_director_config_for_scene_generation",
+                            project_id=project_id,
+                            director_config=director_config
+                        )
+                except DoesNotExist:
+                    logger.warning(
+                        "project_not_found_for_mode_retrieval",
+                        project_id=project_id
+                    )
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Project {project_id} not found",
+                            "details": "The specified project does not exist in the database"
+                        }
+                    )
             except ValueError:
                 raise HTTPException(
                     status_code=400,
@@ -304,17 +340,17 @@ async def create_scenes(request: CreateScenesRequest):
                     }
                 )
 
-        # Generate scenes using new mode-based approach
+        # Generate scenes using mode-based approach
         scenes, output_files = generate_scenes(
-            mode="music-video",  # Default mode for this endpoint
+            mode=project_mode,
             concept_prompt=request.idea.strip(),
             personality_profile=request.character_description.strip(),
-            director_config=None,  # Can be extended later if needed
+            director_config=director_config,
         )
 
         # If project_id provided, create scene records in DynamoDB
         scenes_created_in_db = 0
-        if project_id:
+        if project_id and cached_project_item:
             try:
                 logger.info(
                     "create_scenes_with_project",
@@ -322,20 +358,8 @@ async def create_scenes(request: CreateScenesRequest):
                     scene_count=len(scenes)
                 )
 
-                # Retrieve project from DynamoDB
-                pk = f"PROJECT#{project_id}"
-                try:
-                    project_item = MVProjectItem.get(pk, "METADATA")
-                except DoesNotExist:
-                    logger.warning("create_scenes_project_not_found", project_id=project_id)
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "NotFound",
-                            "message": f"Project {project_id} not found",
-                            "details": "The specified project does not exist in the database"
-                        }
-                    )
+                # Use cached project_item from earlier fetch
+                project_item = cached_project_item
 
                 # Log warning if character description doesn't match (but proceed)
                 if project_item.characterDescription and project_item.characterDescription.strip() != request.character_description.strip():
