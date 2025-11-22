@@ -19,6 +19,9 @@ interface VideoPreviewProps {
   isComposing?: boolean
   selectedScene?: ProjectScene | null
   isScenePreviewMode?: boolean // When true, locks to selectedScene; when false, shows details for currently playing scene
+  muted?: boolean // When true, video element is muted (for audio backing track playback)
+  onAudioVolumeChange?: (volume: number) => void // Callback for audio volume changes when muted is true
+  onAudioMuteChange?: (muted: boolean) => void // Callback for audio mute changes when muted is true
 }
 
 export function VideoPreview({
@@ -33,6 +36,9 @@ export function VideoPreview({
   isComposing = false,
   selectedScene = null,
   isScenePreviewMode = false,
+  muted = false,
+  onAudioVolumeChange,
+  onAudioMuteChange,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
@@ -326,10 +332,25 @@ export function VideoPreview({
 
   // Handle volume changes
   useEffect(() => {
+    // If muted prop is true and audio callbacks exist, control audio instead of video
+    if (muted && onAudioVolumeChange && onAudioMuteChange) {
+      onAudioVolumeChange(volume)
+      onAudioMuteChange(isMuted)
+      return
+    }
+
+    // Otherwise, control video volume as normal
     const video = videoRef.current
     if (!video) return
     video.volume = isMuted ? 0 : volume
-  }, [volume, isMuted])
+  }, [volume, isMuted, muted, onAudioVolumeChange, onAudioMuteChange])
+
+  // Handle muted prop (for audio backing track playback)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.muted = muted
+  }, [muted])
 
   // Handle playback speed changes
   useEffect(() => {
@@ -393,7 +414,13 @@ export function VideoPreview({
   }
 
   const toggleMute = () => {
-    setIsMuted(!isMuted)
+    const newMutedState = !isMuted
+    setIsMuted(newMutedState)
+    
+    // If muted prop is true and audio callback exists, notify parent
+    if (muted && onAudioMuteChange) {
+      onAudioMuteChange(newMutedState)
+    }
   }
 
   const cyclePlaybackSpeed = () => {
@@ -462,13 +489,30 @@ export function VideoPreview({
         case 'arrowup':
           // Up Arrow: Increase volume
           e.preventDefault()
-          setVolume(prev => Math.min(1, prev + 0.1))
-          if (isMuted) setIsMuted(false)
+          setVolume(prev => {
+            const newVolume = Math.min(1, prev + 0.1)
+            if (muted && onAudioVolumeChange) {
+              onAudioVolumeChange(newVolume)
+            }
+            return newVolume
+          })
+          if (isMuted) {
+            setIsMuted(false)
+            if (muted && onAudioMuteChange) {
+              onAudioMuteChange(false)
+            }
+          }
           break
         case 'arrowdown':
           // Down Arrow: Decrease volume
           e.preventDefault()
-          setVolume(prev => Math.max(0, prev - 0.1))
+          setVolume(prev => {
+            const newVolume = Math.max(0, prev - 0.1)
+            if (muted && onAudioVolumeChange) {
+              onAudioVolumeChange(newVolume)
+            }
+            return newVolume
+          })
           break
         case 'm':
           // M: Toggle mute
@@ -520,7 +564,7 @@ export function VideoPreview({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentTime, duration, isMuted, onPlayPause, onSeek, skipToNextScene, skipToPreviousScene, cyclePlaybackSpeed, handleFullscreen, toggleMute])
+  }, [currentTime, duration, isMuted, onPlayPause, onSeek, skipToNextScene, skipToPreviousScene, cyclePlaybackSpeed, handleFullscreen, toggleMute, muted, onAudioVolumeChange, onAudioMuteChange])
 
   return (
     <div className="flex w-full max-w-5xl flex-col gap-4">
@@ -804,8 +848,20 @@ export function VideoPreview({
                   max={100}
                   step={1}
                   onValueChange={([value]) => {
-                    setVolume(value / 100)
-                    if (value > 0 && isMuted) setIsMuted(false)
+                    const newVolume = value / 100
+                    const wasMuted = isMuted
+                    setVolume(newVolume)
+                    if (value > 0 && isMuted) {
+                      setIsMuted(false)
+                    }
+                    
+                    // If muted prop is true and audio callbacks exist, notify parent
+                    if (muted && onAudioVolumeChange) {
+                      onAudioVolumeChange(newVolume)
+                      if (value > 0 && wasMuted && onAudioMuteChange) {
+                        onAudioMuteChange(false)
+                      }
+                    }
                   }}
                   className="w-20"
                   aria-label="Volume (Arrow Up/Down)"

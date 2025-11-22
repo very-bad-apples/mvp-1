@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Video, ChevronLeft, Loader2, Download } from 'lucide-react'
@@ -22,8 +22,11 @@ export default function EditPage({ params }: { params: { id: string } }) {
   const [showOverlay, setShowOverlay] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
   const [compositionJobId, setCompositionJobId] = useState<string | null>(null)
+  const [audioVolume, setAudioVolume] = useState(1)
+  const [audioMuted, setAudioMuted] = useState(false)
   const sceneGenerationTriggered = useRef(false)
   const overlayDismissed = useRef(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const { toast } = useToast()
 
   // Fetch project data using the API client hook
@@ -287,10 +290,94 @@ export default function EditPage({ params }: { params: { id: string } }) {
       setIsComposing(false)
       toast({
         title: "Video Composition Complete!",
-        description: "Your final video is ready. You can now download it.",
+        description: "Your final video is ready. You can download it.",
       })
     }
   }, [project?.finalOutputUrl, isComposing, toast])
+
+  // Load audio backing track when project is available
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !project?.audioBackingTrackUrl) return
+
+    const handleError = () => {
+      console.warn('Failed to load audio backing track:', project.audioBackingTrackUrl)
+    }
+
+    audio.addEventListener('error', handleError)
+
+    // Only update src if it changed
+    if (audio.src !== project.audioBackingTrackUrl) {
+      audio.src = project.audioBackingTrackUrl
+      audio.load()
+    }
+
+    return () => {
+      audio.removeEventListener('error', handleError)
+    }
+  }, [project?.audioBackingTrackUrl])
+
+  // Sync audio play/pause with video playback
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !project?.audioBackingTrackUrl) return
+
+    if (isPlaying) {
+      audio.play().catch(err => {
+        console.warn('Failed to play audio backing track:', err)
+        // Don't break video playback if audio fails
+      })
+    } else {
+      audio.pause()
+    }
+  }, [isPlaying, project?.audioBackingTrackUrl])
+
+  // Sync audio currentTime with video currentTime for seeking
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !project?.audioBackingTrackUrl) return
+
+    // Only sync if difference is significant (>0.1s) to avoid micro-adjustments
+    const diff = Math.abs(audio.currentTime - currentTime)
+    if (diff > 0.1) {
+      audio.currentTime = currentTime
+    }
+  }, [currentTime, project?.audioBackingTrackUrl])
+
+  // Sync audio volume with state
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !project?.audioBackingTrackUrl) return
+    audio.volume = audioMuted ? 0 : audioVolume
+  }, [audioVolume, audioMuted, project?.audioBackingTrackUrl])
+
+  // Sync audio muted state with state
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !project?.audioBackingTrackUrl) return
+    audio.muted = audioMuted
+  }, [audioMuted, project?.audioBackingTrackUrl])
+
+  // Callbacks for VideoPreview to control audio
+  const handleAudioVolumeChange = useCallback((volume: number) => {
+    setAudioVolume(volume)
+  }, [])
+
+  const handleAudioMuteChange = useCallback((muted: boolean) => {
+    setAudioMuted(muted)
+  }, [])
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current
+      if (audio) {
+        audio.pause()
+        audio.src = ''
+        audio.load()
+      }
+    }
+  }, [])
 
   // Handle Continue button click
   const handleContinue = () => {
@@ -515,6 +602,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
                 showFinalVideo={!!project?.finalOutputUrl}
                 isComposing={isComposing}
                 selectedScene={selectedScene}
+                muted={!!project?.audioBackingTrackUrl}
+                onAudioVolumeChange={project?.audioBackingTrackUrl ? handleAudioVolumeChange : undefined}
+                onAudioMuteChange={project?.audioBackingTrackUrl ? handleAudioMuteChange : undefined}
               />
             </div>
 
@@ -538,6 +628,16 @@ export default function EditPage({ params }: { params: { id: string } }) {
         onContinue={handleContinue}
         isComplete={allSceneTextsGenerated}
       />
+
+      {/* Hidden Audio Element for Backing Track */}
+      {project?.audioBackingTrackUrl && (
+        <audio
+          ref={audioRef}
+          className="hidden"
+          preload="auto"
+          aria-hidden="true"
+        />
+      )}
     </div>
   )
 }
