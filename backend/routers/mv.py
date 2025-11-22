@@ -304,16 +304,12 @@ async def create_scenes(request: CreateScenesRequest):
                     }
                 )
 
-        # Generate scenes
+        # Generate scenes using new mode-based approach
         scenes, output_files = generate_scenes(
-            idea=request.idea.strip(),
-            character_description=request.character_description.strip(),
-            character_characteristics=request.character_characteristics.strip() if request.character_characteristics else None,
-            number_of_scenes=request.number_of_scenes,
-            video_type=request.video_type.strip() if request.video_type else None,
-            video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
-            camera_angle=request.camera_angle.strip() if request.camera_angle else None,
-            config_flavor=request.config_flavor,
+            mode="music-video",  # Default mode for this endpoint
+            concept_prompt=request.idea.strip(),
+            personality_profile=request.character_description.strip(),
+            director_config=None,  # Can be extended later if needed
         )
 
         # If project_id provided, create scene records in DynamoDB
