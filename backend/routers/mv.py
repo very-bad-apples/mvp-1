@@ -572,7 +572,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         # Upload to S3 if cloud storage is configured (follows video_generator.py pattern)
         cloud_urls = {}
         try:
-            if settings.STORAGE_BUCKET:
+            if settings.SERVE_FROM_CLOUD and settings.STORAGE_BUCKET:
                 from services.storage_backend import get_storage_backend
                 import asyncio
                 import concurrent.futures
