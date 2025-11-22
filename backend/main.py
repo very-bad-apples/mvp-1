@@ -81,6 +81,9 @@ app = FastAPI(
     description="Backend API for generating AI-powered video ads",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
     swagger_ui_parameters={
         "persistAuthorization": True,
     }
@@ -141,7 +144,7 @@ async def api_authentication_middleware(request: Request, call_next):
         return await call_next(request)
 
     # Skip authentication for health check and docs
-    if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+    if request.url.path in ["/health", "/api/docs", "/api/redoc", "/api/openapi.json"]:
         return await call_next(request)
 
     # Skip authentication for CORS preflight requests
@@ -285,7 +288,7 @@ async def root():
     return {
         "message": "AI Video Generator API",
         "version": "1.0.0",
-        "docs": "/docs",
+        "docs": "/api/docs",
         "health": "/health",
         "endpoints": {
             "generate": "/api/generate",
