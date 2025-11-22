@@ -48,3 +48,17 @@ output "env_file_config" {
   sensitive   = true
 }
 
+# =============================================================================
+# DynamoDB Outputs
+# =============================================================================
+
+output "dynamodb_table_name" {
+  description = "Name of the DynamoDB table for Music Video projects"
+  value       = aws_dynamodb_table.mv_projects.name
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table for Music Video projects"
+  value       = aws_dynamodb_table.mv_projects.arn
+}
+
