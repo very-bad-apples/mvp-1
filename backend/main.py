@@ -277,7 +277,7 @@ async def health_check():
 
 
 # Include routers
-from routers import generate, jobs, websocket, models, mv, audio
+from routers import generate, jobs, websocket, models, mv
 # Note: projects.py router removed - using mv_projects.py instead (duplicate conflict resolved)
 from routers import mv_projects
 from routers import audio_converter
@@ -287,7 +287,7 @@ app.include_router(jobs.router)
 app.include_router(websocket.router)
 app.include_router(models.router)
 app.include_router(mv.router)
-app.include_router(audio.router)
+app.include_router(audio_converter.router)
 # Note: projects.router removed - duplicate of mv_projects.router (both used /api/mv prefix)
 app.include_router(mv_projects.router)
 logger.info("router_loaded", router="mv_projects")
@@ -311,9 +311,7 @@ async def root():
             "mv_generate_video": "/api/mv/generate_video",
             "mv_lipsync": "/api/mv/lipsync",
             "mv_get_video": "/api/mv/get_video/{video_id}",
-            "audio_download": "/api/audio/download",
-            "audio_get": "/api/audio/get/{audio_id}",
-            "audio_info": "/api/audio/info/{audio_id}"
+            "audio_convert_youtube": "/api/audio/convert-youtube"
         }
     }
 
