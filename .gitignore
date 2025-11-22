@@ -60,3 +60,5 @@ terraform/terraform.tfvars
 _docs_NR/
 _context-summaries/
 memory-bank
+
+notes.txt

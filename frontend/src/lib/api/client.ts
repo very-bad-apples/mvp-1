@@ -13,6 +13,7 @@ import {
   CreateScenesResponse,
   GenerateCharacterReferenceRequest,
   GenerateCharacterReferenceResponse,
+  UploadCharacterReferenceResponse,
   GenerateVideoRequest,
   GenerateVideoResponse,
   VideoInfoResponse,
@@ -26,6 +27,8 @@ import {
   GetProjectResponse,
   UpdateProjectRequest,
   UpdateProjectResponse,
+  ComposeRequest,
+  ComposeResponse,
 } from '@/types/project'
 
 /**
@@ -78,6 +81,20 @@ export class RateLimitError extends APIError {
   }
 }
 
+export class S3Error extends APIError {
+  constructor(message: string, details?: string) {
+    super(message, 503, 'S3_ERROR', details)
+    this.name = 'S3Error'
+  }
+}
+
+export class ServiceUnavailableError extends APIError {
+  constructor(message: string, details?: string) {
+    super(message, 503, 'SERVICE_UNAVAILABLE', details)
+    this.name = 'ServiceUnavailableError'
+  }
+}
+
 /**
  * Retry configuration
  */
@@ -95,6 +112,71 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelayMs: 10000,
   backoffMultiplier: 2,
   retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+}
+
+/**
+ * User-friendly error messages for different error scenarios
+ */
+const ERROR_MESSAGES: Record<string, { title: string; message: string; recovery: string }> = {
+  NETWORK_ERROR: {
+    title: 'Connection Failed',
+    message: 'Unable to connect to the server. Please check your internet connection.',
+    recovery: 'Retrying automatically...',
+  },
+  TIMEOUT_ERROR: {
+    title: 'Request Timed Out',
+    message: 'The request took too long to complete. This may be due to high server load.',
+    recovery: 'Retrying with exponential backoff...',
+  },
+  RATE_LIMIT_ERROR: {
+    title: 'Too Many Requests',
+    message: 'You have exceeded the rate limit. Please wait a moment before trying again.',
+    recovery: 'Will retry after cooldown period...',
+  },
+  S3_ERROR: {
+    title: 'Storage Service Error',
+    message: 'Unable to access cloud storage. This may be temporary.',
+    recovery: 'Retrying storage operation...',
+  },
+  SERVICE_UNAVAILABLE: {
+    title: 'Service Temporarily Unavailable',
+    message: 'The video generation service is temporarily unavailable.',
+    recovery: 'Retrying connection...',
+  },
+  CONFIGURATION_ERROR: {
+    title: 'Configuration Error',
+    message: 'There is a problem with the server configuration.',
+    recovery: 'Please contact support if this persists.',
+  },
+  VALIDATION_ERROR: {
+    title: 'Invalid Input',
+    message: 'Please check your input and try again.',
+    recovery: 'No automatic retry - please correct your input.',
+  },
+  NOT_FOUND: {
+    title: 'Resource Not Found',
+    message: 'The requested resource could not be found.',
+    recovery: 'No automatic retry - please verify the resource exists.',
+  },
+  UNKNOWN_ERROR: {
+    title: 'Unexpected Error',
+    message: 'An unexpected error occurred.',
+    recovery: 'Retrying operation...',
+  },
+}
+
+/**
+ * Get user-friendly error message for error code
+ */
+export function getUserFriendlyError(
+  error: APIError
+): { title: string; message: string; recovery: string; canRetry: boolean } {
+  const errorInfo = ERROR_MESSAGES[error.errorCode || 'UNKNOWN_ERROR'] || ERROR_MESSAGES.UNKNOWN_ERROR
+
+  return {
+    ...errorInfo,
+    canRetry: error.statusCode ? DEFAULT_RETRY_CONFIG.retryableStatusCodes.includes(error.statusCode) : false,
+  }
 }
 
 /**
@@ -123,13 +205,56 @@ function calculateBackoffDelay(
  */
 function isRetryableError(error: unknown, config: RetryConfig): boolean {
   if (error instanceof APIError) {
-    if (!error.statusCode) return false
-    return config.retryableStatusCodes.includes(error.statusCode)
+    // Don't retry client errors (400-499) except 408 (timeout) and 429 (rate limit)
+    if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+      return config.retryableStatusCodes.includes(error.statusCode)
+    }
+    // Retry all server errors (500-599)
+    if (error.statusCode && error.statusCode >= 500) {
+      return true
+    }
+    // Retry S3 and service unavailable errors
+    if (error instanceof S3Error || error instanceof ServiceUnavailableError) {
+      return true
+    }
+    return false
   }
   if (error instanceof TypeError && error.message.includes('fetch')) {
     return true // Network errors are retryable
   }
   return false
+}
+
+/**
+ * Callback type for retry progress updates
+ */
+export type RetryProgressCallback = (attempt: number, maxAttempts: number, delayMs: number, error: Error) => void
+
+/**
+ * Log retry attempt with structured information
+ */
+function logRetryAttempt(
+  operationName: string,
+  attempt: number,
+  maxRetries: number,
+  delay: number,
+  error: Error
+): void {
+  const errorInfo = error instanceof APIError ? getUserFriendlyError(error) : null
+
+  console.warn(
+    `[API Retry] ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1})`,
+    {
+      attemptNumber: attempt + 1,
+      totalAttempts: maxRetries + 1,
+      nextRetryIn: `${delay}ms`,
+      errorType: error.constructor.name,
+      errorMessage: error.message,
+      errorCode: error instanceof APIError ? error.errorCode : 'UNKNOWN',
+      retryable: errorInfo?.canRetry ?? true,
+      recovery: errorInfo?.recovery ?? 'Retrying...',
+    }
+  )
 }
 
 /**
@@ -209,10 +334,24 @@ async function apiFetch<T>(
           throw new APIError(message, 404, 'NOT_FOUND', details)
         } else if (response.status === 429) {
           throw new RateLimitError(message, details)
-        } else if (response.status === 503 || response.status === 504) {
+        } else if (response.status === 503) {
+          // Check if this is an S3-specific error
+          if (message.toLowerCase().includes('s3') || message.toLowerCase().includes('storage')) {
+            throw new S3Error(message, details)
+          }
+          throw new ServiceUnavailableError(message, details)
+        } else if (response.status === 504) {
           throw new TimeoutError(message, details)
         } else if (response.status >= 500) {
-          throw new ConfigurationError(message, details)
+          // Check if this is a configuration error
+          if (
+            message.toLowerCase().includes('config') ||
+            message.toLowerCase().includes('environment') ||
+            message.toLowerCase().includes('api key')
+          ) {
+            throw new ConfigurationError(message, details)
+          }
+          throw new APIError(message, response.status, 'INTERNAL_ERROR', details)
         } else {
           throw new APIError(
             message,
@@ -237,10 +376,7 @@ async function apiFetch<T>(
       // Check if we should retry
       if (attempt < config.maxRetries && isRetryableError(error, config)) {
         const delay = calculateBackoffDelay(attempt, config)
-        console.warn(
-          `[API] Request failed (attempt ${attempt + 1}/${config.maxRetries + 1}), retrying in ${delay}ms...`,
-          error
-        )
+        logRetryAttempt(url, attempt, config.maxRetries, delay, lastError)
         await sleep(delay)
         continue
       }
@@ -304,7 +440,10 @@ export async function createProject(
   const formData = new FormData()
   formData.append('mode', data.mode)
   formData.append('prompt', data.prompt)
-  formData.append('characterDescription', data.characterDescription)
+
+  if (data.characterDescription) {
+    formData.append('characterDescription', data.characterDescription)
+  }
 
   if (data.characterReferenceImageId) {
     formData.append('characterReferenceImageId', data.characterReferenceImageId)
@@ -312,6 +451,10 @@ export async function createProject(
 
   if (data.productDescription) {
     formData.append('productDescription', data.productDescription)
+  }
+
+  if (data.productReferenceImageId) {
+    formData.append('productReferenceImageId', data.productReferenceImageId)
   }
 
   if (data.directorConfig) {
@@ -402,6 +545,25 @@ export async function updateProject(
 }
 
 /**
+ * Update a specific scene
+ * @param projectId Project identifier
+ * @param sequence Scene sequence number
+ * @param data Scene update data
+ * @returns Updated scene response
+ */
+export async function updateScene(
+  projectId: string,
+  sequence: number,
+  data: { prompt?: string; negativePrompt?: string }
+): Promise<any> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}`
+  return apiFetch<any>(url, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
  * Generation Functions
  */
 
@@ -445,6 +607,47 @@ export async function generateCharacterReference(
       maxRetries: 2, // Reduce retries for long-running operations
     }
   )
+}
+
+/**
+ * Upload a character reference image file
+ * @param file Image file to upload
+ * @returns Upload response with image_id (UUID)
+ */
+export async function uploadCharacterReference(
+  file: File
+): Promise<UploadCharacterReferenceResponse> {
+  const url = `${getAPIUrl()}/api/mv/upload_character_reference`
+  
+  // Create FormData for multipart/form-data request
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  // Build headers with API key (don't set Content-Type - browser will set it with boundary)
+  const headers: Record<string, string> = {}
+  const apiKey = getAPIKey()
+  if (apiKey) {
+    headers['X-API-Key'] = apiKey
+  }
+  
+  // Use fetch directly for file uploads (FormData sets its own Content-Type with boundary)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+    throw new APIError(
+      errorData.message || 'Failed to upload character reference image',
+      response.status,
+      errorData.error,
+      errorData.details
+    )
+  }
+  
+  return response.json()
 }
 
 /**
@@ -571,6 +774,29 @@ export async function getDirectorConfigs(): Promise<{ configs: string[] }> {
   return apiFetch<{ configs: string[] }>(url, {
     method: 'GET',
   })
+}
+
+/**
+ * Compose final video from all scenes
+ * @param projectId Project identifier
+ * @param data Composition request (empty object)
+ * @returns Composition job response
+ */
+export async function composeVideo(
+  projectId: string,
+  data: ComposeRequest = {}
+): Promise<ComposeResponse> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/compose`
+  return apiFetch<ComposeResponse>(
+    url,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+    {
+      maxRetries: 1, // Minimal retries for composition operations
+    }
+  )
 }
 
 /**

@@ -59,7 +59,10 @@
         "priority": "medium",
         "details": "The job status page is implemented at /jobs/[id] with real-time WebSocket updates, a progress tracker, and a video player for completed jobs. It includes error handling, retry options, and a responsive design. The page displays job details, progress, and status with color-coded badges and icons. It handles WebSocket connections with automatic reconnection and provides a user-friendly interface with accessibility features.",
         "testStrategy": "A comprehensive testing guide is available at /Users/zeno/Projects/bad-apple/video/frontend/TASK_4_TESTING.md, covering scenarios like loading, errors, and responsive design. It includes expected API and WebSocket message formats, manual testing instructions, and a troubleshooting guide.",
-        "subtasks": []
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on develop job status page."
       },
       {
         "id": 5,
@@ -458,7 +461,8 @@
             "dependencies": [],
             "details": "Ensure all Replicate API calls use the ReplicateClient wrapper for retry logic and error handling.",
             "status": "done",
-            "testStrategy": "Test API calls using the ReplicateClient wrapper to ensure proper integration and error handling."
+            "testStrategy": "Test API calls using the ReplicateClient wrapper to ensure proper integration and error handling.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -467,7 +471,8 @@
             "dependencies": [],
             "details": "Implement methods like generate_scene and generate_all_scenes to handle different scene types and styles.",
             "status": "done",
-            "testStrategy": "Test scene generation for different configurations and styles to ensure correct output."
+            "testStrategy": "Test scene generation for different configurations and styles to ensure correct output.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -476,9 +481,13 @@
             "dependencies": [],
             "details": "Support styles such as luxury, energetic, minimal, and bold with specific visual parameters.",
             "status": "done",
-            "testStrategy": "Verify style coherence across scenes by testing each style's parameters."
+            "testStrategy": "Verify style coherence across scenes by testing each style's parameters.",
+            "parentId": "undefined"
           }
-        ]
+        ],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on build video scene generator with replicate/kling."
       },
       {
         "id": 16,
@@ -500,7 +509,8 @@
             "dependencies": [],
             "details": "Ensure all API interactions use ReplicateClient for retry logic and error handling.",
             "status": "done",
-            "testStrategy": "Test API calls using ReplicateClient to ensure proper error handling and retry logic."
+            "testStrategy": "Test API calls using ReplicateClient to ensure proper error handling and retry logic.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -511,7 +521,8 @@
             ],
             "details": "Use FLUX.1-schnell for fast generation. Match styles and include product images.",
             "status": "done",
-            "testStrategy": "Verify image generation speed and style matching."
+            "testStrategy": "Verify image generation speed and style matching.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -522,9 +533,13 @@
             ],
             "details": "Use a hybrid approach: FLUX for background, Pillow for text overlay.",
             "status": "done",
-            "testStrategy": "Test text overlay positioning and style accuracy."
+            "testStrategy": "Test text overlay positioning and style accuracy.",
+            "parentId": "undefined"
           }
-        ]
+        ],
+        "complexity": 5,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down this task with a focus on create cta image generator with replicate/flux."
       },
       {
         "id": 17,
@@ -710,8 +725,8 @@
         "testStrategy": "- Test initialization with/without API token\n- Test retry logic with simulated failures\n- Test file output downloads\n- Test ModelError exception handling\n- Test async operations\n- Test webhook creation\n- Integration test with actual Replicate model (FLUX Schnell for speed)",
         "status": "done",
         "dependencies": [
-          7,
-          18
+          "7",
+          "18"
         ],
         "priority": "high",
         "subtasks": []
@@ -1474,13 +1489,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-11-14T19:20:05.737Z",
-      "taskCount": 25,
-      "completedCount": 10,
+      "lastModified": "2025-11-20T21:46:24.181Z",
+      "taskCount": 62,
+      "completedCount": 60,
       "tags": [
         "master"
       ],
-      "created": "2025-11-14T19:47:38.627Z",
+      "created": "2025-11-20T21:46:32.903Z",
       "description": "Tasks for master context",
       "updated": "2025-11-17T16:40:20.357Z"
     }

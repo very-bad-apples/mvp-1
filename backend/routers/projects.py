@@ -408,7 +408,8 @@ async def create_project(
             product_description=productDescription,
             character_image_s3_key=character_image_s3_key,
             product_image_s3_key=product_image_s3_key,
-            audio_backing_track_s3_key=audio_s3_key
+            audio_backing_track_s3_key=audio_s3_key,
+            mode=mode
         )
 
         # Ensure status is explicitly set to pending with GSI attributes

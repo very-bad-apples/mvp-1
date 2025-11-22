@@ -21,17 +21,16 @@ import structlog
 from pydantic import BaseModel, Field
 
 from config import settings
-from services.replicate_client import ReplicateClient
 from services.storage_backend import get_storage_backend, S3StorageBackend
 
-logger = structlog.get_logger(__name__)
+logger = structlog.get_logger()
 
 
 class LipsyncRequest(BaseModel):
     """Request model for lipsync generation."""
 
-    video_url: Optional[str] = Field(None, description="URL to the video file (scene). Required if project_id and sequence not provided.")
-    audio_url: Optional[str] = Field(None, description="URL to the audio file. Required if project_id and sequence not provided.")
+    video_url: Optional[str] = Field(None, description="URL to the video file (scene)")
+    audio_url: Optional[str] = Field(None, description="URL to the audio file")
     video_id: Optional[str] = Field(None, description="Video ID to lookup URL (alternative to video_url)")
     audio_id: Optional[str] = Field(None, description="Audio ID to lookup URL (alternative to audio_url)")
     start_time: Optional[float] = Field(None, ge=0.0, description="Start time in seconds for audio clipping")
@@ -280,7 +279,7 @@ def generate_lipsync(
         - metadata: Generation metadata
 
     Raises:
-        ValueError: If required parameters are missing or invalid, or if API token is not configured or S3 is not configured
+        ValueError: If required parameters are missing or invalid
         FileNotFoundError: If video_id or audio_id not found
         RuntimeError: If audio clipping fails
         Exception: If lipsync generation fails
@@ -349,149 +348,130 @@ def generate_lipsync(
     # Track processing time
     start_time_ts = time.time()
 
-    # Use ReplicateClient (MSP) for better error handling, retry logic, and logging
-    model_id = "sync/lipsync-2-pro"
-    client = ReplicateClient()
-    
-    logger.info(
-        "running_lipsync_model",
-        model_id=model_id,
-        video_url=video_url[:100] + "..." if len(video_url) > 100 else video_url,
-        audio_url=audio_url[:100] + "..." if len(audio_url) > 100 else audio_url,
-    )
-    
-    # Use Replicate MSP (Model Service Provider) via ReplicateClient
-    # This uses the Client's prediction API for better control and monitoring
-    output = client.run_model(model_id, input_params, use_file_output=True)
-    
-    processing_time = time.time() - start_time_ts
+    # Configure httpx default timeout before replicate.run() creates its client
+    # Lipsync can take several minutes, so we need a longer timeout (10 minutes)
+    # Save original timeout and restore after
+    original_default_timeout = getattr(httpx, '_default_timeout', None)
+    httpx._default_timeout = httpx.Timeout(600.0, connect=30.0)  # 10 minutes
 
-    # Handle output (can be single FileOutput or list)
-    if isinstance(output, list):
-        video_output = output[0]
-    else:
-        video_output = output
+    try:
+        # Run the model (using same pattern as other replicate backends)
+        model_id = "sync/lipsync-2-pro"
 
-    # Read video data
-    video_data = video_output.read()
-
-    # Generate UUID for video
-    video_id = str(uuid.uuid4())
-
-    # Validate S3 is configured
-    if not settings.STORAGE_BUCKET:
-        raise ValueError(
-            "STORAGE_BUCKET is not configured. S3 storage is required for lipsync videos."
-        )
-
-    # Upload video directly to S3 (no local save)
-    from services.storage_backend import get_storage_backend
-    import asyncio
-    import concurrent.futures
-
-    async def upload_video_and_audio_to_s3():
-        """Upload video and audio to S3."""
-        storage = get_storage_backend()
-        
-        # Upload video directly from memory (no temp file)
-        video_cloud_path = f"mv/jobs/{video_id}/lipsync.mp4"
-        video_s3_url = await storage.upload_bytes(
-            video_data,
-            video_cloud_path,
-            content_type="video/mp4"
-        )
-        
+        # Log exact parameters being sent to Replicate API
         logger.info(
-            "lipsync_video_uploaded_to_s3",
-            video_id=video_id,
-            cloud_path=video_cloud_path,
-            size_bytes=len(video_data)
+            "replicate_lipsync_api_call",
+            model=model_id,
+            input_params={
+                "video": input_params["video"],
+                "audio": input_params["audio"],
+                "temperature": input_params.get("temperature"),
+                "occlusion_detection_enabled": input_params.get("occlusion_detection_enabled"),
+                "active_speaker_detection": input_params.get("active_speaker_detection"),
+            }
         )
-        
-        # Download audio from URL and upload to S3
-        audio_s3_url = None
-        audio_s3_key = None
+
+        output = replicate.run(model_id, input=input_params)
+
+        processing_time = time.time() - start_time_ts
+
+        # Handle output (can be single FileOutput or list)
+        if isinstance(output, list):
+            video_output = output[0]
+        else:
+            video_output = output
+
+        # Read video data
+        video_data = video_output.read()
+
+        # Generate UUID for video
+        output_video_id = str(uuid.uuid4())
+
+        # Save video to outputs directory (use same videos directory as other endpoints)
+        output_dir = Path(__file__).parent / "outputs" / "videos"
+        os.makedirs(output_dir, exist_ok=True)
+
+        video_filename = f"{output_video_id}.mp4"
+        video_path = output_dir / video_filename
+
+        with open(video_path, "wb") as f:
+            f.write(video_data)
+
+        # Upload to cloud storage if configured
+        cloud_urls = {}
         try:
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    audio_response = await client.get(audio_url)
-                    audio_response.raise_for_status()
-                    audio_data = audio_response.content
-                
-                # Determine audio file extension and content type from URL
-                audio_ext = ".mp3"  # Default
-                content_type = "audio/mpeg"  # Default
-                
-                if ".mp3" in audio_url.lower():
-                    audio_ext = ".mp3"
-                    content_type = "audio/mpeg"
-                elif ".wav" in audio_url.lower():
-                    audio_ext = ".wav"
-                    content_type = "audio/wav"
-                elif ".m4a" in audio_url.lower():
-                    audio_ext = ".m4a"
-                    content_type = "audio/mp4"
-                elif ".ogg" in audio_url.lower():
-                    audio_ext = ".ogg"
-                    content_type = "audio/ogg"
-                
-                # Upload audio directly from memory (no temp file)
-                audio_cloud_path = f"mv/jobs/{video_id}/audio{audio_ext}"
-                audio_s3_url = await storage.upload_bytes(
-                    audio_data,
-                    audio_cloud_path,
-                    content_type=content_type
-                )
-                audio_s3_key = audio_cloud_path  # Store S3 key for DynamoDB
-                
-                logger.info(
-                    "audio_uploaded_to_s3",
-                    video_id=video_id,
-                    cloud_path=audio_cloud_path,
-                    size_bytes=len(audio_data)
-                )
-                
+            if settings.STORAGE_BUCKET:  # Only upload if cloud storage is configured
+                from services.storage_backend import get_storage_backend
+
+                async def upload_job_to_cloud():
+                    storage = get_storage_backend()
+                    urls = {}
+
+                    # Upload video
+                    urls["video"] = await storage.upload_file(
+                        str(video_path),
+                        f"mv/jobs/{output_video_id}/video.mp4"
+                    )
+
+                    return urls
+
+                # Run async upload - handle both sync and async contexts
+                # Use a separate thread with its own event loop to avoid conflicts
+                def run_upload():
+                    return asyncio.run(upload_job_to_cloud())
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_upload)
+                    cloud_urls = future.result(timeout=300)  # 5 min timeout
+
+                logger.info(f"Uploaded lipsync job {output_video_id} to cloud storage")
         except Exception as e:
-            logger.warning(
-                "audio_upload_to_s3_failed",
-                video_id=video_id,
-                audio_url=audio_url[:100] if len(audio_url) > 100 else audio_url,
-                error=str(e)
-            )
-            # Continue without audio upload - video is still available
-            
-        # Return both S3 URL and S3 key for audio (key needed for DynamoDB)
-        # Fallback to original URL if upload fails, but no S3 key in that case
-        return video_s3_url, audio_s3_url or audio_url, audio_s3_key
-    
-    # Run async upload in separate thread to avoid event loop conflicts
-    def run_upload():
-        return asyncio.run(upload_video_and_audio_to_s3())
-    
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(run_upload)
-        video_s3_url, audio_s3_url, audio_s3_key = future.result(timeout=300)  # 5 min timeout
+            logger.warning(f"Failed to upload lipsync job {output_video_id} to cloud storage: {e}")
+            # Continue without cloud upload - local files are still available
 
-    # Build metadata
-    metadata = {
-        "input_video_url": video_url,
-        "input_audio_url": audio_url,
-        "model_used": model_id,
-        "parameters_used": {
-            "temperature": temperature,
-            "occlusion_detection_enabled": occlusion_detection_enabled,
-            "active_speaker_detection": active_speaker_detection,
-        },
-        "generation_timestamp": datetime.now(timezone.utc).isoformat(),
-        "processing_time_seconds": round(processing_time, 2),
-        "file_size_bytes": len(video_data),
-    }
+        # Build metadata
+        metadata = {
+            "video_url": video_url,
+            "audio_url": audio_url,
+            "model_used": model_id,
+            "parameters_used": {
+                "temperature": temperature,
+                "occlusion_detection_enabled": occlusion_detection_enabled,
+                "active_speaker_detection": active_speaker_detection,
+                "start_time": start_time,
+                "end_time": end_time,
+            },
+            "generation_timestamp": datetime.now(timezone.utc).isoformat(),
+            "processing_time_seconds": round(processing_time, 2),
+            "file_size_bytes": os.path.getsize(video_path),
+        }
 
-    # Clean up temporary clipped audio file if it was created
-    if clipped_audio_temp_path and os.path.exists(clipped_audio_temp_path):
-        try:
-            os.unlink(clipped_audio_temp_path)
-        except Exception:
-            pass  # Ignore cleanup errors
+        # Add cloud URLs to metadata if upload succeeded
+        if cloud_urls:
+            metadata["cloud_urls"] = cloud_urls
+            metadata["cloud_url"] = cloud_urls.get("video")  # Backward compatibility
+            # Use cloud URL as primary video URL when available
+            video_url_path = cloud_urls.get("video")
+        else:
+            # Fallback to local API endpoint if cloud upload failed or not configured
+            video_url_path = f"/api/mv/get_video/{output_video_id}"
 
-    return video_id, video_s3_url, audio_s3_url, audio_s3_key, metadata
+        # Also store local API endpoint for backward compatibility
+        metadata["local_video_url"] = f"/api/mv/get_video/{output_video_id}"
+
+        return output_video_id, str(video_path), video_url_path, metadata
+
+    finally:
+        # Restore original timeout
+        if original_default_timeout is not None:
+            httpx._default_timeout = original_default_timeout
+        elif hasattr(httpx, '_default_timeout'):
+            delattr(httpx, '_default_timeout')
+
+        # Clean up temporary clipped audio file if it was created
+        if clipped_audio_temp_path and os.path.exists(clipped_audio_temp_path):
+            try:
+                os.unlink(clipped_audio_temp_path)
+            except Exception:
+                pass  # Ignore cleanup errors
 

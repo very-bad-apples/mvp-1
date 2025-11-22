@@ -57,55 +57,70 @@ Let's integrate the lipsync capability with the quick-gen-page:
 5. When the lipsync endpoint returns it should kickoff a new call to the stitch-video endpoint with the updated id to the newly returned stitched video and return that new video.
     - also add a "re-stitch with current clips" button to the final video section which will call the stitch-video endpoint with the current id's of the videos and the audio paramaters unchanged from the original call.
 
-## v4
-
-create a new config_flavor by copying the default directory in backend/mv/configs/ and renaming it mv1. then update the files scene_prompts.yaml and parameters.yaml to be suited to producing a music video that will feature a band and a lead singer performing a song to an audience.
-
-## v5
-
-Add an option in the create page under the configurations section for start_at for the audio track which is a numeric integer input field. Add a button which when clicked slices off the N seconds in the start_at input field off the and creates a new audio track/uuid and replaces the existing one being displayed. This updated uuid and audio track should be the one passed to the quick-gen-page.
-
-- apply audio clipping to cut the audio track to the start duration specified.
-    - follow the patterns used elsewhere in the code for how to do this
-
-- make sure to place the output trimmed audio into an s3 bucket.
-
 ---
 
-### Implementation Plan
+### v3 Implementation Notes
 
-A comprehensive task list has been created in `.devdocs/v3/tasklist.md` under the "v5: Audio Start Trimming Feature" section.
+**Status**: Planning Complete - Ready for Implementation
 
-**Key Implementation Details:**
+**Task List**: See `.devdocs/v3/tasklist.md` (v3 section)
 
-1. **Backend**: New `/api/audio/trim` endpoint that:
-   - Accepts `audio_id` and `start_at` (seconds) parameters
-   - Uses ffmpeg to trim audio from start position to end: `ffmpeg -i input.mp3 -ss {start_at} -acodec copy -y output.mp3`
-   - Generates new UUID for trimmed audio (original remains unchanged)
-   - Stores trimmed audio in `backend/mv/outputs/audio/{uuid}.mp3`
-   - Uploads to S3 if configured (graceful fallback to local storage)
+#### Key Decisions Made:
 
-2. **Frontend**: Audio trimming UI in create page Configuration section:
-   - Numeric input field for start position (default: 0, integer only)
-   - "Trim Audio" button (disabled if no audio loaded)
-   - Loading state during trim operation
-   - Replaces current audio with trimmed version after success
-   - Trimmed audio UUID propagates to quick-gen page via sessionStorage
+1. **Lipsync Replacement Behavior**: Lipsynced videos will replace the original video in the UI and state
+2. **Audio Source**: Audio comes from the clipped version of the YouTube video attached to the generation (jobData.audioId)
+3. **Audio Clipping**: Added start_time and end_time parameters to lipsync endpoint
+   - Each clip assumed to be 8 seconds long
+   - Start time calculated based on scene position (scene_index * 8 seconds)
+   - End time = start_time + 8 seconds
+4. **ID Lookup Pattern**: video_id and audio_id will be looked up using existing patterns from `/api/mv/get_video/{id}` and `/api/audio/get/{id}`
+5. **Auto-restitch**: When lipsync returns, automatically trigger stitch-video with updated IDs
+6. **Manual Re-stitch**: Add "re-stitch with current clips" button using current video IDs and unchanged audio parameters
+7. **Processing Status**: Yes, will show processing status during lipsync operations similar to video generation
+8. **Video ID Tracking**: video_id references are the same as the video_ids array currently tracked in scenes
+9. **UI Placement**: Lipsync checkbox only appears next to video regenerate buttons, NOT scene regenerate buttons
 
-3. **Data Flow**:
-   - User uploads audio → Original UUID created
-   - User sets start_at=30 and clicks "Trim Audio"
-   - Backend trims audio and generates new UUID
-   - Frontend replaces audio_id with trimmed UUID
-   - Navigation to quick-gen passes trimmed UUID
-   - All scene/video generation uses trimmed audio
+#### Implementation Scope:
 
-4. **Audio Clipping Pattern**: Follows `clip_audio()` function from `backend/mv/lipsync.py:170-246` which uses ffmpeg subprocess calls with proper timeout, error handling, and S3 upload integration.
+**Backend Changes**:
+- Update `/api/mv/lipsync` endpoint to accept optional video_id/audio_id parameters
+- Add optional start_time and end_time parameters to lipsync endpoint
+- Add ID-to-URL lookup logic for both video and audio
+- Implement audio clipping before passing to Replicate API
+- Maintain backwards compatibility with direct URLs
 
-5. **Error Handling**:
-   - Fatal: Audio not found (404), invalid start_at (400), ffmpeg failures (500)
-   - Non-fatal: S3 upload failures (log warning, continue with local file)
+**Frontend Changes**:
+- Add lipsync checkbox next to video regenerate buttons (one per video card)
+- Implement lipsync request flow with video_id, audio_id, start_time, and end_time
+- Calculate start_time and end_time based on scene position (scene_index * 8 seconds)
+- Add processing status for lipsync operations
+- Replace video in UI when lipsync completes
+- Update video_ids array to track lipsynced versions
+- Auto-trigger stitch-video when lipsync returns
+- Add "Re-stitch with current clips" button to final video section
+- Implement manual re-stitch functionality using latest video IDs
 
-**Example Use Case**: User wants to create a music video starting from the chorus at 45 seconds. They upload the full song, set start_at=45, trim the audio, then proceed to generate scenes and videos that sync to the audio starting from the 45-second mark.
+**Data Flow**:
+1. User enables lipsync checkbox → button text changes to "Regenerate with lipsync"
+2. Click triggers lipsync API call with:
+   - video_id: current video ID from scene
+   - audio_id: from jobData.audioId
+   - start_time: scene_index * 8
+   - end_time: (scene_index * 8) + 8
+3. Backend looks up URLs, clips audio, and processes lipsync
+4. Frontend receives new lipsynced video ID
+5. UI updates to show lipsynced video, video_ids array updated
+6. Auto-trigger stitch-video with all current video IDs
+7. Update final stitched video in UI
+8. Manual "Re-stitch" button available for re-stitching without regenerating
 
-**Success Criteria**: Users can trim audio from any start position, creating a new UUID that seamlessly integrates with the existing create → quick-gen → generation pipeline, with trimmed audio stored both locally and in S3 (when configured).
+#### Edge Cases Addressed:
+- Missing audio_id (no YouTube audio): Hide or disable lipsync checkbox
+- Invalid video_id or audio_id: Show error, don't crash
+- Multiple lipsync operations: Track history in video_ids array
+- Incomplete scenes: Only use scenes with at least one video
+- Long-running operations: Show meaningful progress indicators
+- Audio clipping failures: Handle gracefully with error messages
+
+
+
