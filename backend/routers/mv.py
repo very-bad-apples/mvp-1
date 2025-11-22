@@ -347,8 +347,11 @@ async def create_scenes(request: CreateScenesRequest):
                     )
 
                 # Create scene items in DynamoDB
+                # Use character image for music-video mode, product image for ad-creative mode
                 reference_image_s3_keys = []
-                if project_item.characterImageS3Key:
+                if project_item.mode == "ad-creative" and project_item.productImageS3Key:
+                    reference_image_s3_keys = [project_item.productImageS3Key]
+                elif project_item.characterImageS3Key:
                     reference_image_s3_keys = [project_item.characterImageS3Key]
 
                 for i, scene_data in enumerate(scenes, start=1):

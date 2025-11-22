@@ -283,10 +283,11 @@ export async function startFullGeneration(
         async () => {
           opts.onProgress('videos', index + 1, project.scenes.length, `Generating video ${index + 1}/${project.scenes.length}`)
 
+          // Reference images are stored in the scene in DynamoDB
+          // The backend will read them from there when generating the video
           const videoRequest: GenerateVideoRequest = {
             prompt: scene.prompt,
             negative_prompt: scene.negativePrompt || undefined,
-            reference_image_base64: project.characterReferenceImageId || undefined,
             project_id: projectId,
             sequence: scene.sequence,
           }
