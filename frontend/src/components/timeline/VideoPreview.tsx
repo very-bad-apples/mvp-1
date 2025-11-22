@@ -139,6 +139,10 @@ export function VideoPreview({
         setIsVideoLoaded(true)
         setVideoError(null)
         video.currentTime = 0 // Start from beginning of selected scene
+        // Enforce muted state when muted prop is true
+        if (muted) {
+          video.muted = true
+        }
       }
 
       const handleLoadedData = () => {
@@ -174,6 +178,10 @@ export function VideoPreview({
         setIsVideoLoaded(true)
         setVideoError(null)
         // Seeking handled by separate sync effect
+        // Enforce muted state when muted prop is true
+        if (muted) {
+          video.muted = true
+        }
       }
 
       const handleLoadedData = () => {
@@ -213,6 +221,10 @@ export function VideoPreview({
       setIsVideoLoaded(true)
       setVideoError(null)
       // Initial seek will be handled by the sync effect
+      // Enforce muted state when muted prop is true
+      if (muted) {
+        video.muted = true
+      }
     }
 
     const handleLoadedData = () => {
@@ -240,7 +252,7 @@ export function VideoPreview({
       video.removeEventListener('loadeddata', handleLoadedData)
       video.removeEventListener('error', handleError)
     }
-  }, [isScenePreviewMode, selectedScene, currentSceneIndex, validScenes, showFinalVideo, project.finalOutputUrl])
+  }, [isScenePreviewMode, selectedScene, currentSceneIndex, validScenes, showFinalVideo, project.finalOutputUrl, muted])
 
   // Handle play/pause state changes
   useEffect(() => {
@@ -332,25 +344,35 @@ export function VideoPreview({
 
   // Handle volume changes
   useEffect(() => {
-    // If muted prop is true and audio callbacks exist, control audio instead of video
-    if (muted && onAudioVolumeChange && onAudioMuteChange) {
-      onAudioVolumeChange(volume)
-      onAudioMuteChange(isMuted)
+    const video = videoRef.current
+    if (!video) return
+
+    // If muted prop is true, video must stay muted and volume must not be changed
+    // Only control audio element via callbacks
+    if (muted) {
+      // Enforce video muted state (must always be true)
+      video.muted = true
+      // Never modify video volume when muted prop is true
+      if (onAudioVolumeChange && onAudioMuteChange) {
+        onAudioVolumeChange(volume)
+        onAudioMuteChange(isMuted)
+      }
       return
     }
 
     // Otherwise, control video volume as normal
-    const video = videoRef.current
-    if (!video) return
     video.volume = isMuted ? 0 : volume
   }, [volume, isMuted, muted, onAudioVolumeChange, onAudioMuteChange])
 
   // Handle muted prop (for audio backing track playback)
+  // This effect ensures video stays muted when muted prop is true
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    video.muted = muted
-  }, [muted])
+    if (muted) {
+      video.muted = true
+    }
+  }, [muted, isVideoLoaded]) // Also run when video loads to enforce muted state
 
   // Handle playback speed changes
   useEffect(() => {
