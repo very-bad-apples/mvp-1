@@ -97,6 +97,7 @@ class MVProjectItem(BaseDynamoModel):
     audioBackingTrackS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     finalOutputS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     directorConfig = UnicodeAttribute(null=True)  # Director config name (e.g., "Wes-Anderson")
+    mode = UnicodeAttribute(null=True)  # Project mode: "music-video" or "ad-creative"
     sceneCount = NumberAttribute(null=True, default=0)
     completedScenes = NumberAttribute(null=True, default=0)
     failedScenes = NumberAttribute(null=True, default=0)
@@ -156,6 +157,7 @@ class MVProjectItem(BaseDynamoModel):
                 "audioBackingTrackS3Key": self.audioBackingTrackS3Key,
                 "finalOutputS3Key": self.finalOutputS3Key,
                 "directorConfig": self.directorConfig,
+                "mode": self.mode,
                 "sceneCount": self.sceneCount,
                 "completedScenes": self.completedScenes,
                 "failedScenes": self.failedScenes,
@@ -183,12 +185,13 @@ class MVProjectItem(BaseDynamoModel):
 def create_project_metadata(
     project_id: str,
     concept_prompt: str,
-    character_description: str,
+    character_description: Optional[str] = None,
     product_description: Optional[str] = None,
     character_image_s3_key: Optional[str] = None,
     product_image_s3_key: Optional[str] = None,
     audio_backing_track_s3_key: Optional[str] = None,
     director_config: Optional[str] = None,
+    mode: Optional[str] = None,
 ) -> MVProjectItem:
     """
     Create a new project metadata item.
@@ -196,18 +199,20 @@ def create_project_metadata(
     Args:
         project_id: Unique project UUID
         concept_prompt: User's video concept description
-        character_description: Character description
-        product_description: Optional product description
+        character_description: Optional character description (for music-video mode)
+        product_description: Optional product description (for ad-creative mode)
         character_image_s3_key: S3 object key for character reference image 
             (e.g., "mv/projects/{id}/character.png"), NOT a URL
         product_image_s3_key: S3 object key for product image, NOT a URL
         audio_backing_track_s3_key: S3 object key for audio file, NOT a URL
+        director_config: Director config name (e.g., "Wes-Anderson")
+        mode: Project mode - "music-video" or "ad-creative" (optional, defaults to None)
 
     Returns:
         MVProjectItem instance
         
     Raises:
-        ValueError: If any S3 key parameter is a URL instead of a key
+        ValueError: If any S3 key parameter is a URL instead of a key, or if mode is invalid
     """
     now = datetime.now(timezone.utc)
 
@@ -227,6 +232,10 @@ def create_project_metadata(
     item.productImageS3Key = validate_s3_key(product_image_s3_key, "product_image_s3_key")
     item.audioBackingTrackS3Key = validate_s3_key(audio_backing_track_s3_key, "audio_backing_track_s3_key")
     item.directorConfig = director_config
+    # Validate mode if provided
+    if mode is not None and mode not in ["music-video", "ad-creative"]:
+        raise ValueError(f"mode must be 'music-video' or 'ad-creative', got '{mode}'")
+    item.mode = mode
     item.sceneCount = 0
     item.completedScenes = 0
     item.failedScenes = 0
@@ -299,26 +308,40 @@ def create_scene_item(
 
 def increment_completed_scene(project_id: str) -> None:
     """
-    Atomically increment the completedScenes counter for a project.
-    
+    Update the completedScenes counter by counting actual completed scenes.
+    This method is idempotent - it recalculates the count from scene records
+    rather than blindly incrementing, preventing double-counting issues.
+
     Args:
         project_id: Project UUID
-        
+
     Raises:
         DoesNotExist: If project not found
     """
     pk = f"PROJECT#{project_id}"
     try:
+        # Query all scenes for this project
+        scenes = MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        )
+
+        # Count scenes with status="completed"
+        completed_count = sum(1 for scene in scenes if scene.status == "completed")
+
+        # Update project metadata with accurate count
         project_item = MVProjectItem.get(pk, "METADATA")
-        if project_item.completedScenes is None:
-            project_item.completedScenes = 0
-        project_item.completedScenes += 1
+        old_count = project_item.completedScenes or 0
+        project_item.completedScenes = completed_count
         project_item.updatedAt = datetime.now(timezone.utc)
         project_item.save()
+
         logger.info(
-            "project_completed_scene_incremented",
+            "project_completed_scene_count_updated",
             project_id=project_id,
-            completed_scenes=project_item.completedScenes
+            old_count=old_count,
+            new_count=completed_count,
+            changed=old_count != completed_count
         )
     except DoesNotExist:
         logger.error("project_not_found_for_counter", project_id=project_id)
@@ -327,26 +350,40 @@ def increment_completed_scene(project_id: str) -> None:
 
 def increment_failed_scene(project_id: str) -> None:
     """
-    Atomically increment the failedScenes counter for a project.
-    
+    Update the failedScenes counter by counting actual failed scenes.
+    This method is idempotent - it recalculates the count from scene records
+    rather than blindly incrementing, preventing double-counting issues.
+
     Args:
         project_id: Project UUID
-        
+
     Raises:
         DoesNotExist: If project not found
     """
     pk = f"PROJECT#{project_id}"
     try:
+        # Query all scenes for this project
+        scenes = MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        )
+
+        # Count scenes with status="failed"
+        failed_count = sum(1 for scene in scenes if scene.status == "failed")
+
+        # Update project metadata with accurate count
         project_item = MVProjectItem.get(pk, "METADATA")
-        if project_item.failedScenes is None:
-            project_item.failedScenes = 0
-        project_item.failedScenes += 1
+        old_count = project_item.failedScenes or 0
+        project_item.failedScenes = failed_count
         project_item.updatedAt = datetime.now(timezone.utc)
         project_item.save()
+
         logger.info(
-            "project_failed_scene_incremented",
+            "project_failed_scene_count_updated",
             project_id=project_id,
-            failed_scenes=project_item.failedScenes
+            old_count=old_count,
+            new_count=failed_count,
+            changed=old_count != failed_count
         )
     except DoesNotExist:
         logger.error("project_not_found_for_counter", project_id=project_id)
@@ -355,34 +392,18 @@ def increment_failed_scene(project_id: str) -> None:
 
 def decrement_completed_scene(project_id: str) -> None:
     """
-    Atomically decrement the completedScenes counter for a project.
+    Update the completedScenes counter by recounting from scene records.
     Used when a scene transitions from completed to failed.
-    
+
+    With the new idempotent approach, this simply recalculates the count
+    from actual scene statuses, same as increment_completed_scene.
+
     Args:
         project_id: Project UUID
-        
+
     Raises:
         DoesNotExist: If project not found
     """
-    pk = f"PROJECT#{project_id}"
-    try:
-        project_item = MVProjectItem.get(pk, "METADATA")
-        if project_item.completedScenes is None or project_item.completedScenes <= 0:
-            logger.warning(
-                "project_completed_scene_decrement_below_zero",
-                project_id=project_id,
-                current_count=project_item.completedScenes
-            )
-            return
-        project_item.completedScenes -= 1
-        project_item.updatedAt = datetime.now(timezone.utc)
-        project_item.save()
-        logger.info(
-            "project_completed_scene_decremented",
-            project_id=project_id,
-            completed_scenes=project_item.completedScenes
-        )
-    except DoesNotExist:
-        logger.error("project_not_found_for_counter", project_id=project_id)
-        raise
+    # Just recalculate the count - this is idempotent
+    increment_completed_scene(project_id)
 

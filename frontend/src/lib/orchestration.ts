@@ -19,8 +19,9 @@ import {
   generateLipSync,
   updateProject,
   getProject,
+  updateScene,
   APIError,
-} from '@/lib/api'
+} from '@/lib/api/client'
 import type {
   CreateScenesRequest,
   GenerateCharacterReferenceRequest,
@@ -59,6 +60,18 @@ export type ErrorCallback = (
 ) => void
 
 /**
+ * Retry callback type for recovery feedback
+ */
+export type RetryCallback = (
+  phase: OrchestrationPhase,
+  sceneIndex: number | null,
+  attempt: number,
+  maxAttempts: number,
+  delay: number,
+  error: Error
+) => void
+
+/**
  * Orchestration options
  */
 export interface OrchestrationOptions {
@@ -67,6 +80,9 @@ export interface OrchestrationOptions {
 
   /** Error callback for error handling */
   onError?: ErrorCallback
+
+  /** Retry callback for recovery feedback */
+  onRetry?: RetryCallback
 
   /** Maximum number of retries per operation (default: 3) */
   maxRetries?: number
@@ -85,8 +101,9 @@ export interface OrchestrationOptions {
  * Default orchestration options
  */
 const DEFAULT_OPTIONS: Required<OrchestrationOptions> = {
-  onProgress: () => {},
-  onError: () => {},
+  onProgress: () => { },
+  onError: () => { },
+  onRetry: () => { },
   maxRetries: 3,
   initialRetryDelay: 1000,
   maxRetryDelay: 10000,
@@ -139,13 +156,26 @@ async function retryWithBackoff<T>(
 
       // Calculate delay for next retry
       const delay = calculateBackoffDelay(attempt, options)
+
+      // Log structured retry information
       console.warn(
         `[Orchestration] ${operationName} failed (attempt ${attempt + 1}/${options.maxRetries + 1}), retrying in ${delay}ms...`,
-        error
+        {
+          phase,
+          sceneIndex,
+          attempt: attempt + 1,
+          maxAttempts: options.maxRetries + 1,
+          nextRetryIn: `${delay}ms`,
+          errorType: lastError.constructor.name,
+          errorMessage: lastError.message,
+        }
       )
 
-      // Call error callback
+      // Call error callback (for logging)
       options.onError(phase, sceneIndex, lastError)
+
+      // Call retry callback (for UI feedback)
+      options.onRetry(phase, sceneIndex, attempt + 1, options.maxRetries + 1, delay, lastError)
 
       // Wait before retrying
       await sleep(delay)
@@ -187,12 +217,39 @@ export async function startFullGeneration(
 
     let project = projectResponse
 
-    // Phase 1: Generate all scenes (parallel)
+    // Phase 1: Generate all scenes
     opts.onProgress('scenes', 0, project.scenes.length, 'Starting scene generation...')
     await updateProject(projectId, { status: 'processing' })
 
-    // Assuming scenes are already generated from the initial project creation
-    // If we need to regenerate scenes, we can add that logic here
+    // Check if scenes need to be generated
+    if (project.scenes.length === 0) {
+      // Use characterDescription for music-video mode, productDescription for ad-creative mode
+      const description = project.mode === 'ad-creative'
+        ? (project.productDescription || '')
+        : (project.characterDescription || '')
+
+      const scenesRequest: CreateScenesRequest = {
+        idea: project.conceptPrompt,
+        character_description: description,
+        config_flavor: 'default',
+        project_id: projectId, // Link scenes to this project in DB
+      }
+
+      const scenesResponse = await retryWithBackoff(
+        () => generateScenes(scenesRequest),
+        'Generate scenes',
+        opts,
+        'scenes',
+        0
+      )
+
+      // Fetch updated project with scenes
+      project = await getProject(projectId)
+
+      opts.onProgress('scenes', 1, 1, `Generated ${project.scenes.length} scenes`)
+    } else {
+      opts.onProgress('scenes', 1, 1, `Using existing ${project.scenes.length} scenes`)
+    }
 
     // Phase 2: Generate all character reference images (parallel)
     opts.onProgress('images', 0, project.scenes.length, 'Starting image generation...')
@@ -221,32 +278,29 @@ export async function startFullGeneration(
 
     opts.onProgress('images', 1, 1, 'Character reference generated')
 
-    // Phase 3: Generate all videos (parallel)
+    // Phase 3: Generate all videos (parallel - backend handles DB updates atomically)
     opts.onProgress('videos', 0, project.scenes.length, 'Starting video generation...')
     await updateProject(projectId, { status: 'processing' })
 
+    // Generate all videos in parallel - backend updates each scene atomically in DynamoDB
     const videoPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
         async () => {
           opts.onProgress('videos', index + 1, project.scenes.length, `Generating video ${index + 1}/${project.scenes.length}`)
 
+          // Reference images are stored in the scene in DynamoDB
+          // The backend will read them from there when generating the video
           const videoRequest: GenerateVideoRequest = {
             prompt: scene.prompt,
             negative_prompt: scene.negativePrompt || undefined,
-            reference_image_base64: project.characterReferenceImageId || undefined,
+            project_id: projectId,
+            sequence: scene.sequence,
           }
 
           const videoResponse = await generateVideo(videoRequest)
 
-          // Update project with video URL
-          const updatedScenes = [...project.scenes]
-          updatedScenes[index] = {
-            ...scene,
-            videoClipUrl: videoResponse.video_url,
-            status: 'completed',
-          }
-
-          project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+          // Backend automatically updates the scene in DynamoDB with the video URL
+          // No need to manually update - backend handles atomic updates per scene
 
           return videoResponse
         },
@@ -258,6 +312,10 @@ export async function startFullGeneration(
     )
 
     await Promise.all(videoPromises)
+
+    // Refetch project to get all updated scenes with video URLs
+    project = await getProject(projectId)
+
     opts.onProgress('videos', project.scenes.length, project.scenes.length, 'All videos generated')
 
     // Phase 4: Generate all lip-syncs (parallel)
@@ -320,6 +378,22 @@ export async function startFullGeneration(
     const finalProject = await getProject(projectId)
     if (!finalProject.projectId) {
       throw new Error('Failed to fetch final project state')
+    }
+
+    // Check if all scenes have videos
+    const allScenesComplete = finalProject.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    const completedCount = finalProject.scenes.filter(scene => scene.videoClipUrl).length
+
+    if (allScenesComplete) {
+      // All videos generated successfully - mark as completed
+      await updateProject(projectId, { status: 'completed' })
+      opts.onProgress('compose', 1, 1, `All ${completedCount} videos generated successfully!`)
+      console.log(`[Orchestration] Project ${projectId} completed: ${completedCount}/${finalProject.scenes.length} scenes with videos`)
+    } else {
+      // Some videos missing - keep as processing
+      await updateProject(projectId, { status: 'processing' })
+      opts.onProgress('compose', 1, 1, `${completedCount}/${finalProject.scenes.length} videos generated`)
+      console.warn(`[Orchestration] Project ${projectId} incomplete: Only ${completedCount}/${finalProject.scenes.length} scenes have videos`)
     }
 
     return finalProject
@@ -464,6 +538,99 @@ export async function regenerateImage(
 }
 
 /**
+ * Regenerate a specific scene prompt
+ *
+ * @param projectId Project identifier
+ * @param sceneIndex Scene index for prompt regeneration
+ * @param options Orchestration options
+ * @returns Updated project
+ */
+export async function regenerateScenePrompt(
+  projectId: string,
+  sceneIndex: number,
+  options: OrchestrationOptions = {}
+): Promise<Project> {
+  const opts = { ...DEFAULT_OPTIONS, ...options }
+
+  try {
+    // Fetch current project state
+    const projectResponse = await getProject(projectId)
+    if (!projectResponse.projectId) {
+      throw new Error('Failed to fetch project')
+    }
+
+    let project = projectResponse
+
+    if (sceneIndex < 0 || sceneIndex >= project.scenes.length) {
+      throw new Error(`Invalid scene index: ${sceneIndex}`)
+    }
+
+    const scene = project.scenes[sceneIndex]
+
+    opts.onProgress('scenes', sceneIndex, project.scenes.length, `Regenerating prompt for scene ${sceneIndex + 1}`)
+
+    // Generate a new scene using the create_scenes endpoint
+    // Request only 1 scene to get a fresh prompt
+    // Use characterDescription for music-video mode, productDescription for ad-creative mode
+    const description = project.mode === 'ad-creative'
+      ? (project.productDescription || '')
+      : (project.characterDescription || '')
+
+    const scenesRequest: CreateScenesRequest = {
+      idea: project.conceptPrompt,
+      character_description: description,
+      config_flavor: 'default',
+      // Don't pass project_id to avoid overwriting all scenes
+      // We'll manually update just this one scene
+    }
+
+    const scenesResponse = await retryWithBackoff(
+      () => generateScenes(scenesRequest),
+      `Regenerate prompt for scene ${sceneIndex + 1}`,
+      opts,
+      'scenes',
+      sceneIndex
+    )
+
+    // Take the first generated scene's prompt and use it
+    if (scenesResponse.scenes && scenesResponse.scenes.length > 0) {
+      const newSceneData = scenesResponse.scenes[0]
+
+      // Update the specific scene using the updateScene endpoint
+      await retryWithBackoff(
+        () => updateScene(
+          projectId,
+          scene.sequence,
+          {
+            prompt: newSceneData.description,
+            negativePrompt: newSceneData.negative_description || undefined,
+          }
+        ),
+        `Update scene ${sceneIndex + 1} with new prompt`,
+        opts,
+        'scenes',
+        sceneIndex
+      )
+
+      // Refetch project to get updated scene
+      project = await getProject(projectId)
+      if (!project.projectId) {
+        throw new Error('Failed to refetch project after scene update')
+      }
+    } else {
+      throw new Error('No scenes generated from API')
+    }
+
+    opts.onProgress('scenes', sceneIndex + 1, project.scenes.length, `Prompt ${sceneIndex + 1} regenerated`)
+
+    return project
+  } catch (error) {
+    opts.onError('scenes', sceneIndex, error instanceof Error ? error : new Error(String(error)))
+    throw error
+  }
+}
+
+/**
  * Regenerate a specific video
  *
  * @param projectId Project identifier
@@ -501,20 +668,32 @@ export async function regenerateVideo(
           prompt: scene.prompt,
           negative_prompt: scene.negativePrompt || undefined,
           reference_image_base64: project.characterReferenceImageId || undefined,
+          project_id: projectId,
+          sequence: scene.sequence,
         }
 
         const videoResponse = await generateVideo(videoRequest)
 
-        // Update project with new video URL
-        const updatedScenes = [...project.scenes]
-        updatedScenes[sceneIndex] = {
-          ...scene,
-          videoClipUrl: videoResponse.video_url,
-          status: 'completed',
+        // ZENOS
+        // Backend automatically updates the scene in DynamoDB with the video URL
+        // Just refetch the project to get the updated scene
+        project = await getProject(projectId)
+        if (!project.projectId) {
+          throw new Error('Failed to refetch project after video generation')
         }
 
-        project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+        // END ZENOS
+        // NOAHS
+        // Update project with new video URL
+        // const updatedScenes = [...project.scenes]
+        // updatedScenes[sceneIndex] = {
+        //   ...scene,
+        //   videoClipUrl: videoResponse.video_url,
+        //   status: 'completed',
+        // }
 
+        // project = await updateAndRefetch(projectId, { scenes: updatedScenes })
+        // END NOAHS
         return videoResponse
       },
       `Regenerate video for scene ${sceneIndex + 1}`,

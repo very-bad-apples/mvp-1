@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File as FileParam
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from mv.scene_generator import (
@@ -50,6 +50,7 @@ from services.s3_storage import (
     generate_s3_key,
     generate_scene_s3_key,
     validate_s3_key,
+    S3StorageService,
 )
 from pynamodb.exceptions import DoesNotExist, PutError
 
@@ -62,13 +63,14 @@ router = APIRouter(prefix="/api/mv", tags=["Music Video"])
     "/get_config_flavors",
     response_model=dict,
     status_code=200,
-    summary="Get Available Config Flavors",
+    summary="[DEPRECATED] Get Available Config Flavors",
     description="""
-Get list of available configuration flavors.
+DEPRECATED: This endpoint is deprecated as of the config simplification refactor.
 
-Returns an array of flavor names that are available for use with the
-config_flavor parameter in scene generation, video generation, and
-character reference generation endpoints.
+Config flavors have been replaced with mode-based templates.
+Use the mode parameter ("music-video" or "ad-creative") in project creation instead.
+
+This endpoint is kept for backward compatibility only and will be removed in a future version.
 
 **Example Response:**
 ```json
@@ -80,17 +82,26 @@ character reference generation endpoints.
 )
 async def get_config_flavors():
     """
-    Get list of available configuration flavors.
+    DEPRECATED: Get list of available configuration flavors.
+    
+    This endpoint is deprecated. Config flavors have been replaced with
+    mode-based templates. New code should use mode parameter instead.
 
     Returns:
         Dictionary with 'flavors' key containing list of available flavor names
     """
+    import warnings
+    warnings.warn(
+        "get_config_flavors endpoint is deprecated. Use mode-based templates instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     try:
         from mv.config_manager import get_discovered_flavors
 
         flavors = get_discovered_flavors()
 
-        logger.info("config_flavors_requested", flavors=flavors)
+        logger.warning("config_flavors_requested_deprecated", flavors=flavors)
 
         return {"flavors": flavors}
     except Exception as e:
@@ -277,13 +288,49 @@ async def create_scenes(request: CreateScenesRequest):
                 }
             )
 
-        # Validate project_id format if provided
+        # Validate project_id format if provided and retrieve mode
         project_id = None
+        project_mode = "music-video"  # Default mode
+        director_config = None
+        cached_project_item = None
+
         if request.project_id:
             try:
                 # Validate UUID format
                 uuid.UUID(request.project_id)
                 project_id = request.project_id
+
+                # Retrieve project from database
+                pk = f"PROJECT#{project_id}"
+                try:
+                    cached_project_item = MVProjectItem.get(pk, "METADATA")
+                    if cached_project_item.mode:
+                        project_mode = cached_project_item.mode
+                        logger.info(
+                            "using_project_mode_for_scene_generation",
+                            project_id=project_id,
+                            mode=project_mode
+                        )
+                    if cached_project_item.directorConfig:
+                        director_config = cached_project_item.directorConfig
+                        logger.info(
+                            "using_director_config_for_scene_generation",
+                            project_id=project_id,
+                            director_config=director_config
+                        )
+                except DoesNotExist:
+                    logger.warning(
+                        "project_not_found_for_mode_retrieval",
+                        project_id=project_id
+                    )
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "NotFound",
+                            "message": f"Project {project_id} not found",
+                            "details": "The specified project does not exist in the database"
+                        }
+                    )
             except ValueError:
                 raise HTTPException(
                     status_code=400,
@@ -294,21 +341,17 @@ async def create_scenes(request: CreateScenesRequest):
                     }
                 )
 
-        # Generate scenes
+        # Generate scenes using mode-based approach
         scenes, output_files = generate_scenes(
-            idea=request.idea.strip(),
-            character_description=request.character_description.strip(),
-            character_characteristics=request.character_characteristics.strip() if request.character_characteristics else None,
-            number_of_scenes=request.number_of_scenes,
-            video_type=request.video_type.strip() if request.video_type else None,
-            video_characteristics=request.video_characteristics.strip() if request.video_characteristics else None,
-            camera_angle=request.camera_angle.strip() if request.camera_angle else None,
-            config_flavor=request.config_flavor,
+            mode=project_mode,
+            concept_prompt=request.idea.strip(),
+            personality_profile=request.character_description.strip(),
+            director_config=director_config,
         )
 
         # If project_id provided, create scene records in DynamoDB
         scenes_created_in_db = 0
-        if project_id:
+        if project_id and cached_project_item:
             try:
                 logger.info(
                     "create_scenes_with_project",
@@ -316,20 +359,8 @@ async def create_scenes(request: CreateScenesRequest):
                     scene_count=len(scenes)
                 )
 
-                # Retrieve project from DynamoDB
-                pk = f"PROJECT#{project_id}"
-                try:
-                    project_item = MVProjectItem.get(pk, "METADATA")
-                except DoesNotExist:
-                    logger.warning("create_scenes_project_not_found", project_id=project_id)
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "NotFound",
-                            "message": f"Project {project_id} not found",
-                            "details": "The specified project does not exist in the database"
-                        }
-                    )
+                # Use cached project_item from earlier fetch
+                project_item = cached_project_item
 
                 # Log warning if character description doesn't match (but proceed)
                 if project_item.characterDescription and project_item.characterDescription.strip() != request.character_description.strip():
@@ -341,8 +372,11 @@ async def create_scenes(request: CreateScenesRequest):
                     )
 
                 # Create scene items in DynamoDB
+                # Use character image for music-video mode, product image for ad-creative mode
                 reference_image_s3_keys = []
-                if project_item.characterImageS3Key:
+                if project_item.mode == "ad-creative" and project_item.productImageS3Key:
+                    reference_image_s3_keys = [project_item.productImageS3Key]
+                elif project_item.characterImageS3Key:
                     reference_image_s3_keys = [project_item.characterImageS3Key]
 
                 for i, scene_data in enumerate(scenes, start=1):
@@ -456,6 +490,481 @@ async def create_scenes(request: CreateScenesRequest):
             detail={
                 "error": "InternalError",
                 "message": "An unexpected error occurred during scene generation",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/test_scenes/{project_id}",
+    response_model=CreateScenesResponse,
+    status_code=200,
+    summary="Test Scene Generation from Project",
+    description="""
+Test scene generation using an existing project's data.
+
+This endpoint:
+1. Retrieves project metadata from DynamoDB
+2. Uses the project's mode, description, and director config to generate scenes
+3. Optionally saves scenes to database (controlled by write_to_db parameter)
+4. Returns the generated scenes for review
+
+**Query Parameters:**
+- `write_to_db`: Boolean (default: false). If true, scenes will be saved to database and associated with the project.
+
+**Use Case:** Testing how scenes will be generated for a specific project, with option to commit if satisfied.
+"""
+)
+async def test_scenes_from_project(project_id: str, write_to_db: bool = False):
+    """
+    Test scene generation using existing project data.
+
+    Args:
+        project_id: UUID of existing project
+        write_to_db: If True, save scenes to database. Default: False (test only)
+
+    Returns:
+        CreateScenesResponse with generated scenes
+    """
+    try:
+        logger.info("test_scenes_request", project_id=project_id)
+
+        # Validate UUID format
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Retrieve project from database
+        from pynamodb.exceptions import DoesNotExist
+        pk = f"PROJECT#{project_id}"
+
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Extract project data
+        mode = project_item.mode
+        concept_prompt = project_item.conceptPrompt
+        director_config = project_item.directorConfig
+
+        # Get personality profile based on mode
+        personality_profile = None
+        if mode == "music-video":
+            personality_profile = project_item.characterDescription
+        elif mode == "ad-creative":
+            personality_profile = project_item.productDescription
+
+        if not personality_profile:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Project missing required description field",
+                    "details": f"Mode '{mode}' requires {'characterDescription' if mode == 'music-video' else 'productDescription'}"
+                }
+            )
+
+        logger.info(
+            "generating_test_scenes",
+            project_id=project_id,
+            mode=mode,
+            has_director=director_config is not None,
+            write_to_db=write_to_db
+        )
+
+        # Generate scenes using the new simplified API
+        scenes, output_files = generate_scenes(
+            mode=mode,
+            concept_prompt=concept_prompt,
+            personality_profile=personality_profile,
+            director_config=director_config,
+        )
+
+        logger.info(
+            "test_scenes_generated",
+            project_id=project_id,
+            scene_count=len(scenes)
+        )
+
+        # Optionally save scenes to database
+        scenes_created_in_db = 0
+        db_status = "disabled"
+
+        if write_to_db:
+            # Get character reference image if available
+            character_image_s3_key = None
+            if mode == "music-video" and project_item.characterImageS3Key:
+                character_image_s3_key = project_item.characterImageS3Key
+            elif mode == "ad-creative" and project_item.productImageS3Key:
+                character_image_s3_key = project_item.productImageS3Key
+
+            reference_image_s3_keys = []
+            if character_image_s3_key:
+                reference_image_s3_keys = [character_image_s3_key]
+
+            # Create scene items in DynamoDB
+            for i, scene_data in enumerate(scenes, start=1):
+                scene_item = create_scene_item(
+                    project_id=project_id,
+                    sequence=i,
+                    prompt=scene_data.description,
+                    negative_prompt=scene_data.negative_description,
+                    duration=8.0,  # Default duration
+                    needs_lipsync=True,  # TODO: Determine based on mode
+                    reference_image_s3_keys=reference_image_s3_keys
+                )
+
+                try:
+                    scene_item.save()
+                    scenes_created_in_db += 1
+                    logger.info(
+                        "scene_saved_to_db",
+                        project_id=project_id,
+                        sequence=i
+                    )
+                except Exception as save_error:
+                    logger.error(
+                        "scene_save_failed",
+                        project_id=project_id,
+                        sequence=i,
+                        error=str(save_error)
+                    )
+
+            # Update project scene count
+            try:
+                project_item.sceneCount = scenes_created_in_db
+                project_item.updatedAt = datetime.now(timezone.utc)
+                project_item.save()
+                db_status = "success"
+                logger.info(
+                    "project_updated_with_scenes",
+                    project_id=project_id,
+                    scene_count=scenes_created_in_db
+                )
+            except Exception as update_error:
+                logger.error(
+                    "project_update_failed",
+                    project_id=project_id,
+                    error=str(update_error)
+                )
+                db_status = "partial"
+
+        # Return response
+        return CreateScenesResponse(
+            scenes=scenes,
+            output_files=output_files,
+            metadata={
+                "project_id": project_id,
+                "mode": mode,
+                "scenes_generated": len(scenes),
+                "director_config": director_config,
+                "write_to_db": write_to_db,
+                "scenes_created_in_db": scenes_created_in_db,
+                "db_integration": db_status
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "test_scenes_error",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to generate test scenes",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/generate_scene_video/{project_id}/{scene_sequence}",
+    status_code=200,
+    summary="Generate Video for Scene",
+    description="""
+Generate a video clip for a specific scene in a project.
+
+**Path Parameters:**
+- `project_id`: Project identifier
+- `scene_sequence`: Scene sequence number (1, 2, 3, etc.)
+
+**Query Parameters:**
+- `write_to_db`: Boolean (default: true). If true, video will be saved to database.
+- `backend`: Video generation backend to use (default: "gemini")
+  - "gemini": Google Veo 3.1 via Gemini API
+  - "replicate": Google Veo 3.1 via Replicate API
+
+**Process:**
+1. Retrieves scene data from database
+2. Generates video using scene prompt and reference images
+3. Uploads video to S3
+4. Optionally updates scene record with video URL
+
+**Returns:**
+- videoUrl: Presigned S3 URL for the generated video
+- s3Key: S3 object key for the video
+- metadata: Generation metadata (backend, duration, etc.)
+"""
+)
+async def generate_scene_video(
+    project_id: str,
+    scene_sequence: int,
+    write_to_db: bool = True,
+    backend: str = "gemini"
+):
+    """
+    Generate video for a specific scene.
+
+    This endpoint:
+    1. Retrieves scene from database
+    2. Gets project reference images
+    3. Generates video using specified backend
+    4. Uploads video to S3
+    5. Optionally updates scene with video S3 key
+    """
+    try:
+        logger.info(
+            "generate_scene_video_request",
+            project_id=project_id,
+            scene_sequence=scene_sequence,
+            backend=backend,
+            write_to_db=write_to_db
+        )
+
+        # Get scene from database
+        scene_sk = f"SCENE#{scene_sequence:03d}"
+        try:
+            scene_item = MVProjectItem.get(f"PROJECT#{project_id}", scene_sk)
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Scene {scene_sequence} not found in project {project_id}",
+                    "details": "Scene does not exist in database"
+                }
+            )
+
+        # Verify it's a scene item
+        if scene_item.entityType != "scene":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid scene item",
+                    "details": f"Item is not a scene (entityType={scene_item.entityType})"
+                }
+            )
+
+        # Get project metadata for reference images
+        try:
+            project_item = MVProjectItem.get(f"PROJECT#{project_id}", "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "Project metadata does not exist"
+                }
+            )
+
+        # Prepare reference image (use scene's reference images or project's character/product image)
+        reference_image_base64 = None
+        reference_s3_key = None
+
+        # First try scene-specific reference images
+        if scene_item.referenceImageS3Keys and len(scene_item.referenceImageS3Keys) > 0:
+            reference_s3_key = scene_item.referenceImageS3Keys[0]
+        # Fall back to project-level reference image based on mode
+        elif project_item.mode == "music-video" and project_item.characterImageS3Key:
+            reference_s3_key = project_item.characterImageS3Key
+        elif project_item.mode == "ad-creative" and project_item.productImageS3Key:
+            reference_s3_key = project_item.productImageS3Key
+
+        # Download and encode reference image if available
+        if reference_s3_key:
+            try:
+                import boto3
+                import base64
+                from io import BytesIO
+
+                s3_client = boto3.client(
+                    's3',
+                    region_name=settings.AWS_REGION,
+                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+                )
+
+                # Download image from S3
+                image_obj = s3_client.get_object(
+                    Bucket=settings.STORAGE_BUCKET,
+                    Key=reference_s3_key
+                )
+                image_bytes = image_obj['Body'].read()
+                reference_image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+
+                logger.info(
+                    "reference_image_loaded",
+                    s3_key=reference_s3_key,
+                    size_bytes=len(image_bytes)
+                )
+            except Exception as e:
+                logger.warning(
+                    "reference_image_load_failed",
+                    s3_key=reference_s3_key,
+                    error=str(e)
+                )
+                # Continue without reference image
+
+        # Generate video using specified backend
+        video_bytes = None
+
+        if backend == "gemini":
+            from mv.video_backends.gemini_backend import generate_video_gemini
+
+            video_bytes = generate_video_gemini(
+                prompt=scene_item.prompt,
+                negative_prompt=scene_item.negativePrompt,
+                aspect_ratio="16:9",
+                duration=int(scene_item.duration or 8),
+                generate_audio=True,
+                reference_image_base64=reference_image_base64,
+            )
+        elif backend == "replicate":
+            from mv.video_backends.replicate_backend import generate_video_replicate
+
+            video_bytes = generate_video_replicate(
+                prompt=scene_item.prompt,
+                negative_prompt=scene_item.negativePrompt,
+                aspect_ratio="16:9",
+                duration=int(scene_item.duration or 8),
+                generate_audio=True,
+                reference_image_base64=reference_image_base64,
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": f"Invalid backend: {backend}",
+                    "details": "Supported backends: gemini, replicate"
+                }
+            )
+
+        if not video_bytes:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "VideoGenerationError",
+                    "message": "Video generation returned no data",
+                    "details": f"Backend {backend} did not return video bytes"
+                }
+            )
+
+        logger.info(
+            "video_generated",
+            backend=backend,
+            size_bytes=len(video_bytes)
+        )
+
+        # Upload video to S3
+        from io import BytesIO
+        s3_storage = S3StorageService()
+
+        video_s3_key = f"mv/projects/{project_id}/scenes/{scene_sequence:03d}/video.mp4"
+        video_file = BytesIO(video_bytes)
+
+        s3_storage.upload_file(
+            file_data=video_file,
+            s3_key=video_s3_key,
+            content_type="video/mp4"
+        )
+
+        logger.info(
+            "video_uploaded_to_s3",
+            s3_key=video_s3_key
+        )
+
+        # Update scene in database if requested
+        if write_to_db:
+            # Track if scene was already completed
+            was_completed = scene_item.status == "completed"
+
+            scene_item.videoClipS3Key = video_s3_key
+            scene_item.status = "completed"
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+
+            # Update project completed scenes count only if scene wasn't already completed
+            if not was_completed:
+                project_item.completedScenes = (project_item.completedScenes or 0) + 1
+                project_item.updatedAt = datetime.now(timezone.utc)
+                project_item.save()
+
+            logger.info(
+                "scene_updated_in_db",
+                project_id=project_id,
+                scene_sequence=scene_sequence,
+                s3_key=video_s3_key,
+                was_already_completed=was_completed
+            )
+
+        # Generate presigned URL for video
+        video_url = s3_storage.generate_presigned_url(video_s3_key)
+
+        return {
+            "videoUrl": video_url,
+            "s3Key": video_s3_key,
+            "metadata": {
+                "project_id": project_id,
+                "scene_sequence": scene_sequence,
+                "backend": backend,
+                "duration": scene_item.duration,
+                "prompt": scene_item.prompt,
+                "write_to_db": write_to_db,
+                "reference_image_used": reference_s3_key is not None,
+                "video_size_bytes": len(video_bytes)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "generate_scene_video_error",
+            project_id=project_id,
+            scene_sequence=scene_sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to generate scene video",
                 "details": str(e)
             }
         )
@@ -675,6 +1184,205 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
         )
 
 
+@router.post(
+    "/upload_character_reference",
+    status_code=200,
+    responses={
+        200: {"description": "Character reference image uploaded successfully"},
+        400: {"description": "Invalid file or request"},
+        500: {"description": "Internal server error"}
+    },
+    summary="Upload Character Reference Image",
+    description="""
+Upload a character reference image file.
+
+This endpoint:
+1. Accepts an image file upload (multipart/form-data)
+2. Generates a UUID for the image
+3. Uploads the image to S3 at `character_references/{uuid}.{ext}`
+4. Returns the image ID (UUID) for use in project creation
+
+**File Requirements:**
+- Must be a valid image file (PNG, JPEG, WebP)
+- Maximum size: 10MB
+
+**Returns:**
+- `image_id`: UUID that can be used as `characterReferenceImageId` in project creation
+- `image_url`: Optional presigned URL (if cloud storage configured)
+"""
+)
+async def upload_character_reference(
+    file: UploadFile = FileParam(..., description="Image file to upload")
+):
+    """
+    Upload a character reference image file.
+    
+    Args:
+        file: Image file to upload
+        
+    Returns:
+        JSON with image_id (UUID) and optional image_url
+    """
+    try:
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid file type",
+                    "details": "File must be an image (PNG, JPEG, WebP, etc.)"
+                }
+            )
+        
+        # Validate file size (10MB max)
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "File too large",
+                    "details": f"Maximum file size is {MAX_FILE_SIZE / (1024*1024):.0f}MB"
+                }
+            )
+        
+        # Generate UUID for the image
+        image_id = str(uuid.uuid4())
+        
+        # Determine file extension from content type or filename
+        ext = "png"  # default
+        if file.content_type:
+            content_type_lower = file.content_type.lower()
+            if "jpeg" in content_type_lower or "jpg" in content_type_lower:
+                ext = "jpg"
+            elif "png" in content_type_lower:
+                ext = "png"
+            elif "webp" in content_type_lower:
+                ext = "webp"
+
+            logger.debug(
+                "extension_detected_from_content_type",
+                content_type=file.content_type,
+                detected_extension=ext
+            )
+        elif file.filename:
+            # Fallback to filename extension
+            ext = Path(file.filename).suffix.lstrip('.').lower() or "png"
+
+            logger.debug(
+                "extension_detected_from_filename",
+                filename=file.filename,
+                detected_extension=ext
+            )
+        
+        # Save to temporary file
+        # Use same directory structure as generate_character_reference endpoint
+        temp_dir = Path(__file__).parent.parent / "mv" / "outputs" / "character_reference"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        temp_file_path = temp_dir / f"{image_id}.{ext}"
+        with open(temp_file_path, "wb") as f:
+            f.write(file_content)
+        
+        logger.info(
+            "character_reference_uploaded",
+            image_id=image_id,
+            filename=file.filename,
+            content_type=file.content_type,
+            file_size=len(file_content),
+            temp_path=str(temp_file_path)
+        )
+        
+        # Upload to S3 if cloud storage is configured
+        image_url = None
+        if settings.STORAGE_BUCKET:
+            try:
+                from services.storage_backend import get_storage_backend
+
+                storage = get_storage_backend()
+                cloud_path = f"character_references/{image_id}.{ext}"
+
+                # Upload directly - we're already in an async endpoint
+                image_url = await storage.upload_file(
+                    str(temp_file_path),
+                    cloud_path
+                )
+
+                logger.info(
+                    "character_reference_uploaded_to_cloud",
+                    image_id=image_id,
+                    cloud_path=cloud_path,
+                    extension=ext,
+                    image_url=image_url
+                )
+            except Exception as e:
+                logger.error(
+                    "character_reference_upload_to_cloud_failed",
+                    image_id=image_id,
+                    cloud_path=f"character_references/{image_id}.{ext}",
+                    extension=ext,
+                    error=str(e),
+                    exc_info=True
+                )
+                # Continue without cloud URL - file is still saved locally
+                image_url = None
+        
+        # Clean up temp file after successful upload (or if cloud storage not configured)
+        # Only delete if cloud storage succeeded OR cloud storage is not configured
+        if image_url or not settings.STORAGE_BUCKET:
+            try:
+                if temp_file_path.exists():
+                    temp_file_path.unlink()
+                    logger.debug(
+                        "temp_file_cleaned_up",
+                        image_id=image_id,
+                        temp_path=str(temp_file_path)
+                    )
+            except Exception as e:
+                logger.warning(
+                    "failed_to_cleanup_temp_file",
+                    image_id=image_id,
+                    temp_path=str(temp_file_path),
+                    error=str(e)
+                )
+        else:
+            logger.info(
+                "temp_file_kept_due_to_upload_failure",
+                image_id=image_id,
+                temp_path=str(temp_file_path)
+            )
+        
+        return JSONResponse(
+            content={
+                "image_id": image_id,
+                "image_url": image_url,
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "file_size": len(file_content)
+            },
+            status_code=200
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "upload_character_reference_error",
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to upload character reference image",
+                "details": str(e)
+            }
+        )
+
+
 @router.get(
     "/get_character_reference/{image_id}",
     responses={
@@ -736,43 +1444,62 @@ async def get_character_reference(image_id: str, redirect: bool = False):
             
             storage = get_storage_backend()
             
-            # S3: Generate presigned URL without exists() check (performance optimization)
-            # Note: We skip the exists() check for performance (like video endpoint)
-            # If file doesn't exist, the presigned URL will return 404 when accessed
+            # S3: Generate presigned URL
+            # Try multiple extensions since we don't store the extension separately
             if isinstance(storage, S3StorageBackend):
-                # Default to png, but will work with any extension in S3
-                cloud_path = f"character_references/{image_id}.png"
-                
-                presigned_url = storage.generate_presigned_url(
-                    cloud_path,
-                    expiry=settings.PRESIGNED_URL_EXPIRY
-                )
-                
-                logger.info(
-                    "get_character_reference_url_generated",
+                # Try different extensions (matching local serving behavior)
+                for ext in ["png", "jpg", "jpeg", "webp"]:
+                    cloud_path = f"character_references/{image_id}.{ext}"
+
+                    # Check if file exists in S3
+                    try:
+                        if storage.file_exists(cloud_path):
+                            presigned_url = storage.generate_presigned_url(
+                                cloud_path,
+                                expiry=settings.PRESIGNED_URL_EXPIRY
+                            )
+
+                            logger.info(
+                                "get_character_reference_url_generated",
+                                image_id=image_id,
+                                storage_backend="s3",
+                                cloud_path=cloud_path,
+                                extension=ext,
+                                redirect_mode=redirect
+                            )
+
+                            # Return JSON with URL by default, or redirect if requested
+                            if redirect:
+                                return RedirectResponse(
+                                    url=presigned_url,
+                                    status_code=302
+                                )
+                            else:
+                                return JSONResponse(
+                                    content={
+                                        "image_id": image_id,
+                                        "image_url": presigned_url,
+                                        "storage_backend": "s3",
+                                        "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
+                                        "cloud_path": cloud_path
+                                    },
+                                    status_code=200
+                                )
+                    except Exception as e:
+                        logger.debug(
+                            "get_character_reference_extension_not_found",
+                            image_id=image_id,
+                            extension=ext,
+                            error=str(e)
+                        )
+                        continue
+
+                # If we get here, none of the extensions were found in S3
+                logger.warning(
+                    "get_character_reference_not_found_in_s3",
                     image_id=image_id,
-                    storage_backend="s3",
-                    cloud_path=cloud_path,
-                    redirect_mode=redirect
+                    tried_extensions=["png", "jpg", "jpeg", "webp"]
                 )
-                
-                # Return JSON with URL by default, or redirect if requested
-                if redirect:
-                    return RedirectResponse(
-                        url=presigned_url,
-                        status_code=302
-                    )
-                else:
-                    return JSONResponse(
-                        content={
-                            "image_id": image_id,
-                            "image_url": presigned_url,
-                            "storage_backend": "s3",
-                            "expires_in_seconds": settings.PRESIGNED_URL_EXPIRY,
-                            "cloud_path": cloud_path
-                        },
-                        status_code=200
-                    )
             
             # If not S3, fall through to local serving
             logger.debug(
@@ -995,6 +1722,113 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                     exc_info=True
                 )
 
+        # DynamoDB integration: Fetch reference images if not provided in request
+        reference_image_to_use = request.reference_image_base64
+        if not reference_image_to_use and request.project_id and request.sequence:
+            try:
+                logger.info(
+                    "fetching_reference_image_for_video_generation",
+                    project_id=request.project_id,
+                    sequence=request.sequence
+                )
+
+                # Get scene from database
+                pk = f"PROJECT#{request.project_id}"
+                sk = f"SCENE#{request.sequence:03d}"
+
+                try:
+                    scene_item = MVProjectItem.get(pk, sk)
+
+                    # Get project metadata for reference images
+                    try:
+                        project_item = MVProjectItem.get(pk, "METADATA")
+
+                        # Prepare reference image (use scene's reference images or project's character/product image)
+                        reference_s3_key = None
+
+                        # First try scene-specific reference images
+                        if scene_item.referenceImageS3Keys and len(scene_item.referenceImageS3Keys) > 0:
+                            reference_s3_key = scene_item.referenceImageS3Keys[0]
+                            logger.info(
+                                "using_scene_reference_image",
+                                project_id=request.project_id,
+                                sequence=request.sequence,
+                                s3_key=reference_s3_key
+                            )
+                        # Fall back to project-level reference image based on mode
+                        elif project_item.mode == "music-video" and project_item.characterImageS3Key:
+                            reference_s3_key = project_item.characterImageS3Key
+                            logger.info(
+                                "using_character_reference_image",
+                                project_id=request.project_id,
+                                s3_key=reference_s3_key
+                            )
+                        elif project_item.mode == "ad-creative" and project_item.productImageS3Key:
+                            reference_s3_key = project_item.productImageS3Key
+                            logger.info(
+                                "using_product_reference_image",
+                                project_id=request.project_id,
+                                s3_key=reference_s3_key
+                            )
+
+                        # Download and encode reference image if available
+                        if reference_s3_key:
+                            try:
+                                import boto3
+                                import base64
+
+                                s3_client = boto3.client(
+                                    's3',
+                                    region_name=settings.AWS_REGION,
+                                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+                                )
+
+                                # Download image from S3
+                                image_obj = s3_client.get_object(
+                                    Bucket=settings.STORAGE_BUCKET,
+                                    Key=reference_s3_key
+                                )
+                                image_bytes = image_obj['Body'].read()
+                                reference_image_to_use = base64.b64encode(image_bytes).decode('utf-8')
+
+                                logger.info(
+                                    "reference_image_loaded_for_video_generation",
+                                    project_id=request.project_id,
+                                    sequence=request.sequence,
+                                    s3_key=reference_s3_key,
+                                    size_bytes=len(image_bytes)
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "reference_image_load_failed_for_video_generation",
+                                    project_id=request.project_id,
+                                    sequence=request.sequence,
+                                    s3_key=reference_s3_key,
+                                    error=str(e)
+                                )
+                                # Continue without reference image
+                    except DoesNotExist:
+                        logger.warning(
+                            "project_metadata_not_found_for_reference_image",
+                            project_id=request.project_id
+                        )
+                except DoesNotExist:
+                    logger.warning(
+                        "scene_not_found_for_reference_image",
+                        project_id=request.project_id,
+                        sequence=request.sequence
+                    )
+            except Exception as e:
+                logger.error(
+                    "failed_to_fetch_reference_image_for_video_generation",
+                    project_id=request.project_id,
+                    sequence=request.sequence,
+                    error=str(e),
+                    exc_info=True
+                )
+                # Continue without reference image
+
         # Generate video
         video_id, video_path, video_url, metadata, character_reference_warning = generate_video(
             prompt=request.prompt.strip(),
@@ -1004,7 +1838,7 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
             generate_audio=request.generate_audio,
             seed=request.seed,
             character_reference_id=request.character_reference_id,
-            reference_image_base64=request.reference_image_base64,
+            reference_image_base64=reference_image_to_use,
             video_rules_template=request.video_rules_template.strip() if request.video_rules_template else None,
             backend=request.backend or "replicate",
             config_flavor=request.config_flavor,
@@ -1672,118 +2506,49 @@ async def lipsync_video(request: LipsyncRequest):
             active_speaker_detection=request.active_speaker_detection
         )
 
-        # Determine video_url and audio_url
-        video_url = None
-        audio_url = None
-        
-        # If project_id and sequence provided, fetch from DynamoDB
-        if request.project_id and request.sequence:
-            try:
-                # Fetch project and scene from DynamoDB
-                pk = f"PROJECT#{request.project_id}"
-                
-                # Get project for audio
-                try:
-                    project_item = MVProjectItem.get(pk, "METADATA")
-                    if not project_item.audioBackingTrackS3Key:
-                        raise HTTPException(
-                            status_code=400,
-                            detail={
-                                "error": "ValidationError",
-                                "message": "Project audio not found",
-                                "details": "Project does not have audioBackingTrackS3Key. Please ensure audio was uploaded when creating the project."
-                            }
-                        )
-                except DoesNotExist:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "NotFound",
-                            "message": f"Project {request.project_id} not found",
-                            "details": "The specified project does not exist in the database"
-                        }
-                    )
-                
-                # Get scene for video
-                sk = f"SCENE#{request.sequence:03d}"
-                try:
-                    scene_item = MVProjectItem.get(pk, sk)
-                    if not scene_item.videoClipS3Key:
-                        raise HTTPException(
-                            status_code=400,
-                            detail={
-                                "error": "ValidationError",
-                                "message": "Scene video not found",
-                                "details": f"Scene {request.sequence} does not have videoClipS3Key. Please generate the video first."
-                            }
-                        )
-                except DoesNotExist:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={
-                            "error": "NotFound",
-                            "message": f"Scene {request.sequence} not found for project {request.project_id}",
-                            "details": "The specified scene does not exist in the database"
-                        }
-                    )
-                
-                # Generate presigned URLs from S3 keys
-                from services.s3_storage import get_s3_storage_service
-                s3_service = get_s3_storage_service()
-                
-                audio_url = s3_service.generate_presigned_url(project_item.audioBackingTrackS3Key)
-                video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
-                
-                logger.info(
-                    "lipsync_urls_from_dynamodb",
-                    project_id=request.project_id,
-                    sequence=request.sequence,
-                    audio_s3_key=project_item.audioBackingTrackS3Key,
-                    video_s3_key=scene_item.videoClipS3Key
-                )
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(
-                    "failed_to_fetch_urls_from_dynamodb",
-                    project_id=request.project_id,
-                    sequence=request.sequence,
-                    error=str(e),
-                    exc_info=True
-                )
-                raise HTTPException(
-                    status_code=500,
-                    detail={
-                        "error": "InternalError",
-                        "message": "Failed to fetch audio/video URLs from DynamoDB",
-                        "details": str(e)
-                    }
-                )
-        else:
-            # Use provided URLs directly
-            if not request.video_url or not request.video_url.strip():
+        # Validate required fields - either URL or ID must be provided
+        if not request.video_url and not request.video_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Either video_url or video_id is required",
+                    "details": "Provide either 'video_url' or 'video_id' parameter"
+                }
+            )
+
+        if not request.audio_url and not request.audio_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Either audio_url or audio_id is required",
+                    "details": "Provide either 'audio_url' or 'audio_id' parameter"
+                }
+            )
+
+        # Validate time parameters if provided
+        if request.start_time is not None and request.end_time is not None:
+            if request.end_time <= request.start_time:
                 raise HTTPException(
                     status_code=400,
                     detail={
                         "error": "ValidationError",
-                        "message": "Video URL is required",
-                        "details": "Either provide video_url and audio_url, or provide project_id and sequence to fetch from DynamoDB"
+                        "message": "end_time must be greater than start_time",
+                        "details": f"start_time={request.start_time}, end_time={request.end_time}"
                     }
                 )
 
-            if not request.audio_url or not request.audio_url.strip():
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "error": "ValidationError",
-                        "message": "Audio URL is required",
-                        "details": "Either provide video_url and audio_url, or provide project_id and sequence to fetch from DynamoDB"
-                    }
-                )
-            
-            video_url = request.video_url.strip()
-            audio_url = request.audio_url.strip()
+        # Validate project_id and sequence are provided together
+        if (request.project_id and not request.sequence) or (request.sequence and not request.project_id):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "project_id and sequence must be provided together",
+                    "details": "Both project_id and sequence are required for DynamoDB integration"
+                }
+            )
 
         # DynamoDB integration: Mark scene as "processing" before lipsync starts
         if request.project_id and request.sequence:
@@ -1825,10 +2590,14 @@ async def lipsync_video(request: LipsyncRequest):
                     exc_info=True
                 )
 
-        # Generate lipsync video (uploads directly to S3, returns S3 URLs)
-        video_id, video_s3_url, audio_s3_url, audio_s3_key, metadata = generate_lipsync(
-            video_url=video_url,
-            audio_url=audio_url,
+        # Generate lipsync video
+        video_id, video_path, video_url, metadata = generate_lipsync(
+            video_url=request.video_url.strip() if request.video_url else None,
+            audio_url=request.audio_url.strip() if request.audio_url else None,
+            video_id=request.video_id,
+            audio_id=request.audio_id,
+            start_time=request.start_time,
+            end_time=request.end_time,
             temperature=request.temperature,
             occlusion_detection_enabled=request.occlusion_detection_enabled,
             active_speaker_detection=request.active_speaker_detection,

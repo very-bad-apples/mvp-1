@@ -50,6 +50,20 @@ class SceneResponse(BaseModel):
         }
 
 
+class SceneUpdateRequest(BaseModel):
+    """Request model for updating a scene's editable fields."""
+    prompt: Optional[str] = Field(None, min_length=1, max_length=2000, description="Updated scene prompt")
+    negativePrompt: Optional[str] = Field(None, max_length=1000, description="Updated negative prompt")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "prompt": "Updated scene description with more details",
+                "negativePrompt": "Updated negative prompt"
+            }
+        }
+
+
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")
@@ -97,7 +111,7 @@ class ProjectCreateResponse(BaseModel):
 class ProjectResponse(BaseModel):
     """
     Response model for project retrieval.
-    
+
     Note: All *Url fields contain presigned S3 URLs (e.g., "https://bucket.s3.amazonaws.com/...?X-Amz-Signature=..."),
     NOT S3 object keys. These URLs are generated on-demand from S3 keys stored in the database.
     Presigned URLs expire after a configured time (default: 1 hour).
@@ -105,13 +119,14 @@ class ProjectResponse(BaseModel):
     projectId: str
     status: str
     conceptPrompt: str
-    characterDescription: str
+    characterDescription: Optional[str] = None
     characterImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for character image (expires after configured time)")
     productDescription: Optional[str] = None
     productImageUrl: Optional[str] = Field(None, description="Presigned S3 URL for product image (expires after configured time)")
     audioBackingTrackUrl: Optional[str] = Field(None, description="Presigned S3 URL for audio backing track (expires after configured time)")
     finalOutputUrl: Optional[str] = Field(None, description="Presigned S3 URL for final composed video (expires after configured time)")
     directorConfig: Optional[str] = Field(None, description="Director config name used for this project")
+    mode: str = Field(..., description="Project mode: 'music-video' or 'ad-creative'")
     sceneCount: int
     completedScenes: int
     failedScenes: int
@@ -162,8 +177,8 @@ class ProjectUpdateRequest(BaseModel):
         }
 
 
-class SceneUpdateRequest(BaseModel):
-    """Request model for updating scene data."""
+class SceneWorkerUpdateRequest(BaseModel):
+    """Request model for updating scene data (used by workers, not user-facing)."""
     status: Optional[str] = None
     videoClipS3Key: Optional[str] = None
     lipSyncedVideoClipS3Key: Optional[str] = None

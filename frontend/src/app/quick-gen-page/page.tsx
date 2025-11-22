@@ -159,31 +159,6 @@ export default function QuickGenPage() {
   const [lipsyncProcessing, setLipsyncProcessing] = useState<{ [key: number]: boolean }>({})
   const [lipsyncError, setLipsyncError] = useState<{ [key: number]: string | null }>({})
 
-  // Fetch available config flavors on mount
-  useEffect(() => {
-    const fetchConfigFlavors = async () => {
-      setIsFetchingFlavors(true)
-      try {
-        const response = await fetch(`${API_URL}/api/mv/get_config_flavors`, {
-          headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-        })
-        if (response.ok) {
-          const data = await response.json()
-          if (data.flavors && Array.isArray(data.flavors)) {
-            setAvailableFlavors(data.flavors)
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch config flavors:', error)
-        // Keep default fallback
-      } finally {
-        setIsFetchingFlavors(false)
-      }
-    }
-
-    fetchConfigFlavors()
-  }, [])
-
   // Load job data from sessionStorage
   useEffect(() => {
     const storedData = sessionStorage.getItem('quickJobData')

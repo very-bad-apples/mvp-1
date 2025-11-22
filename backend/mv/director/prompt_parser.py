@@ -232,3 +232,119 @@ def discover_director_configs() -> list[str]:
 
     return configs
 
+
+def extract_signature_style(config_name: Optional[str]) -> Optional[str]:
+    """
+    Extract the signature style comment from a director config YAML file.
+
+    The signature style is expected to be on line 2 of the YAML file in the format:
+    # Signature Style: [description]
+
+    Args:
+        config_name: Name of director config (e.g., "Wes-Anderson") or None
+
+    Returns:
+        Signature style string or None if not found/invalid
+
+    Example:
+        >>> extract_signature_style("Wes-Anderson")
+        "Symmetrical compositions, pastel color palettes, planimetric framing, whimsical precision"
+    """
+    if not config_name:
+        return None
+
+    # Sanitize config_name to prevent path traversal attacks
+    # Remove path separators and parent directory references
+    if '/' in config_name or '\\' in config_name or '..' in config_name:
+        logger.warning(
+            "invalid_config_name_path_traversal_attempt",
+            config_name=config_name
+        )
+        return None
+
+    # Try YAML first, then JSON
+    yaml_path = CONFIGS_DIR / f"{config_name}.yaml"
+    yml_path = CONFIGS_DIR / f"{config_name}.yml"
+    json_path = CONFIGS_DIR / f"{config_name}.json"
+
+    file_path = None
+    if yaml_path.exists():
+        file_path = yaml_path
+    elif yml_path.exists():
+        file_path = yml_path
+    elif json_path.exists():
+        # JSON files don't have comments, so return None
+        logger.warning("signature_style_not_supported_for_json", config_name=config_name)
+        return None
+
+    if not file_path:
+        logger.warning("config_not_found_for_signature_style", config_name=config_name)
+        return None
+
+    # Additional safety check: ensure resolved path is within CONFIGS_DIR
+    try:
+        # Verify the resolved path is within CONFIGS_DIR
+        resolved_configs_dir = CONFIGS_DIR.resolve()
+        resolved_file_path = file_path.resolve()
+        
+        # Check if CONFIGS_DIR is a parent of the file path
+        if resolved_configs_dir not in resolved_file_path.parents and resolved_file_path != resolved_configs_dir:
+            logger.error(
+                "path_traversal_detected",
+                config_name=config_name,
+                resolved_path=str(resolved_file_path)
+            )
+            return None
+    except (OSError, ValueError) as e:
+        logger.error(
+            "path_resolution_error",
+            config_name=config_name,
+            error=str(e)
+        )
+        return None
+
+    try:
+        # Read file line by line to extract comment from line 2
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # Check if we have at least 2 lines
+        if len(lines) < 2:
+            logger.warning("config_too_short_for_signature_style", config_name=config_name)
+            return None
+
+        # Line 2 (index 1) should contain the signature style comment
+        line_2 = lines[1].strip()
+
+        # Pattern: # Signature Style: [description]
+        # Handle variations: "# Signature Style:", "#Signature Style:", etc.
+        pattern = r"#\s*Signature\s+Style\s*:\s*(.+)"
+        match = re.search(pattern, line_2, re.IGNORECASE)
+
+        if match:
+            signature_style = match.group(1).strip()
+            logger.info(
+                "signature_style_extracted",
+                config_name=config_name,
+                style_preview=signature_style[:50]
+            )
+            return signature_style
+        else:
+            logger.warning(
+                "signature_style_not_found",
+                config_name=config_name,
+                line_2_preview=line_2[:50]
+            )
+            return None
+
+    except FileNotFoundError:
+        logger.error("config_file_not_found", config_name=config_name, path=str(file_path))
+        return None
+    except Exception as e:
+        logger.error(
+            "signature_style_extraction_error",
+            config_name=config_name,
+            error=str(e)
+        )
+        return None
+

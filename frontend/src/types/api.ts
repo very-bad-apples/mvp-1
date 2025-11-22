@@ -13,6 +13,8 @@ export interface CreateScenesRequest {
   video_type?: string
   video_characteristics?: string
   camera_angle?: string
+  config_flavor?: string
+  project_id?: string
 }
 
 export interface SceneDescription {
@@ -71,6 +73,17 @@ export interface GenerateCharacterReferenceResponse {
 }
 
 /**
+ * Upload character reference image response
+ */
+export interface UploadCharacterReferenceResponse {
+  image_id: string
+  image_url?: string | null
+  filename?: string | null
+  content_type?: string | null
+  file_size?: number
+}
+
+/**
  * Video generation request/response types
  */
 export interface GenerateVideoRequest {
@@ -83,6 +96,8 @@ export interface GenerateVideoRequest {
   reference_image_base64?: string
   video_rules_template?: string
   backend?: 'replicate' | 'gemini'
+  project_id?: string
+  sequence?: number
 }
 
 export interface GenerateVideoResponse {
