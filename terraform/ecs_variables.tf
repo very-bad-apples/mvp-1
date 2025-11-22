@@ -395,24 +395,4 @@ variable "oidc_session_timeout" {
   default     = 604800
 }
 
-# =============================================================================
-# CORS Configuration (defined in main variables.tf but documented here)
-# =============================================================================
-# 
-# CORS (Cross-Origin Resource Sharing) settings are configured via the
-# cors_allowed_origins variable in terraform/variables.tf
-# 
-# To add production URLs:
-# 1. Edit terraform/terraform.tfvars
-# 2. Add your frontend URLs to cors_allowed_origins list
-# 3. Run: terraform apply
-# 
-# Example:
-#   cors_allowed_origins = [
-#     "http://localhost:3000",
-#     "https://yourdomain.com",
-#     "https://www.yourdomain.com"
-#   ]
-# 
-# =============================================================================
 
