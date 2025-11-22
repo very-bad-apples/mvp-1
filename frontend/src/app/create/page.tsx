@@ -88,17 +88,24 @@ export default function CreatePage() {
 
   // Check if form is valid and ready to submit
   const isFormValid = () => {
-    // Check video description
+    // Check video description (required)
     if (!prompt.trim()) return false
 
-    // Check mode-specific requirements
-    if (mode === 'music-video') {
-      // Music video requires audio
-      if (audioSource === 'upload' && !uploadedAudio) return false
-      if (audioSource === 'youtube' && !downloadedAudioId) return false
+    // Check personality (required)
+    if (!personality.trim()) return false
+
+    // Check reference image (required)
+    if (imageSource === 'upload' && !uploadedCharacterImage) return false
+    if (imageSource === 'generate') {
+      // Must have character description and selected image
+      if (!characterDescription.trim()) return false
+      if (selectedImageIndex === null) return false
     }
 
-    // Note: Reference image is optional for both modes
+    // Check audio (required for both modes)
+    if (audioSource === 'upload' && !uploadedAudio) return false
+    if (audioSource === 'youtube' && !downloadedAudioId) return false
+
     return true
   }
 
@@ -115,23 +122,70 @@ export default function CreatePage() {
       return
     }
 
-    if (mode === 'music-video') {
-      if (audioSource === 'upload' && !uploadedAudio) {
+    if (!personality.trim()) {
+      toast({
+        title: "Error",
+        description: mode === 'ad-creative' 
+          ? "Please provide brand personality"
+          : "Please provide artist/band personality",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check reference image (required)
+    if (imageSource === 'upload' && !uploadedCharacterImage) {
+      toast({
+        title: "Error",
+        description: mode === 'ad-creative'
+          ? "Please upload a product/brand reference image"
+          : "Please upload a character reference image",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (imageSource === 'generate') {
+      if (!characterDescription.trim()) {
         toast({
           title: "Error",
-          description: "Please upload a music file",
+          description: mode === 'ad-creative'
+            ? "Please provide product/brand visual style description"
+            : "Please provide artist/band visual appearance description",
           variant: "destructive",
         })
         return
       }
-      if (audioSource === 'youtube' && !downloadedAudioId) {
+      if (selectedImageIndex === null) {
         toast({
           title: "Error",
-          description: "Please download audio from YouTube",
+          description: mode === 'ad-creative'
+            ? "Please select a generated product image"
+            : "Please select a generated character image",
           variant: "destructive",
         })
         return
       }
+    }
+
+    // Check audio (required for both modes)
+    if (audioSource === 'upload' && !uploadedAudio) {
+      toast({
+        title: "Error",
+        description: mode === 'ad-creative'
+          ? "Please upload background music"
+          : "Please upload a music file",
+        variant: "destructive",
+      })
+      return
+    }
+    if (audioSource === 'youtube' && !downloadedAudioId) {
+      toast({
+        title: "Error",
+        description: "Please download audio from YouTube",
+        variant: "destructive",
+      })
+      return
     }
 
     setIsSubmitting(true)
@@ -452,9 +506,12 @@ export default function CreatePage() {
 
               {/* Personality Field */}
               <div className="space-y-3">
-                <Label htmlFor="personality" className="text-sm font-medium text-white">
-                  {mode === 'ad-creative' ? 'Brand Personality (Optional)' : 'Artist/Band Personality (Optional)'}
-                </Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="personality" className="text-sm font-medium text-white">
+                    {mode === 'ad-creative' ? 'Brand Personality' : 'Artist/Band Personality'}
+                  </Label>
+                  <span className="text-red-400 text-sm">*</span>
+                </div>
                 <Textarea
                   id="personality"
                   placeholder={
@@ -475,9 +532,12 @@ export default function CreatePage() {
 
               {/* Image Source */}
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-white">
-                  {mode === 'ad-creative' ? 'Product/Brand Reference Image' : 'Character Reference Image'}
-                </Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-sm font-medium text-white">
+                    {mode === 'ad-creative' ? 'Product/Brand Reference Image' : 'Character Reference Image'}
+                  </Label>
+                  <span className="text-red-400 text-sm">*</span>
+                </div>
                 
                 {/* Image Source Tabs */}
                 <Tabs
@@ -524,8 +584,8 @@ export default function CreatePage() {
                     {!uploadedCharacterImage && (
                       <p className="text-xs text-gray-400 mt-2">
                         {mode === 'ad-creative'
-                          ? 'Upload a product/brand reference image (optional)'
-                          : 'Upload a character reference image (optional)'}
+                          ? 'Upload a product/brand reference image'
+                          : 'Upload a character reference image'}
                       </p>
                     )}
                   </div>
@@ -536,9 +596,12 @@ export default function CreatePage() {
                   <div className="space-y-4">
                     {/* Visual Appearance Input */}
                     <div>
-                      <Label htmlFor="character" className="text-sm font-medium text-white mb-2 block">
-                        {mode === 'ad-creative' ? 'Product/Brand Visual Style' : 'Artist/Band Visual Appearance'}
-                      </Label>
+                      <div className="flex items-center gap-1 mb-2">
+                        <Label htmlFor="character" className="text-sm font-medium text-white">
+                          {mode === 'ad-creative' ? 'Product/Brand Visual Style' : 'Artist/Band Visual Appearance'}
+                        </Label>
+                        <span className="text-red-400 text-sm">*</span>
+                      </div>
                       <Textarea
                         id="character"
                         placeholder={
@@ -677,13 +740,13 @@ export default function CreatePage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-1">
                   <Label className="text-sm font-medium text-white">
-                    {mode === 'ad-creative' ? 'Background Music (Optional)' : 'Music Source'}
+                    {mode === 'ad-creative' ? 'Background Music' : 'Music Source'}
                   </Label>
-                  {mode === 'music-video' && <span className="text-red-400 text-sm">*</span>}
+                  <span className="text-red-400 text-sm">*</span>
                 </div>
                 {mode === 'ad-creative' && (
                   <p className="text-xs text-gray-400">
-                    Add background music to your ad creative (optional)
+                    Add background music to your ad creative
                   </p>
                 )}
                 <div className="space-y-4">
