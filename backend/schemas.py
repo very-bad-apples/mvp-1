@@ -146,12 +146,17 @@ class AudioDownloadRequest(BaseModel):
         default="192",
         description="Audio quality in kbps (e.g., '128', '192', '256', '320')"
     )
+    cookies: Optional[str] = Field(
+        default=None,
+        description="Optional YouTube cookies in Netscape format. Export with: yt-dlp --cookies-from-browser chrome --cookies cookies.txt https://youtube.com/watch?v=test"
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                "audio_quality": "192"
+                "audio_quality": "192",
+                "cookies": "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tFALSE\t..."
             }
         }
 

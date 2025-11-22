@@ -221,6 +221,13 @@ DYNAMODB_ENDPOINT=http://localhost:8001
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
+
+# YouTube Download (yt-dlp)
+# Use cookies to bypass YouTube bot detection
+# Option 1: Automatically extract cookies from browser (recommended)
+YTDLP_COOKIES_FROM_BROWSER=chrome  # Options: chrome, firefox, edge, safari, opera, brave
+# Option 2: Use a cookies file (export with: yt-dlp --cookies-from-browser chrome --cookies cookies.txt)
+# YTDLP_COOKIES_FILE=/path/to/cookies.txt
 ```
 
 ### Frontend (.env.local)
