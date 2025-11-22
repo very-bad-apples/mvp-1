@@ -36,9 +36,8 @@ variable "cors_allowed_origins" {
   description = "List of allowed origins for CORS (wildcards not recommended for production)"
   type        = list(string)
   default     = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://badapples.vercel.app"
+    "*",
+    "https://bigbadapples.com"
   ]
   
   # Add your production frontend URLs:
