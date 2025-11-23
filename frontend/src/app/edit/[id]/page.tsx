@@ -573,7 +573,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleExportVideo}
-                disabled={!allVideosComplete || isComposing || !!project?.finalOutputUrl}
+                disabled={!allVideosComplete || isComposing}
               >
                 {isComposing ? (
                   <>

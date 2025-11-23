@@ -63,7 +63,7 @@ async def process_composition_job(project_id: str) -> Dict[str, Any]:
         # Retrieve all scenes
         scene_items = list(MVProjectItem.query(
             pk,
-            MVProjectItem.SK.begins_with("SCENE#")
+            MVProjectItem.SK.startswith("SCENE#")
         ))
 
         # Sort by sequence
@@ -189,7 +189,7 @@ async def process_composition_job(project_id: str) -> Dict[str, Any]:
 
 def compose_video_with_moviepy(scene_paths: List[str], audio_path: str, output_path: str):
     """
-    Compose final video using moviepy.
+    Compose final video using moviepy 2.0.0.
 
     Args:
         scene_paths: List of scene video file paths
@@ -197,12 +197,7 @@ def compose_video_with_moviepy(scene_paths: List[str], audio_path: str, output_p
         output_path: Output file path
     """
     try:
-        from moviepy.editor import (
-            VideoFileClip,
-            concatenate_videoclips,
-            concatenate_audioclips,
-            AudioFileClip
-        )
+        from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
     except ImportError:
         raise ImportError("moviepy is required for video composition. Install with: pip install moviepy")
 
@@ -228,14 +223,15 @@ def compose_video_with_moviepy(scene_paths: List[str], audio_path: str, output_p
                 loops = int(final_clip.duration / audio.duration) + 1
                 audio_loops = [audio] * loops
                 audio = concatenate_audioclips(audio_loops)
-                audio = audio.subclip(0, final_clip.duration)
+                # Trim concatenated audio to exact video duration
+                audio = audio.with_duration(final_clip.duration)
             else:
                 # Trim audio to match video duration
-                audio = audio.subclip(0, final_clip.duration)
+                audio = audio.with_duration(final_clip.duration)
 
-            final_clip = final_clip.set_audio(audio)
+            final_clip = final_clip.with_audio(audio)
 
-        # Write output
+        # Write output (MoviePy 2.0.0 syntax)
         final_clip.write_videofile(
             output_path,
             codec='libx264',

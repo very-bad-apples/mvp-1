@@ -13,7 +13,7 @@ import time
 import shutil
 import requests
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from typing import Optional, List
 from pathlib import Path
 
@@ -44,7 +44,6 @@ from services.s3_storage import (
 )
 from config import settings
 from pynamodb.exceptions import PutError, DoesNotExist
-import json
 
 logger = structlog.get_logger()
 
@@ -1983,28 +1982,31 @@ async def start_generation(project_id: str):
     response_model=ComposeResponse,
     summary="Compose Final Video",
     description="""
-Queue final video composition job.
+Start final video composition process.
 
 This endpoint:
 1. Validates all scenes are completed
-2. Queues composition job to Redis
-3. Returns job ID for tracking
+2. Starts background composition task
+3. Returns immediately with job ID for tracking
 
-The worker process will:
+The background task will:
 1. Download scene videos from S3
 2. Stitch them with moviepy
 3. Add audio backing track
 4. Upload final video to S3
 5. Update project with final output S3 key
+
+Poll GET /projects/{project_id} to check when finalOutputUrl is available.
 """
 )
-async def compose_video(project_id: str, request: ComposeRequest):
+async def compose_video(project_id: str, request: ComposeRequest, background_tasks: BackgroundTasks):
     """
-    Queue final video composition.
+    Start final video composition in background.
 
     Args:
         project_id: Project UUID
         request: Composition request (currently no additional params)
+        background_tasks: FastAPI background tasks
 
     Returns:
         ComposeResponse with job ID
@@ -2048,34 +2050,27 @@ async def compose_video(project_id: str, request: ComposeRequest):
                 }
             )
 
-        # Queue composition job to Redis
-        from redis_client import redis_client
-
+        # Generate job ID for tracking
         job_id = f"compose_{project_id}"
 
-        job_data = {
-            "job_id": job_id,
-            "project_id": project_id,
-            "type": "compose",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-
-        # Push to Redis queue using direct client access
-        redis_conn = redis_client.get_client()
-        redis_conn.lpush("video_composition_queue", json.dumps(job_data))
-        logger.info("composition_job_queued", job_id=job_id, project_id=project_id)
-
-        # Update project status
+        # Update project status immediately
         project_item.status = "composing"
         project_item.GSI1PK = "composing"
         project_item.updatedAt = datetime.now(timezone.utc)
         project_item.save()
 
+        # Import composition function
+        from workers.compose_worker import process_composition_job
+
+        # Start background composition task
+        background_tasks.add_task(process_composition_job, project_id)
+        logger.info("composition_job_started", job_id=job_id, project_id=project_id)
+
         return ComposeResponse(
             jobId=job_id,
             projectId=project_id,
-            status="queued",
-            message="Video composition job queued"
+            status="composing",
+            message="Video composition started"
         )
 
     except HTTPException:
@@ -2086,7 +2081,7 @@ async def compose_video(project_id: str, request: ComposeRequest):
             status_code=500,
             detail={
                 "error": "InternalError",
-                "message": "Failed to queue composition job",
+                "message": "Failed to start composition",
                 "details": str(e)
             }
         )
