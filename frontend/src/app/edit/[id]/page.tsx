@@ -51,7 +51,10 @@ export default function EditPage({ params }: { params: { id: string } }) {
   // Check if all VIDEOS are complete (for export functionality)
   const allVideosComplete = useMemo(() => {
     if (!project?.scenes || project.scenes.length === 0) return false
-    return project.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    return project.scenes.every(scene => 
+      (scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined) ||
+      (scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    )
   }, [project?.scenes])
 
   // Auto-select the currently playing scene based on currentTime
@@ -60,7 +63,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     // Get scenes with videos, sorted by sequence
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.videoClipUrl)
+      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
       .sort((a, b) => a.sequence - b.sequence)
 
     if (scenesWithVideos.length === 0) return
@@ -112,7 +115,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     // Get all scenes with videos, sorted by sequence
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.videoClipUrl)
+      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
       .sort((a, b) => a.sequence - b.sequence)
 
     // Find the clicked scene in the sorted list
@@ -226,7 +229,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
       }
 
       // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
-      const scenesWithoutVideos = project.scenes.filter(scene => !scene.videoClipUrl)
+      const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl && !scene.videoClipUrl)
       if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
         sceneGenerationTriggered.current = true
 

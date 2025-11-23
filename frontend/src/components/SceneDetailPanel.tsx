@@ -73,7 +73,7 @@ export function SceneDetailPanel({ scene, onUpdatePrompt, onUpdateNegativePrompt
     if (scene.errorMessage) {
       return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Error</Badge>
     }
-    if (scene.videoClipUrl) {
+    if (scene.originalVideoClipUrl || scene.videoClipUrl) {
       return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Complete</Badge>
     }
     if (scene.status === 'processing') {

@@ -69,7 +69,9 @@ export interface AssetGalleryProps {
   scenes?: Array<{
     sequence: number
     prompt: string
+    /** @deprecated Use originalVideoClipUrl instead */
     videoClipUrl?: string | null
+    originalVideoClipUrl?: string | null
     status?: string
   }>
 

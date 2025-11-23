@@ -327,7 +327,7 @@ export async function startFullGeneration(
         async () => {
           opts.onProgress('lipsync', index + 1, project.scenes.length, `Generating lip-sync ${index + 1}/${project.scenes.length}`)
 
-          if (!scene.videoClipUrl) {
+          if (!scene.originalVideoClipUrl && !scene.videoClipUrl) {
             console.warn(`Scene ${index + 1} missing video, skipping lip-sync`)
             return null
           }
@@ -380,9 +380,14 @@ export async function startFullGeneration(
       throw new Error('Failed to fetch final project state')
     }
 
-    // Check if all scenes have videos
-    const allScenesComplete = finalProject.scenes.every(scene => scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
-    const completedCount = finalProject.scenes.filter(scene => scene.videoClipUrl).length
+    // Check if all scenes have videos (using originalVideoClipUrl with fallback to videoClipUrl)
+    const allScenesComplete = finalProject.scenes.every(scene => 
+      (scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined) ||
+      (scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    )
+    const completedCount = finalProject.scenes.filter(scene => 
+      scene.originalVideoClipUrl || scene.videoClipUrl
+    ).length
 
     if (allScenesComplete) {
       // All videos generated successfully - mark as completed
@@ -741,7 +746,7 @@ export async function regenerateLipSync(
 
     const scene = project.scenes[sceneIndex]
 
-    if (!scene.videoClipUrl) {
+    if (!scene.originalVideoClipUrl && !scene.videoClipUrl) {
       throw new Error(`Scene ${sceneIndex + 1} missing video for lip-sync`)
     }
 

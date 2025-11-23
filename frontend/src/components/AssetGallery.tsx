@@ -52,14 +52,15 @@ export function AssetGallery({
 
     // Add scene videos
     scenes.forEach((scene) => {
-      if (scene.videoClipUrl && scene.status === 'completed') {
+      const videoUrl = scene.originalVideoClipUrl ?? scene.videoClipUrl
+      if (videoUrl && scene.status === 'completed') {
         // Check if this is a lip-synced video (simple heuristic)
-        const isLipSynced = scene.videoClipUrl.includes('lipsync') || scene.videoClipUrl.includes('lip-sync')
+        const isLipSynced = videoUrl.includes('lipsync') || videoUrl.includes('lip-sync')
 
         assetList.push({
           id: `scene-${scene.sequence}`,
           type: isLipSynced ? 'lipsync' : 'video',
-          url: scene.videoClipUrl,
+          url: videoUrl,
           description: scene.prompt,
           sceneSequence: scene.sequence,
           metadata: {
