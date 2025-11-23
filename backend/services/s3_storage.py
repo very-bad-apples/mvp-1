@@ -179,9 +179,19 @@ class S3StorageService:
                 Bucket=self.bucket_name,
                 Key=s3_key
             )
+            logger.debug(
+                "s3_file_exists_check",
+                s3_key=s3_key,
+                exists=True
+            )
             return True
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
+                logger.debug(
+                    "s3_file_exists_check",
+                    s3_key=s3_key,
+                    exists=False
+                )
                 return False
             # Re-raise other errors
             logger.error(
