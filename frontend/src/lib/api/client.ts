@@ -565,6 +565,50 @@ export async function updateScene(
 }
 
 /**
+ * Generate video for a specific scene
+ * @param projectId Project identifier
+ * @param sequence Scene sequence number
+ * @param backend Video generation backend (default: "replicate")
+ * @returns Video generation response with videoUrl and metadata
+ */
+export async function generateSceneVideo(
+  projectId: string,
+  sequence: number,
+  backend: string = "replicate"
+): Promise<{
+  videoUrl: string
+  s3Key: string
+  metadata: {
+    project_id: string
+    scene_sequence: number
+    backend: string
+    duration?: number
+    prompt?: string
+    write_to_db: boolean
+    reference_image_used: boolean
+    video_size_bytes: number
+  }
+}> {
+  const url = `${getAPIUrl()}/api/mv/generate_scene_video/${projectId}/${sequence}?write_to_db=true&backend=${backend}`
+  return apiFetch<{
+    videoUrl: string
+    s3Key: string
+    metadata: {
+      project_id: string
+      scene_sequence: number
+      backend: string
+      duration?: number
+      prompt?: string
+      write_to_db: boolean
+      reference_image_used: boolean
+      video_size_bytes: number
+    }
+  }>(url, {
+    method: 'POST',
+  })
+}
+
+/**
  * Trim a scene's video clip
  * @param projectId Project identifier
  * @param sequence Scene sequence number
