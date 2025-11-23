@@ -456,6 +456,13 @@ def resequence_display_order(project_id: str) -> None:
             )
             return
 
+        # First, ensure all scenes have displaySequence set (migration)
+        for scene in scenes:
+            if scene.displaySequence is None:
+                scene.displaySequence = scene.sequence
+                scene.updatedAt = datetime.now(timezone.utc)
+                scene.save()
+
         # Sort by displaySequence (fallback to sequence if displaySequence is None)
         scenes.sort(key=lambda s: s.displaySequence if s.displaySequence is not None else (s.sequence or 0))
 
