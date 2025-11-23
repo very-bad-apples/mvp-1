@@ -1,0 +1,77 @@
+# 80s Action/Horror Film Director Configuration
+# Signature Style: Gritty military action, jungle warfare, alien horror, practical effects, intense survival atmosphere, sweat-soaked tension
+
+camera:
+  shotType: medium_shot  # Tight framing on action, close-ups for intensity, wide shots for jungle/alien environments
+  movement: handheld  # Shaky, kinetic camera work for action sequences, steady for tension
+  lens: standard  # Vintage 35mm film camera lens, slightly softer focus, practical effects era
+  angle: low_angle  # Low angles for power, eye-level for intimacy, high angles for vulnerability
+
+lighting:
+  type: dramatic  # Harsh jungle lighting, practical military equipment lights, alien bioluminescence
+  direction: side  # Deep shadows, high contrast, sweat and grime visible
+
+style:
+  visualStyle: cinematic
+  mood: intense  # Survival, warfare, horror, primal fear, military grit
+  colorGrading: desaturated  # Muted jungle greens, military browns, alien blues/purples, blood reds
+
+motion:
+  intensity: 0.7  # Fast-paced action, slow tension builds, sudden movements
+  guidanceScale: 11  # Strong adherence to 80s action/horror aesthetic
+  cfgScale: 9  # Balanced guidance for filmic look
+
+audio:
+  music:
+    style: orchestral  # Epic military themes, tense horror scores, synth elements
+    mood: intense  # Building tension, explosive action, primal fear
+    intensity: prominent  # Sound design crucial: gunfire, alien sounds, jungle ambience
+
+quality:
+  negativePrompts:
+    - blurry
+    - low quality
+    - digital clean look
+    - modern polished aesthetic
+    - oversaturated colors
+    - smooth digital video
+    - clean sterile environments
+    - bright cheerful lighting
+    - high resolution digital
+    - crisp sharp focus
+    - glossy surfaces
+    - retro synthwave
+    - neon colors
+    - cyberpunk aesthetic
+    - clean futuristic
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: hard_cut  # Fast-paced editing, quick cuts for action, slow builds for tension
+
+# Additional 80s Action/Horror Film Characteristics:
+# - Visible film grain and texture (35mm/16mm film stock aesthetic)
+# - Sweaty, grimy, battle-worn characters
+# - Military gear: bandanas, vests, weapons, tactical equipment
+# - Jungle environments: dense foliage, mud, rain, humidity
+# - Alien environments: dark, organic, bioluminescent, claustrophobic
+# - Practical effects: blood, gore, explosions, creature effects
+# - Harsh practical lighting: flashlights, flares, fire, alien glow
+# - High contrast chiaroscuro lighting
+# - Steam, smoke, atmospheric haze, rain
+# - Claustrophobic, confined spaces (spaceships, caves, jungle)
+# - Muted color palette: jungle greens, military browns, alien blues/purples
+# - Warm practical lights vs cool ambient lighting
+# - Film stock color science (Kodak warm tones, Fuji cooler tones)
+# - Vintage camera characteristics (slight chromatic aberration, filmic motion blur)
+# - Handheld camera work for action, steady for tension
+# - Focus on texture: mud, blood, sweat, grime, alien surfaces
+# - "Used future" design philosophy (functional, worn, not sleek)
+# - Working-class military aesthetic (not polished, not glamorous)
+# - Period-appropriate cinematography techniques
+# - Analog film look (not digital/clean)
+# - Influences: Alien (1979), Predator (1987), The Thing (1982), Rambo: First Blood (1982), Aliens (1986)
+
+
+
+

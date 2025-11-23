@@ -1,0 +1,101 @@
+# Product Reveal Commercial Director Configuration
+# Signature Style: Hands-only product reveals, NO HUMANS, extreme close-ups, table/workspace assembly or jungle discovery scenarios
+
+camera:
+  shotType: extreme_close_up  # Extreme close-ups on MULTIPLE HANDS performing actions simultaneously, dynamic framing
+  movement: dynamic  # Constant movement, tracking hands in motion, smooth pans following action, energetic reveals
+  lens: macro  # Macro lens for extreme close-ups on hands, objects, and product details, shallow depth of field
+  angle: overhead  # Overhead for table/workspace scenes, eye-level for jungle discovery, dynamic angle changes during action
+
+lighting:
+  type: dramatic  # Bold, high-contrast lighting to make hands and product pop, dynamic lighting changes
+  direction: front  # Front lighting for table scenes, side lighting for jungle texture and depth, moving light sources
+
+style:
+  visualStyle: commercial  # Polished, product-focused commercial aesthetic, high-energy action
+  mood: energetic  # Bold, confident, adventurous, discovery-focused, powerful, action-packed
+  colorGrading: vibrant  # Rich, saturated colors, jungle greens, product colors pop, high contrast
+
+motion:
+  intensity: 0.95  # Maximum dynamic movement, fast-paced hand actions, constant motion, product appears during action
+  guidanceScale: 10  # Strong adherence to hands-only commercial style with maximum movement
+  cfgScale: 8  # Balanced guidance for polished commercial look
+
+audio:
+  music:
+    style: electronic  # Energetic, bold, modern commercial music
+    mood: energetic  # Upbeat, confident, adventurous
+    intensity: prominent  # Music drives the energy, syncs with action beats
+
+quality:
+  negativePrompts:
+    - person
+    - human
+    - face
+    - body
+    - head
+    - people
+    - person's face
+    - full body
+    - talking head
+    - dialogue
+    - speech
+    - voice
+    - character
+    - actor
+    - blurry
+    - low quality
+    - static shot
+    - slow motion
+    - wide shot
+    - text overlay
+    - logo visible
+    - product label text
+    - slow pacing
+    - minimal movement
+    - stationary camera
+    - soft focus
+    - desaturated colors
+    - muted tones
+    - dark lighting
+    - grainy footage
+    - film grain
+    - vintage aesthetic
+    - retro look
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: quick_cut  # Fast-paced editing, quick cuts between hand actions and product reveals
+
+# Additional Product Reveal Commercial Characteristics:
+# - MULTIPLE HANDS - Show 2-4 hands working together, creating dynamic interaction and movement
+# - HANDS ONLY - NO HUMANS, NO FACES, NO BODIES - just hands performing actions
+# - CONSTANT MOVEMENT - Hands always in motion, removing, clearing, discovering, revealing
+# - PRODUCT APPEARS DURING ACTION - Product should be discovered/revealed in the MIDDLE of scenes, not just at the end
+# - Table/workspace scenarios: Multiple hands placing objects, hands adding/assembling items simultaneously, dynamic organization
+# - Jungle discovery scenarios: Multiple hands removing leaves together, hands clearing vines in motion, hands brushing debris, hands discovering product mid-action
+# - Extreme close-ups on MULTIPLE hands performing actions simultaneously (placing, adding, removing, clearing, discovering)
+# - Product prominently featured DURING action sequences, not just at the end
+# - Shallow depth of field to isolate multiple hands and product from background
+# - Fast-paced, energetic editing rhythm with constant motion
+# - Bold, confident camera movements following multiple hands in action
+# - High production value, polished commercial aesthetic with maximum dynamism
+# - Product is the hero - appears during action, always in sharp focus, well-lit, prominently displayed
+# - Multiple hands work together - performing coordinated actions that lead to product reveal
+# - Overhead shots for table/workspace assembly scenes with multiple hands
+# - Eye-level or low-angle shots for jungle discovery scenes with hands in motion
+# - Rich, vibrant color grading makes product colors pop
+# - Quick cuts maintain energy and focus attention on moving elements
+# - Macro lens captures multiple hand movements, object details, and product texture
+# - Front lighting ensures product is always clearly visible even during fast action
+# - Dynamic camera movements add energy and excitement, following the action
+# - Influences: Old Spice commercials, modern hands-only product reveal ads with maximum movement
+# - Focus on: multiple hands doing action → product appears during action → reveal pattern
+# - Each scene follows: action (multiple hands) → product discovery mid-action → reveal structure
+# - Product should feel like a discovery found during the action, not just at the end
+# - Bold, confident, adventurous brand personality
+# - High-energy, fast-paced commercial pacing with constant motion
+# - Product-focused cinematography (product appears during action, always the star)
+# - NO HUMANS VISIBLE - only multiple hands, objects, and product
+# - Maximum movement and dynamism throughout every scene
+
