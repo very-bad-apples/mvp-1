@@ -26,6 +26,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
   const sceneGenerationTriggered = useRef(false)
   const overlayDismissed = useRef(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const lastAutoSelectedSceneRef = useRef<string | null>(null)
   const { toast } = useToast()
 
   // Fetch project data using the API client hook
@@ -64,30 +65,31 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     if (scenesWithVideos.length === 0) return
 
-    // Calculate which scene is playing at currentTime
+    // Find the scene that should be playing at current time
+    let targetSceneId: string | null = null
     let accumulatedTime = 0
+
     for (const scene of scenesWithVideos) {
       const sceneDuration = scene.duration || 0
       if (currentTime >= accumulatedTime && currentTime < accumulatedTime + sceneDuration) {
-        // This scene is currently playing - auto-select it
-        const sceneId = `scene-${scene.sequence}`
-        if (selectedSceneId !== sceneId) {
-          setSelectedSceneId(sceneId)
-        }
-        return
+        targetSceneId = `scene-${scene.sequence}`
+        break
       }
       accumulatedTime += sceneDuration
     }
 
     // If we're beyond all scenes, select the last scene
-    if (currentTime >= accumulatedTime && scenesWithVideos.length > 0) {
+    if (!targetSceneId && currentTime >= accumulatedTime && scenesWithVideos.length > 0) {
       const lastScene = scenesWithVideos[scenesWithVideos.length - 1]
-      const sceneId = `scene-${lastScene.sequence}`
-      if (selectedSceneId !== sceneId) {
-        setSelectedSceneId(sceneId)
-      }
+      targetSceneId = `scene-${lastScene.sequence}`
     }
-  }, [currentTime, project?.scenes, selectedSceneId])
+
+    // Only update if the target scene changed
+    if (targetSceneId && targetSceneId !== lastAutoSelectedSceneRef.current) {
+      lastAutoSelectedSceneRef.current = targetSceneId
+      setSelectedSceneId(targetSceneId)
+    }
+  }, [currentTime, project?.scenes])
 
   // Get the selected scene object from the ID
   const selectedScene = useMemo(() => {
@@ -101,6 +103,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
     if (!sceneId || !project?.scenes) {
       return
     }
+
+    // Reset auto-selection tracking when user manually selects
+    lastAutoSelectedSceneRef.current = null
 
     // Parse scene sequence from ID
     const sequence = parseInt(sceneId.replace('scene-', ''))

@@ -4,6 +4,7 @@ import * as React from "react"
 import { Slider } from "@/components/ui/slider"
 import { Card } from "@/components/ui/card"
 import { Scissors } from "lucide-react"
+import { formatPreciseTime } from '@/lib/utils/time'
 
 export interface VideoTrimmerProps {
   videoDuration: number
@@ -41,12 +42,6 @@ export function VideoTrimmer({
     onTrimPointsChange(newTrimPoints)
   }
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = (seconds % 60).toFixed(1)
-    return mins > 0 ? `${mins}:${secs.padStart(4, "0")}` : `${secs}s`
-  }
-
   const trimDuration = trimPoints.out - trimPoints.in
 
   return (
@@ -57,7 +52,7 @@ export function VideoTrimmer({
           <h3 className="text-lg font-semibold text-foreground">Video Trimmer</h3>
         </div>
         <div className="text-sm text-muted-foreground">
-          Duration: {formatTime(videoDuration)}
+          Duration: {formatPreciseTime(videoDuration)}
         </div>
       </div>
 
@@ -91,7 +86,7 @@ export function VideoTrimmer({
             {/* Time markers */}
             <div className="absolute inset-0 flex items-center justify-between px-3 text-xs text-muted-foreground font-mono">
               <span>0:00</span>
-              <span>{formatTime(videoDuration)}</span>
+              <span>{formatPreciseTime(videoDuration)}</span>
             </div>
           </div>
         </div>
@@ -103,7 +98,7 @@ export function VideoTrimmer({
               In Point
             </div>
             <div className="text-lg font-mono font-semibold text-blue-400">
-              {formatTime(trimPoints.in)}
+              {formatPreciseTime(trimPoints.in)}
             </div>
           </div>
 
@@ -112,7 +107,7 @@ export function VideoTrimmer({
               Out Point
             </div>
             <div className="text-lg font-mono font-semibold text-blue-400">
-              {formatTime(trimPoints.out)}
+              {formatPreciseTime(trimPoints.out)}
             </div>
           </div>
 
@@ -121,7 +116,7 @@ export function VideoTrimmer({
               Trim Duration
             </div>
             <div className="text-lg font-mono font-semibold text-blue-400">
-              {formatTime(trimDuration)}
+              {formatPreciseTime(trimDuration)}
             </div>
           </div>
         </div>
@@ -129,7 +124,7 @@ export function VideoTrimmer({
         {/* Additional Info */}
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-gray-800">
           <span>
-            Range: {formatTime(trimPoints.in)} - {formatTime(trimPoints.out)}
+            Range: {formatPreciseTime(trimPoints.in)} - {formatPreciseTime(trimPoints.out)}
           </span>
           <span>
             {((trimDuration / videoDuration) * 100).toFixed(1)}% of video

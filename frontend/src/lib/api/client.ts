@@ -29,6 +29,7 @@ import {
   UpdateProjectResponse,
   ComposeRequest,
   ComposeResponse,
+  ProjectScene,
 } from '@/types/project'
 
 /**
@@ -555,9 +556,9 @@ export async function updateScene(
   projectId: string,
   sequence: number,
   data: { prompt?: string; negativePrompt?: string }
-): Promise<any> {
+): Promise<ProjectScene> {
   const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}`
-  return apiFetch<any>(url, {
+  return apiFetch<ProjectScene>(url, {
     method: 'PATCH',
     body: JSON.stringify(data),
   })
@@ -574,7 +575,7 @@ export async function trimScene(
   projectId: string,
   sequence: number,
   trimPoints: { in: number; out: number }
-): Promise<any> {
+): Promise<ProjectScene> {
   try {
     const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}/trim`
 
@@ -583,7 +584,7 @@ export async function trimScene(
       url,
     })
 
-    const response = await apiFetch<any>(url, {
+    const response = await apiFetch<ProjectScene>(url, {
       method: 'POST',
       body: JSON.stringify(trimPoints),
     })
@@ -821,11 +822,11 @@ export async function getDirectorConfigs(): Promise<{ configs: string[] }> {
 export async function regenerateScene(
   projectId: string,
   sequence: number
-): Promise<any> {
+): Promise<ProjectScene> {
   const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}/regenerate`
 
   try {
-    return await apiFetch<any>(
+    return await apiFetch<ProjectScene>(
       url,
       {
         method: 'POST',
@@ -846,6 +847,32 @@ export async function regenerateScene(
         details: error.details,
       } : error
     )
+    throw error
+  }
+}
+
+/**
+ * Download a scene's video clip directly from S3 URL
+ * @param videoUrl Presigned S3 URL of the video to download
+ * @param sequence Scene sequence number
+ * @param projectId Project identifier
+ */
+export function downloadSceneVideo(
+  videoUrl: string,
+  sequence: number,
+  projectId: string
+): void {
+  try {
+    // Create a temporary anchor element to trigger download
+    const a = document.createElement('a')
+    a.href = videoUrl  // Use the presigned S3 URL directly
+    a.download = `scene-${sequence}-${projectId}.mp4`
+    a.target = '_blank'  // Open in new tab as fallback
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } catch (error) {
+    console.error('Download failed:', error)
     throw error
   }
 }
