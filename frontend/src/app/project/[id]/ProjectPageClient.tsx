@@ -11,7 +11,7 @@
  * - Error handling and loading states
  */
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Video, ChevronLeft, CheckCircle2, Circle, Film, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { ProjectStatus, ProjectScene } from '@/types/project'
 import { AssetGallery } from '@/components/AssetGallery'
 import FinalVideoPlayer from '@/components/FinalVideoPlayer'
+import { LipsyncOptionsModal, type LipsyncOptions } from '@/components/LipsyncOptionsModal'
 
 const statusConfig: Record<ProjectStatus, { color: string; label: string }> = {
   'pending': { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', label: 'Pending' },
@@ -170,11 +171,13 @@ function SceneCard({
   onRegenerateImage,
   onRegenerateVideo,
   onRegenerateLipsync,
+  onAddLipsync,
 }: {
   scene: ProjectScene
   onRegenerateImage?: (sceneId: number) => void
   onRegenerateVideo?: (sceneId: number) => void
   onRegenerateLipsync?: (sceneId: number) => void
+  onAddLipsync?: (sceneId: number) => void
 }) {
   const hasVideo = (scene.originalVideoClipUrl || scene.videoClipUrl) && scene.status === 'completed'
   const thumbnail = '/placeholder.svg'
@@ -198,7 +201,7 @@ function SceneCard({
       <div className="relative aspect-video overflow-hidden bg-gray-900/50">
         {hasVideo && (scene.originalVideoClipUrl || scene.videoClipUrl) ? (
           <video
-            src={scene.originalVideoClipUrl ?? scene.videoClipUrl}
+            src={scene.originalVideoClipUrl || scene.videoClipUrl || ''}
             className="object-cover w-full h-full"
             muted
             loop
@@ -254,6 +257,17 @@ function SceneCard({
                 aria-label={`Regenerate video for scene ${scene.sequence}`}
               >
                 Regen Video
+              </Button>
+            )}
+            {onAddLipsync && scene.status === 'completed' && hasVideo && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-blue-600 hover:bg-blue-700 text-blue-400"
+                onClick={() => onAddLipsync(scene.sequence!)}
+                aria-label={`Add lipsync to scene ${scene.sequence}`}
+              >
+                Add Lipsync
               </Button>
             )}
             {onRegenerateLipsync && scene.status === 'completed' && (
@@ -328,6 +342,11 @@ function VideoPlayerSection({
 export function ProjectPageClient({ projectId }: { projectId: string }) {
   const { toast } = useToast()
   const { project, loading, error, refetch, isPolling, setOptimisticProject } = useProjectPolling(projectId)
+
+  // Lipsync modal state
+  const [lipsyncModalOpen, setLipsyncModalOpen] = useState(false)
+  const [lipsyncSceneSequence, setLipsyncSceneSequence] = useState<number | null>(null)
+  const [isLipsyncProcessing, setIsLipsyncProcessing] = useState(false)
 
   // Calculate phases based on project status
   const phases = useMemo(() => {
@@ -497,6 +516,72 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
     }
   }, [projectId, refetch, toast])
 
+  // Handle add lipsync request
+  const handleAddLipsync = useCallback((sequence: number) => {
+    setLipsyncSceneSequence(sequence)
+    setLipsyncModalOpen(true)
+  }, [])
+
+  // Handle lipsync modal submit
+  const handleLipsyncSubmit = useCallback(async (options: LipsyncOptions) => {
+    if (lipsyncSceneSequence === null) return
+
+    try {
+      setIsLipsyncProcessing(true)
+
+      toast({
+        title: 'Adding Lipsync',
+        description: `Adding lipsync to scene ${lipsyncSceneSequence}...`,
+      })
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (API_KEY) {
+        headers['X-API-Key'] = API_KEY
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/mv/projects/${projectId}/lipsync/${lipsyncSceneSequence}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(options)
+        }
+      )
+
+      if (!response.ok) {
+        const data = await response.json()
+        const errorMessage = data.detail?.message || data.error || data.message || 'Failed to add lipsync'
+        throw new Error(errorMessage)
+      }
+
+      toast({
+        title: 'Lipsync Added',
+        description: `Lipsync successfully added to scene ${lipsyncSceneSequence}.`,
+      })
+
+      // Close modal
+      setLipsyncModalOpen(false)
+      setLipsyncSceneSequence(null)
+
+      // Refetch project to update UI
+      await refetch()
+    } catch (err) {
+      console.error('Lipsync error:', err)
+      toast({
+        title: 'Lipsync Failed',
+        description: err instanceof Error ? err.message : 'Failed to add lipsync',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLipsyncProcessing(false)
+    }
+  }, [projectId, lipsyncSceneSequence, refetch, toast])
+
   // Error state
   if (error && !project) {
     return (
@@ -624,6 +709,7 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
                   onRegenerateImage={handleRegenerateImage}
                   onRegenerateVideo={handleRegenerateVideo}
                   onRegenerateLipsync={handleRegenerateLipsync}
+                  onAddLipsync={handleAddLipsync}
                 />
               ))}
             </div>
@@ -648,6 +734,20 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
           />
         )}
       </main>
+
+      {/* Lipsync Options Modal */}
+      {lipsyncSceneSequence !== null && (
+        <LipsyncOptionsModal
+          isOpen={lipsyncModalOpen}
+          onClose={() => {
+            setLipsyncModalOpen(false)
+            setLipsyncSceneSequence(null)
+          }}
+          onSubmit={handleLipsyncSubmit}
+          sceneSequence={lipsyncSceneSequence}
+          isLoading={isLipsyncProcessing}
+        />
+      )}
     </div>
   )
 }

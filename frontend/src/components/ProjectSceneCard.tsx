@@ -73,6 +73,8 @@ export interface ProjectSceneCardProps {
   scene: SceneWithStatus
   /** Callback when regenerate is requested */
   onRegenerate?: (type: 'image' | 'video' | 'lipsync') => void
+  /** Callback when add lipsync is requested */
+  onAddLipsync?: (sequence: number) => void
   /** Callback when retry is requested after error */
   onRetry?: () => void
   /** Additional CSS classes */
@@ -158,6 +160,7 @@ function getStatusText(status: SceneGenerationStatus): string {
 export default function ProjectSceneCard({
   scene,
   onRegenerate,
+  onAddLipsync,
   onRetry,
   className,
 }: ProjectSceneCardProps) {
@@ -272,6 +275,15 @@ export default function ProjectSceneCard({
                   <Play className="h-4 w-4 mr-2" />
                   Regenerate Video
                 </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-slate-700" />
+                <DropdownMenuItem
+                  onClick={() => onAddLipsync?.(scene.sequence)}
+                  disabled={!scene.originalVideoClipUrl && !scene.videoClipUrl}
+                  className="text-white hover:bg-slate-700 focus:bg-slate-700"
+                >
+                  <Mic className="h-4 w-4 mr-2" />
+                  Add Lipsync
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onRegenerate('lipsync')}
                   disabled={!scene.lipSyncUrl}
@@ -383,7 +395,7 @@ export default function ProjectSceneCard({
                 <div className="relative w-full h-full group">
                   <video
                     ref={videoRef}
-                    src={scene.originalVideoClipUrl ?? scene.videoClipUrl}
+                    src={scene.originalVideoClipUrl || scene.videoClipUrl || ''}
                     className="w-full h-full object-cover"
                     loop
                     muted

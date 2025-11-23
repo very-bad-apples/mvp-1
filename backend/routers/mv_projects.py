@@ -41,6 +41,7 @@ from mv_models import (
 )
 from mv.scene_generator import generate_scenes, generate_scenes_legacy
 from mv.video_generator import generate_video
+from mv.lipsync import generate_lipsync
 from services.s3_storage import (
     get_s3_storage_service,
     generate_s3_key,
@@ -2487,6 +2488,382 @@ async def get_final_video(project_id: str):
             detail={
                 "error": "InternalError",
                 "message": "Failed to retrieve final video",
+                "details": str(e)
+            }
+        )
+
+
+def calculate_audio_timing_for_scene(project_id: str, sequence: int) -> tuple[float, float]:
+    """
+    Calculate audio start_time and end_time for a scene based on cumulative duration.
+
+    This function sums the duration of all previous scenes to determine when
+    this scene's audio should start and end in the project's backing track.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+
+    Returns:
+        Tuple of (start_time, end_time) in seconds
+
+    Raises:
+        DoesNotExist: If scene not found
+        HTTPException: If scene has no duration
+    """
+    pk = f"PROJECT#{project_id}"
+    cumulative_duration = 0.0
+
+    logger.debug(
+        "calculating_audio_timing",
+        project_id=project_id,
+        sequence=sequence
+    )
+
+    # Query all scenes before target sequence to calculate cumulative duration
+    try:
+        all_scenes = list(MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        ))
+
+        # Sort by sequence number
+        all_scenes.sort(key=lambda s: s.sequence)
+
+        # Find target scene and calculate cumulative duration
+        target_scene = None
+        for scene in all_scenes:
+            if scene.sequence == sequence:
+                target_scene = scene
+                break
+            elif scene.sequence < sequence:
+                # Add duration of previous scenes
+                if scene.duration:
+                    cumulative_duration += scene.duration
+                else:
+                    logger.warning(
+                        "scene_missing_duration",
+                        project_id=project_id,
+                        sequence=scene.sequence
+                    )
+                    # Use default duration for scenes without duration
+                    cumulative_duration += 5.0
+
+        if not target_scene:
+            raise DoesNotExist(f"Scene {sequence} not found in project {project_id}")
+
+        # Get target scene duration
+        scene_duration = target_scene.duration
+        if not scene_duration:
+            logger.warning(
+                "target_scene_missing_duration",
+                project_id=project_id,
+                sequence=sequence
+            )
+            # Use default duration
+            scene_duration = 5.0
+
+        start_time = cumulative_duration
+        end_time = cumulative_duration + scene_duration
+
+        logger.info(
+            "audio_timing_calculated",
+            project_id=project_id,
+            sequence=sequence,
+            start_time=start_time,
+            end_time=end_time,
+            scene_duration=scene_duration,
+            previous_scenes_duration=cumulative_duration
+        )
+
+        return (start_time, end_time)
+
+    except DoesNotExist:
+        raise
+    except Exception as e:
+        logger.error(
+            "audio_timing_calculation_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise
+
+
+@router.post(
+    "/projects/{project_id}/lipsync/{sequence}",
+    response_model=SceneResponse,
+    status_code=200,
+    summary="Add Lipsync to Scene",
+    description="""
+Add lip-sync to a specific scene in a project.
+
+This endpoint:
+1. Fetches the project's audio backing track and scene's video from S3
+2. Automatically calculates audio timing based on scene sequence and cumulative duration
+3. Clips the audio segment for this scene
+4. Processes lipsync using Replicate's Lipsync-2-Pro model
+5. Updates the scene's video with the lipsynced version
+
+**Audio Timing Calculation:**
+- start_time = sum of all previous scenes' durations
+- end_time = start_time + current scene's duration
+
+**Example Request:**
+```json
+{
+    "temperature": 0.5,
+    "active_speaker_detection": true
+}
+```
+
+**Example Response:**
+```json
+{
+    "projectId": "a1b2c3d4-...",
+    "sequence": 2,
+    "status": "completed",
+    "videoUrl": "https://s3.../lipsynced.mp4",
+    ...
+}
+```
+"""
+)
+async def add_scene_lipsync(
+    project_id: str,
+    sequence: int,
+    temperature: Optional[float] = None,
+    active_speaker_detection: Optional[bool] = None,
+    occlusion_detection_enabled: Optional[bool] = None
+):
+    """
+    Add lipsync to a specific scene in a project.
+
+    Automatically calculates audio timing based on scene sequence
+    and previous scene durations.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+        temperature: Lip movement expressiveness (0.0-1.0, default: model default)
+        active_speaker_detection: Auto-detect speaker in multi-person videos
+        occlusion_detection_enabled: Handle face obstructions (slower)
+
+    Returns:
+        Updated scene data with lipsynced video URL
+
+    Raises:
+        HTTPException: 404 if project/scene not found, 400 for validation errors
+    """
+    try:
+        logger.info(
+            "lipsync_request_received",
+            project_id=project_id,
+            sequence=sequence,
+            temperature=temperature,
+            active_speaker_detection=active_speaker_detection,
+            occlusion_detection_enabled=occlusion_detection_enabled
+        )
+
+        s3_service = get_s3_storage_service()
+
+        # 1. Validate and fetch project metadata
+        pk = f"PROJECT#{project_id}"
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "ProjectNotFound",
+                    "message": f"Project {project_id} not found"
+                }
+            )
+
+        # Check for audio backing track
+        if not project_item.audioBackingTrackS3Key:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Project has no audio backing track",
+                    "details": "Cannot perform lipsync without audio track"
+                }
+            )
+
+        # 2. Fetch target scene
+        sk = f"SCENE#{sequence:03d}"
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "SceneNotFound",
+                    "message": f"Scene {sequence} not found in project {project_id}"
+                }
+            )
+
+        # Check for video
+        video_s3_key = scene_item.workingVideoClipS3Key or scene_item.originalVideoClipS3Key
+        if not video_s3_key:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Scene has no video",
+                    "details": "Cannot perform lipsync without video clip"
+                }
+            )
+
+        # 3. Calculate audio timing from previous scenes
+        start_time, end_time = calculate_audio_timing_for_scene(project_id, sequence)
+
+        # 4. Generate presigned URLs for video and audio
+        video_url = s3_service.generate_presigned_url(video_s3_key)
+        audio_url = s3_service.generate_presigned_url(project_item.audioBackingTrackS3Key)
+
+        logger.info(
+            "lipsync_processing_started",
+            project_id=project_id,
+            sequence=sequence,
+            start_time=start_time,
+            end_time=end_time
+        )
+
+        # 5. Call lipsync processing
+        start_processing = time.time()
+
+        lipsync_result = generate_lipsync(
+            video_url=video_url,
+            audio_url=audio_url,
+            start_time=start_time,
+            end_time=end_time,
+            temperature=temperature,
+            occlusion_detection_enabled=occlusion_detection_enabled,
+            active_speaker_detection=active_speaker_detection,
+            project_id=project_id,
+            sequence=sequence
+        )
+
+        processing_time = time.time() - start_processing
+
+        logger.info(
+            "lipsync_processing_completed",
+            project_id=project_id,
+            sequence=sequence,
+            processing_time_seconds=processing_time,
+            video_url=lipsync_result["video_url"]
+        )
+
+        # 6. Update scene with lipsynced video
+        # Store the S3 key (extract from URL if needed)
+        lipsynced_video_url = lipsync_result["video_url"]
+
+        # If the lipsync result contains an S3 key, use it; otherwise store the URL
+        # (The generate_lipsync function should return S3 URL, not presigned)
+        if lipsynced_video_url.startswith("http"):
+            # It's a presigned URL or external URL - extract S3 key if possible
+            # For now, store in lipSyncedVideoClipS3Key
+            # TODO: Extract S3 key from URL if it's an S3 URL
+            scene_item.lipSyncedVideoClipS3Key = lipsync_result.get("video_id", lipsynced_video_url)
+        else:
+            scene_item.lipSyncedVideoClipS3Key = lipsynced_video_url
+
+        # Preserve original video if not already set
+        if not scene_item.originalVideoClipS3Key:
+            scene_item.originalVideoClipS3Key = video_s3_key
+
+        # Update working video to lipsynced version
+        scene_item.workingVideoClipS3Key = scene_item.lipSyncedVideoClipS3Key
+        scene_item.updatedAt = datetime.now(timezone.utc)
+        scene_item.save()
+
+        logger.info(
+            "lipsync_scene_updated",
+            project_id=project_id,
+            sequence=sequence,
+            lipsynced_s3_key=scene_item.lipSyncedVideoClipS3Key
+        )
+
+        # 7. Return updated scene data
+        # Generate presigned URLs for response
+        reference_urls = []
+        if scene_item.referenceImageS3Keys:
+            for key in scene_item.referenceImageS3Keys:
+                reference_urls.append(s3_service.generate_presigned_url(key))
+
+        audio_clip_url = None
+        if scene_item.audioClipS3Key:
+            audio_clip_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+        original_video_url = None
+        if scene_item.originalVideoClipS3Key:
+            original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+        working_video_url = None
+        if scene_item.workingVideoClipS3Key:
+            working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
+
+        lipsynced_url = None
+        if scene_item.lipSyncedVideoClipS3Key:
+            lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        trim_points = None
+        if scene_item.trimPoints:
+            try:
+                trim_points = json.loads(scene_item.trimPoints)
+            except Exception:
+                pass
+
+        return SceneResponse(
+            projectId=project_id,
+            sequence=scene_item.sequence,
+            displaySequence=scene_item.displaySequence,
+            prompt=scene_item.prompt or "",
+            negativePrompt=scene_item.negativePrompt,
+            status=scene_item.status,
+            referenceImageUrls=reference_urls,
+            audioClipUrl=audio_clip_url,
+            originalVideoClipUrl=original_video_url,
+            workingVideoClipUrl=working_video_url,
+            lipsyncedVideoClipUrl=lipsynced_url,
+            trimPoints=trim_points,
+            duration=scene_item.duration,
+            needsLipSync=scene_item.needsLipSync,
+            videoGenerationJobId=scene_item.videoGenerationJobId,
+            lipsyncJobId=scene_item.lipsyncJobId,
+            retryCount=scene_item.retryCount or 0,
+            errorMessage=scene_item.errorMessage,
+            createdAt=scene_item.createdAt,
+            updatedAt=scene_item.updatedAt
+        )
+
+    except HTTPException:
+        raise
+    except DoesNotExist as e:
+        logger.error("scene_not_found", project_id=project_id, sequence=sequence, error=str(e))
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "SceneNotFound",
+                "message": f"Scene {sequence} not found"
+            }
+        )
+    except Exception as e:
+        logger.error(
+            "lipsync_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to add lipsync to scene",
                 "details": str(e)
             }
         )
