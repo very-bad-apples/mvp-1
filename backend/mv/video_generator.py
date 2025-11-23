@@ -403,6 +403,9 @@ def generate_video(
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
+    # Capture file size before upload for debug logging
+    video_file_size = os.path.getsize(video_path)
+
     # Upload entire job directory to cloud storage if configured
     cloud_urls = {}
     try:
@@ -412,19 +415,27 @@ def generate_video(
             async def upload_job_to_cloud():
                 storage = get_storage_backend()
                 urls = {}
-                
+
+                # Import cleanup function
+                from services.s3_storage import delete_local_file_after_upload
+
                 # Upload video
                 urls["video"] = await storage.upload_file(
                     str(video_path),
                     f"mv/jobs/{video_id}/video.mp4"
                 )
-                
+                # Delete local video file after successful upload
+                delete_local_file_after_upload(str(video_path))
+                delete_local_file_after_upload(str(video_path_compat))
+
                 # Upload metadata
                 urls["metadata"] = await storage.upload_file(
                     str(metadata_path),
                     f"mv/jobs/{video_id}/metadata.json"
                 )
-                
+                # Delete local metadata file after successful upload
+                delete_local_file_after_upload(str(metadata_path))
+
                 # Upload reference image if exists
                 ref_image_path = job_dir / "reference_image.jpg"
                 if ref_image_path.exists():
@@ -432,7 +443,9 @@ def generate_video(
                         str(ref_image_path),
                         f"mv/jobs/{video_id}/reference_image.jpg"
                     )
-                
+                    # Delete local reference image after successful upload
+                    delete_local_file_after_upload(str(ref_image_path))
+
                 return urls
             
             # Run async upload - handle both sync and async contexts
@@ -470,7 +483,7 @@ def generate_video(
             "video_id": video_id,
             "video_path": str(video_path),
             "processing_time_seconds": metadata["processing_time_seconds"],
-            "file_size_bytes": os.path.getsize(video_path),
+            "file_size_bytes": video_file_size,
             "character_reference_id": character_reference_id,
             "character_reference_path": character_reference_path,
         })

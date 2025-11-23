@@ -6,6 +6,7 @@ Uses existing Terraform-configured S3 bucket.
 """
 
 import boto3
+import os
 from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
 from pathlib import Path
@@ -394,4 +395,52 @@ def get_s3_storage_service() -> S3StorageService:
     if _s3_storage_service is None:
         _s3_storage_service = S3StorageService()
     return _s3_storage_service
+
+
+def delete_local_file_after_upload(file_path: str) -> None:
+    """
+    Delete local file after successful S3 upload.
+
+    This function safely removes local media files to prevent disk space
+    accumulation. It handles edge cases like missing files and permission errors.
+
+    Args:
+        file_path: Absolute path to file to delete
+
+    Returns:
+        None
+
+    Examples:
+        >>> delete_local_file_after_upload("/tmp/video.mp4")
+        # File deleted and logged
+    """
+    try:
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            os.remove(file_path)
+            logger.info(
+                "local_file_deleted_after_upload",
+                file_path=file_path,
+                file_size_bytes=file_size
+            )
+        else:
+            logger.warning(
+                "local_file_not_found_for_deletion",
+                file_path=file_path,
+                reason="File does not exist"
+            )
+    except PermissionError as e:
+        logger.error(
+            "local_file_deletion_permission_denied",
+            file_path=file_path,
+            error=str(e),
+            exc_info=True
+        )
+    except Exception as e:
+        logger.error(
+            "local_file_deletion_failed",
+            file_path=file_path,
+            error=str(e),
+            exc_info=True
+        )
 
