@@ -643,9 +643,28 @@ async def create_project(
                     }
                 )
             # Reference to existing character image in character_references directory
-            # Note: Extension may vary (png, jpg, webp), default to png for compatibility
-            # The actual file extension is determined when the image was uploaded/generated
-            character_image_s3_key = f"character_references/{characterReferenceImageId}.png"
+            # Determine actual file extension by checking which file exists in S3
+            character_image_s3_key = None
+            for ext in ["png", "jpg", "jpeg", "webp"]:
+                test_key = f"character_references/{characterReferenceImageId}.{ext}"
+                if s3_service.file_exists(test_key):
+                    character_image_s3_key = test_key
+                    logger.info(
+                        "character_reference_extension_found",
+                        character_reference_id=characterReferenceImageId,
+                        extension=ext,
+                        s3_key=test_key
+                    )
+                    break
+
+            # If no file found, default to .png for backward compatibility
+            if not character_image_s3_key:
+                character_image_s3_key = f"character_references/{characterReferenceImageId}.png"
+                logger.warning(
+                    "character_reference_not_found_defaulting_to_png",
+                    character_reference_id=characterReferenceImageId,
+                    s3_key=character_image_s3_key
+                )
 
         # Handle product reference image (for ad-creative mode)
         if productReferenceImageId:
