@@ -446,6 +446,22 @@ def generate_video(
                     # Delete local reference image after successful upload
                     delete_local_file_after_upload(str(ref_image_path))
 
+                # Delete the empty job directory after all files are uploaded and deleted
+                try:
+                    import shutil
+                    if job_dir.exists():
+                        shutil.rmtree(str(job_dir))
+                        logger.info(
+                            "job_directory_deleted_after_upload",
+                            job_dir=str(job_dir)
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "failed_to_delete_job_directory",
+                        job_dir=str(job_dir),
+                        error=str(e)
+                    )
+
                 return urls
             
             # Run async upload - handle both sync and async contexts

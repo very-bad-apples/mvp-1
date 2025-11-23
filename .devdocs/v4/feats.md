@@ -2,7 +2,7 @@
 
 **Feature**: Delete media files saved to children directories of backend/mv/outputs (e.g. audio/ videos/ jobs/ etc) once the upload to S3 is complete.
 
-**Status**: 📋 Planned
+**Status**: ✅ Implemented
 
 **Task List**: See `.devdocs/v4/tasklist.md` for detailed implementation plan
 
