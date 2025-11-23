@@ -1832,7 +1832,7 @@
         "id": "56",
         "title": "Create SceneEditModal Component with shadcn Dialog",
         "description": "Develop the SceneEditModal component using shadcn/ui Dialog with specific styling and functionality requirements.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "32",
           "34"
@@ -1878,13 +1878,14 @@
         ],
         "complexity": 7,
         "recommendedSubtasks": 3,
-        "expansionPrompt": "Consider subtasks for component structure, styling, and async operation handling."
+        "expansionPrompt": "Consider subtasks for component structure, styling, and async operation handling.",
+        "updatedAt": "2025-11-23T04:03:30.699Z"
       },
       {
         "id": "57",
         "title": "Build Video Preview Section for SceneEditModal",
         "description": "Develop a video preview section within the SceneEditModal, featuring a compact video player with trimming functionality and playback boundary support. This section should always be visible at the top of the modal to provide visual context while editing prompts.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "56",
           "45"
@@ -1895,7 +1896,8 @@
         "subtasks": [],
         "complexity": 6,
         "recommendedSubtasks": 2,
-        "expansionPrompt": "Create subtasks for video player integration and trimming functionality."
+        "expansionPrompt": "Create subtasks for video player integration and trimming functionality.",
+        "updatedAt": "2025-11-23T04:28:19.229Z"
       },
       {
         "id": "58",
@@ -1903,7 +1905,7 @@
         "description": "Develop the prompt editing section for SceneEditModal using shadcn/ui Textarea components with local state management and dark theme styling.",
         "details": "1. **Component Setup**: Enhance `SceneEditModal` in `frontend/src/components/SceneEditModal.tsx` to include a new section for editing prompts.\n   - Use shadcn/ui Textarea components for 'Scene Prompt' and 'Negative Prompt'.\n   - Add labels, placeholders, and character count indicators for each textarea.\n\n2. **Styling**: Implement dark theme styling using Tailwind CSS.\n   - Ensure clear visual separation between the prompt sections.\n   - Use helper text to inform users that changes will trigger video regeneration.\n\n3. **State Management**: Implement local state management to handle prompt changes.\n   - Changes should only be saved when the user clicks the action button, not on every input change.\n\n4. **UI Enhancements**: Ensure the UI is responsive and accessible, with clear visual cues for user actions.",
         "testStrategy": "1. **UI Testing**: Verify that the textareas render correctly with labels, placeholders, and character counts.\n   - Check that the dark theme styling is applied consistently.\n\n2. **State Management Testing**: Ensure that prompt changes are only saved when the action button is clicked.\n   - Test that the local state updates correctly without saving on every change.\n\n3. **Accessibility Testing**: Verify that the textareas are accessible with screen readers and keyboard navigation.\n\n4. **Visual Separation**: Confirm that there is clear visual separation between the Scene Prompt and Negative Prompt sections.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "56"
         ],
@@ -1911,7 +1913,8 @@
         "subtasks": [],
         "complexity": 5,
         "recommendedSubtasks": 2,
-        "expansionPrompt": "Consider subtasks for UI design and state management implementation."
+        "expansionPrompt": "Consider subtasks for UI design and state management implementation.",
+        "updatedAt": "2025-11-23T04:10:34.275Z"
       },
       {
         "id": "59",
@@ -2049,7 +2052,7 @@
         "description": "Add a lip-sync feature to the SceneEditModal with a button to generate lip-sync using the existing endpoint.",
         "details": "1. **UI Update**: Add a 'Generate Lip-Sync' button in the Actions section of the SceneEditModal. Ensure the button is only enabled if the `needsLipSync` flag is true and `audioClipUrl` is available.\n2. **API Integration**: On button click, call the existing lipsync endpoint (POST /api/mv/lipsync) or use `orchestration.generateLipSync`.\n3. **Progress Indication**: Implement a progress indicator to show the status of the lip-sync generation process.\n4. **Update Scene**: Once the lip-sync generation is complete, update the scene with the `lipSyncedVideoClipUrl`.\n5. **Status Badge**: Display a lip-sync status badge in the video preview section.\n6. **Error Handling**: Implement error handling with retry options for failed lip-sync generation attempts.\n7. **Loading States**: Use elegant loading states to enhance user experience during asynchronous operations.",
         "testStrategy": "1. **UI Testing**: Verify the 'Generate Lip-Sync' button appears correctly and is enabled/disabled based on the `needsLipSync` flag and `audioClipUrl`.\n2. **API Call Test**: Ensure the correct API endpoint is called with appropriate parameters when the button is clicked.\n3. **Progress Indicator Test**: Check that the progress indicator displays correctly during the lip-sync generation process.\n4. **Scene Update Test**: Confirm that the scene is updated with `lipSyncedVideoClipUrl` upon successful lip-sync generation.\n5. **Error Handling Test**: Simulate API failures to verify error handling and retry logic.\n6. **Status Badge Test**: Ensure the lip-sync status badge displays correctly in the video preview section.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "56",
           "19"
@@ -2058,7 +2061,8 @@
         "subtasks": [],
         "complexity": 6,
         "recommendedSubtasks": 2,
-        "expansionPrompt": "Create subtasks for API integration and progress indication implementation."
+        "expansionPrompt": "Create subtasks for API integration and progress indication implementation.",
+        "updatedAt": "2025-11-23T04:28:02.711Z"
       },
       {
         "id": "63",
@@ -2066,7 +2070,7 @@
         "description": "Implement a download feature in the SceneEditModal with a button to download scenes.",
         "details": "1. **UI Update**: Add a 'Download Scene' button with a download icon in the Actions section of the SceneEditModal.\n   - Use a consistent style with other action buttons.\n\n2. **API Client Function**: Implement `downloadScene` function in the API client.\n   - Call the endpoint `GET /api/mv/projects/{projectId}/scenes/{sequence}/download`.\n   - Handle the response to trigger a browser download with the filename format `scene-{sequence}-{projectId}.mp4`.\n\n3. **Loading State**: Display a loading indicator while the download is being prepared.\n   - Disable the button during this state to prevent multiple requests.\n\n4. **Error Handling**: Implement error handling for failed downloads.\n   - Show a user-friendly error message if the download fails.",
         "testStrategy": "1. **UI Testing**: Verify the 'Download Scene' button appears correctly and is styled consistently with other buttons.\n2. **API Call Test**: Ensure the `downloadScene` function calls the correct API endpoint with appropriate parameters.\n3. **Download Verification**: Confirm that clicking the button triggers a download with the correct filename format.\n4. **Loading State Test**: Check that the loading indicator appears during download preparation and the button is disabled.\n5. **Error Handling Test**: Simulate a failed download and verify that an appropriate error message is displayed to the user.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "56"
         ],
@@ -2074,14 +2078,15 @@
         "subtasks": [],
         "complexity": 5,
         "recommendedSubtasks": 2,
-        "expansionPrompt": "Consider subtasks for API client function implementation and error handling."
+        "expansionPrompt": "Consider subtasks for API client function implementation and error handling.",
+        "updatedAt": "2025-11-23T04:25:00.202Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-11-23T03:57:27.999Z",
+      "lastModified": "2025-11-23T04:28:19.230Z",
       "taskCount": 56,
-      "completedCount": 43,
+      "completedCount": 48,
       "tags": [
         "master"
       ]

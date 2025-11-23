@@ -12,42 +12,6 @@ export type ProjectStatus =
   | 'completed'
   | 'failed'
 
-/**
- * Media clip with URL and duration
- */
-export interface MediaClip {
-  /** URL to the media file */
-  url: string
-
-  /** Duration of the media clip in seconds */
-  duration: number
-}
-
-/**
- * Individual scene in a music video project
- */
-export interface Scene {
-  /** Scene sequence number within the project */
-  sequence: number
-
-  /** AI-generated scene description for video prompt */
-  prompt: string
-
-  /** Negative prompt - elements to exclude from this scene */
-  negativePrompt: string
-
-  /** Array of reference image URLs for this scene */
-  referenceImages: string[]
-
-  /** Audio clip for this scene */
-  audioClip: MediaClip
-
-  /** Generated video clip for this scene */
-  videoClip: MediaClip
-
-  /** Lip-synced video clip for this scene */
-  lipSyncedVideoClip: MediaClip
-}
 
 /**
  * Scene within a project
