@@ -333,38 +333,51 @@ export default function EditPage({ params }: { params: { id: string } }) {
   }, [isPlaying, project?.audioBackingTrackUrl])
 
   // Sync audio currentTime with video currentTime
-  // Only sync when paused (user seeking) or when playback starts
+  // Sync when paused, when playback starts, or when user seeks during playback
   // During normal playback, let audio play naturally without constant syncing to avoid choppiness
   const lastSyncedTimeRef = useRef<number>(0)
   const wasPlayingRef = useRef<boolean>(false)
-  
+  const prevCurrentTimeRef = useRef<number>(0)
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !project?.audioBackingTrackUrl) return
+
+    // Calculate the change in currentTime to detect seek operations
+    const timeDelta = Math.abs(currentTime - prevCurrentTimeRef.current)
+
+    // Detect if this is a seek operation (large jump in time)
+    // Normal playback updates happen in small increments (< 0.5s)
+    // Seeks typically jump by larger amounts
+    const isSeekOperation = timeDelta > 0.5
 
     // Sync when playback starts (to ensure audio starts at correct position)
     if (isPlaying && !wasPlayingRef.current) {
       audio.currentTime = currentTime
       lastSyncedTimeRef.current = currentTime
       wasPlayingRef.current = true
+      prevCurrentTimeRef.current = currentTime
       return
     }
-    
+
     // Update ref when playback stops
     if (!isPlaying) {
       wasPlayingRef.current = false
     }
 
-    // Only sync when paused (user is seeking) - don't sync during playback
-    if (!isPlaying) {
+    // Sync when paused OR when a seek operation is detected while playing
+    if (!isPlaying || isSeekOperation) {
       const diff = Math.abs(audio.currentTime - currentTime)
       if (diff > 0.1) {
         audio.currentTime = currentTime
         lastSyncedTimeRef.current = currentTime
       }
     }
-    // During playback, don't sync - let audio play naturally
-    // The audio will stay in sync because both started at the same time
+
+    // Update previous time for next comparison
+    prevCurrentTimeRef.current = currentTime
+
+    // During normal playback (no seek), don't sync - let audio play naturally
   }, [currentTime, isPlaying, project?.audioBackingTrackUrl])
 
   // Sync audio volume with state
