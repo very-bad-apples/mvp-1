@@ -568,9 +568,10 @@ async def get_project(project_id: str):
             if scene_item.audioClipS3Key:
                 audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
 
+            # Use working clip URL (backward compatible)
             video_url = None
-            if scene_item.videoClipS3Key:
-                video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+            if scene_item.workingVideoClipS3Key:
+                video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
 
             lipsynced_url = None
             if scene_item.lipSyncedVideoClipS3Key:

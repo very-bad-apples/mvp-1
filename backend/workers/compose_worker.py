@@ -81,8 +81,8 @@ async def process_composition_job(project_id: str) -> Dict[str, Any]:
         # Download scene videos
         scene_paths = []
         for scene in scene_items:
-            # Use lipsynced video if available, otherwise use regular video
-            s3_key = scene.lipSyncedVideoClipS3Key if scene.lipSyncedVideoClipS3Key else scene.videoClipS3Key
+            # Use lipsynced video if available, otherwise use working clip
+            s3_key = scene.lipSyncedVideoClipS3Key if scene.lipSyncedVideoClipS3Key else scene.workingVideoClipS3Key
 
             if not s3_key:
                 logger.error("scene_missing_video", project_id=project_id, sequence=scene.sequence)

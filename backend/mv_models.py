@@ -110,7 +110,14 @@ class MVProjectItem(BaseDynamoModel):
     referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True)  # List of S3 keys, not URLs
     duration = NumberAttribute(null=True)
     audioClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
-    videoClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
+    
+    # Video clip fields
+    originalVideoClipS3Key = UnicodeAttribute(null=True)  # Unmodified Veo-generated clip
+    workingVideoClipS3Key = UnicodeAttribute(null=True)  # Trimmed/edited clip
+    trimPoints = UnicodeAttribute(null=True)  # JSON: {"in": 0.0, "out": 8.0}
+    
+    # Note: videoClipS3Key field removed - use workingVideoClipS3Key instead
+    
     needsLipSync = BooleanAttribute(null=True)
     lipSyncedVideoClipS3Key = UnicodeAttribute(null=True)  # S3 key, not URL
     videoGenerationJobId = UnicodeAttribute(null=True)
@@ -170,7 +177,10 @@ class MVProjectItem(BaseDynamoModel):
                 "referenceImageS3Keys": list(self.referenceImageS3Keys) if self.referenceImageS3Keys is not None else [],
                 "duration": self.duration,
                 "audioClipS3Key": self.audioClipS3Key,
-                "videoClipS3Key": self.videoClipS3Key,
+                # Video clip fields (NEW)
+                "originalVideoClipS3Key": self.originalVideoClipS3Key,
+                "workingVideoClipS3Key": self.workingVideoClipS3Key,
+                "trimPoints": self.trimPoints,
                 "needsLipSync": self.needsLipSync,
                 "lipSyncedVideoClipS3Key": self.lipSyncedVideoClipS3Key,
                 "videoGenerationJobId": self.videoGenerationJobId,
@@ -259,6 +269,9 @@ def create_scene_item(
     """
     Create a new scene item.
 
+    Note: Video clip fields (originalVideoClipS3Key, workingVideoClipS3Key, trimPoints)
+    are initialized as null and set after video generation completes.
+
     Args:
         project_id: Parent project UUID
         sequence: Scene order (1-indexed)
@@ -290,6 +303,12 @@ def create_scene_item(
     item.negativePrompt = negative_prompt
     item.duration = duration
     item.needsLipSync = needs_lipsync
+    
+    # Initialize video clip fields as null (set after generation)
+    item.originalVideoClipS3Key = None
+    item.workingVideoClipS3Key = None
+    item.trimPoints = None
+    
     # Validate S3 keys in list to ensure they're keys, not URLs
     if reference_image_s3_keys:
         item.referenceImageS3Keys = [validate_s3_key(key, f"reference_image_s3_keys[{i}]") 
