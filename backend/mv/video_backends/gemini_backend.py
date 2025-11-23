@@ -112,7 +112,8 @@ def generate_video_gemini(
 
     # Download the video
     video = result.generated_videos[0]
-    video_file = client.files.download(video.video)
+    # Use named parameter 'name' instead of positional argument
+    video_file = client.files.download(name=video.video)
 
     # Read video bytes
     video_bytes = video_file.read()
