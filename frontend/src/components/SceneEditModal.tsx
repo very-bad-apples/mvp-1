@@ -22,7 +22,7 @@ import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircl
 import { ProjectScene } from '@/types/project'
 import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
-import { trimScene, downloadSceneVideo, generateLipSync } from '@/lib/api/client'
+import { trimScene, downloadSceneVideo, generateLipSync, updateScene } from '@/lib/api/client'
 import { formatVideoTime, formatDuration } from '@/lib/utils/time'
 import { getSceneVideoUrl } from '@/lib/utils/video'
 import { useSceneToast } from '@/hooks/useSceneToast'
@@ -73,6 +73,14 @@ export function SceneEditModal({
 
   // Lip-sync state
   const [lipSyncStatus, setLipSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+
+  // Save prompts state
+  const [isSavingPrompts, setIsSavingPrompts] = useState(false)
+
+  // Track if prompts have been modified
+  const promptsModified =
+    editedPrompt !== (scene.prompt || '') ||
+    editedNegativePrompt !== (scene.negativePrompt || '')
 
   // Sync local state when scene changes
   useEffect(() => {
@@ -236,6 +244,40 @@ export function SceneEditModal({
     }
   }
 
+  /**
+   * Save edited prompts
+   */
+  const handleSavePrompts = async () => {
+    if (!promptsModified) return
+
+    setIsSavingPrompts(true)
+    setIsOperationInProgress(true)
+
+    try {
+      await updateScene(projectId, scene.sequence, {
+        prompt: editedPrompt,
+        negativePrompt: editedNegativePrompt,
+      })
+
+      sceneToast.showSuccess(scene, 'Prompt Update')
+
+      // Call the callback to trigger a refresh in parent component
+      if (onSceneUpdate) {
+        onSceneUpdate({
+          ...scene,
+          prompt: editedPrompt,
+          negativePrompt: editedNegativePrompt,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to save prompts:', error)
+      sceneToast.showError(scene, 'Prompt Update', error)
+    } finally {
+      setIsSavingPrompts(false)
+      setIsOperationInProgress(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* Custom DialogContent with max-w-4xl and max-h-[90vh] */}
@@ -303,123 +345,122 @@ export function SceneEditModal({
         {/* Scrollable Content Area - Grows to fill available space */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
 
-          {/* Video Preview Section */}
+          {/* Video Preview & Trimmer Section */}
           <div className="space-y-3">
-  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-    Video Preview
-  </h3>
-  <div className="border border-border rounded-lg p-6 bg-muted/20 space-y-4">
-    {currentVideoUrl ? (
-      <>
-        {/* Video Player */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Video className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium">
-                {showOriginal ? 'Original Video' : 'Working Video'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={getStatusVariant(scene.status)} className="text-xs">
-                {scene.status}
-              </Badge>
-              {scene.lipSyncedVideoClipUrl && scene.videoClipUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowOriginal(!showOriginal)}
-                  className="text-xs"
-                >
-                  {showOriginal ? 'Show Working' : 'Show Original'}
-                </Button>
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Video Preview & Editing
+            </h3>
+            <div className="border border-border rounded-lg p-6 bg-muted/20 space-y-4">
+              {currentVideoUrl ? (
+                <>
+                  {/* Header with status and toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Video className="h-4 w-4 text-cyan-500" />
+                      <span className="text-sm font-medium">
+                        {showOriginal ? 'Original Video' : 'Working Video'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getStatusVariant(scene.status)} className="text-xs">
+                        {scene.status}
+                      </Badge>
+                      {scene.lipSyncedVideoClipUrl && scene.videoClipUrl && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowOriginal(!showOriginal)}
+                          className="text-xs"
+                        >
+                          {showOriginal ? 'Show Working' : 'Show Original'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Full-width Video Container */}
+                  <div className="relative bg-black rounded-lg overflow-hidden w-full" style={{ aspectRatio: '16/9' }}>
+                    <video
+                      ref={videoRef}
+                      src={currentVideoUrl}
+                      className="w-full h-full object-contain"
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      onEnded={() => setIsPlaying(false)}
+                    />
+
+                    {/* Play/Pause Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-16 w-16 rounded-full bg-black/50 hover:bg-black/70"
+                        onClick={togglePlayPause}
+                      >
+                        {isPlaying ? (
+                          <Pause className="h-8 w-8 text-white" />
+                        ) : (
+                          <Play className="h-8 w-8 text-white" />
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Trim indicator overlay */}
+                    {scene.trimPoints && (
+                      <div className="absolute top-2 left-2 bg-cyan-500/90 text-white text-xs px-2 py-1 rounded">
+                        Trimmed: {formatVideoTime(scene.trimPoints.in)} - {formatVideoTime(scene.trimPoints.out)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Video Controls */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Duration: {formatVideoTime(videoDuration)}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={togglePlayPause}
+                      className="text-xs"
+                    >
+                      {isPlaying ? 'Pause' : 'Play'}
+                    </Button>
+                  </div>
+
+                  {/* Video Trimmer */}
+                  <div className="space-y-3 pt-4 border-t border-border">
+                    <VideoTrimmer
+                      videoDuration={videoDuration}
+                      initialTrimPoints={trimPoints}
+                      onTrimPointsChange={setTrimPoints}
+                      videoUrl={currentVideoUrl}
+                    />
+
+                    {/* Apply Trim Button */}
+                    <div className="flex items-center justify-end gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Trim points: {formatVideoTime(trimPoints.in)} - {formatVideoTime(trimPoints.out)}
+                      </p>
+                      <Button
+                        onClick={handleApplyTrim}
+                        disabled={isApplyingTrim || isOperationInProgress}
+                        size="sm"
+                        className="bg-cyan-600 hover:bg-cyan-700"
+                      >
+                        {isApplyingTrim && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isApplyingTrim ? 'Applying...' : 'Apply Trim Points'}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-2">
+                  <Video className="h-12 w-12 opacity-50" />
+                  <p className="text-sm">No video available for this scene</p>
+                  <p className="text-xs">Generate video to see preview</p>
+                </div>
               )}
             </div>
           </div>
-
-          {/* Video Container */}
-          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', maxWidth: '500px' }}>
-            <video
-              ref={videoRef}
-              src={currentVideoUrl}
-              className="w-full h-full object-contain"
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
-            />
-
-            {/* Play/Pause Overlay */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-16 w-16 rounded-full bg-black/50 hover:bg-black/70"
-                onClick={togglePlayPause}
-              >
-                {isPlaying ? (
-                  <Pause className="h-8 w-8 text-white" />
-                ) : (
-                  <Play className="h-8 w-8 text-white" />
-                )}
-              </Button>
-            </div>
-
-            {/* Trim indicator overlay */}
-            {scene.trimPoints && (
-              <div className="absolute top-2 left-2 bg-blue-500/90 text-white text-xs px-2 py-1 rounded">
-                Trimmed: {formatVideoTime(scene.trimPoints.in)} - {formatVideoTime(scene.trimPoints.out)}
-              </div>
-            )}
-          </div>
-
-          {/* Video Controls */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Duration: {formatVideoTime(videoDuration)}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={togglePlayPause}
-              className="text-xs"
-            >
-              {isPlaying ? 'Pause' : 'Play'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Video Trimmer */}
-        <div className="space-y-3">
-          <VideoTrimmer
-            videoDuration={videoDuration}
-            initialTrimPoints={trimPoints}
-            onTrimPointsChange={setTrimPoints}
-          />
-
-          {/* Apply Trim Button */}
-          <div className="flex items-center justify-end gap-3">
-            <p className="text-xs text-muted-foreground">
-              Trim points: {formatVideoTime(trimPoints.in)} - {formatVideoTime(trimPoints.out)}
-            </p>
-            <Button
-              onClick={handleApplyTrim}
-              disabled={isApplyingTrim || isOperationInProgress}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isApplyingTrim && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isApplyingTrim ? 'Applying...' : 'Apply Trim Points'}
-            </Button>
-          </div>
-        </div>
-      </>
-    ) : (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-2">
-        <Video className="h-12 w-12 opacity-50" />
-        <p className="text-sm">No video available for this scene</p>
-        <p className="text-xs">Generate video to see preview</p>
-      </div>
-    )}
-  </div>
-</div>
 
           {/* Prompts Section */}
           <div className="space-y-3">
@@ -479,6 +520,22 @@ export function SceneEditModal({
                 <p id="negative-prompt-help" className="text-xs text-muted-foreground">
                   Changes will trigger video regeneration when saved
                 </p>
+              </div>
+
+              {/* Save Prompts Button */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                {promptsModified && (
+                  <p className="text-xs text-amber-500">Unsaved changes</p>
+                )}
+                <Button
+                  onClick={handleSavePrompts}
+                  disabled={!promptsModified || isSavingPrompts || isOperationInProgress}
+                  size="sm"
+                  className="bg-cyan-600 hover:bg-cyan-700"
+                >
+                  {isSavingPrompts && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSavingPrompts ? 'Saving...' : 'Save Prompts'}
+                </Button>
               </div>
             </div>
           </div>

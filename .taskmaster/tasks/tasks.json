@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "Initialize Next.js Application",
         "description": "Set up the Next.js 14 application with required configurations.",
         "details": "Initialize a new Next.js 14 project with TypeScript and Tailwind CSS. Configure for standalone builds and environment variable support. Use the App Router for routing.",
@@ -17,7 +17,7 @@
         "updatedAt": "2025-11-14T19:10:17.491Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Create Landing Page",
         "description": "Develop the landing page for the application.",
         "details": "Use Next.js pages to create a landing page with basic navigation and layout using Tailwind CSS.",
@@ -33,7 +33,7 @@
         "expansionPrompt": "Divide the landing page creation into subtasks for layout design and responsive testing across devices."
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "Implement Product Upload Form",
         "description": "Develop a form for product image upload and details input.",
         "details": "Create a form component using Kibo UI MCP. Include drag & drop for image upload, input fields for product name, style selector, CTA text, and a submit button. Implement validation for inputs.",
@@ -49,7 +49,7 @@
         "expansionPrompt": "Break down this task with a focus on implement product upload form."
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "Develop Job Status Page",
         "description": "Create a dynamic page to display job status and progress.",
         "status": "done",
@@ -65,7 +65,7 @@
         "expansionPrompt": "Break down this task with a focus on develop job status page."
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "Create Custom Video Player Component",
         "description": "Develop a video player with advanced controls.",
         "details": "Implement a video player with play/pause, timeline scrubbing, volume control, fullscreen toggle, and mobile-optimized controls. Add share functionality.",
@@ -81,7 +81,7 @@
         "expansionPrompt": "Break down this task with a focus on create custom video player component."
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "Set Up shadcn/ui Components",
         "description": "Install and configure shadcn/ui components for the application.",
         "details": "Install shadcn/ui and configure components like Button, Input, Label, Form, Progress, Card, Badge, Dialog, Toast, Dropdown, Tabs, and Separator. Customize using Kibo UI MCP.",
@@ -138,7 +138,7 @@
         "updatedAt": "2025-11-14T19:20:05.736Z"
       },
       {
-        "id": "7",
+        "id": 7,
         "title": "Initialize FastAPI Application",
         "description": "Set up the FastAPI backend with necessary configurations.",
         "details": "Initialize FastAPI with CORS middleware, environment variable management using python-dotenv, logging with structlog, and error handling middleware. Add a health check endpoint.",
@@ -153,7 +153,7 @@
         "updatedAt": "2025-11-14T19:08:42.535Z"
       },
       {
-        "id": "8",
+        "id": 8,
         "title": "Develop Video Generation Endpoint",
         "description": "Create an endpoint to handle video generation requests.",
         "details": "Implement POST /api/generate to accept multipart form data, validate inputs, generate a unique job ID, enqueue the job to Redis, and return the job ID and estimated completion time.",
@@ -216,7 +216,7 @@
         "expansionPrompt": "Break down the video generation endpoint development into subtasks for input validation, job ID generation, and Redis queuing."
       },
       {
-        "id": "9",
+        "id": 9,
         "title": "Implement Job Status Endpoint",
         "description": "Create an endpoint to fetch job status and progress.",
         "details": "Develop GET /api/jobs/{job_id} to fetch job status from Redis and database, return progress, stage, errors, and video URL when completed. Handle invalid job IDs with 404.",
@@ -268,7 +268,7 @@
         "expansionPrompt": "Divide the job status endpoint implementation into subtasks for Redis integration, error handling, and response formatting."
       },
       {
-        "id": "10",
+        "id": 10,
         "title": "Set Up WebSocket for Progress Updates",
         "description": "Implement WebSocket endpoint for real-time job progress updates.",
         "details": "Create /ws/jobs/{job_id} to establish a persistent connection, subscribe to Redis pub/sub for updates, stream progress events, and manage connection cleanup and reconnection logic.",
@@ -331,7 +331,7 @@
         "expansionPrompt": "Outline the WebSocket setup into subtasks for connection management, Redis subscription, and event streaming."
       },
       {
-        "id": "11",
+        "id": 11,
         "title": "Develop File Upload Handling Service",
         "description": "Create a service to handle file uploads and validation.",
         "details": "Implement a service to save uploaded images to temporary storage, generate thumbnails, validate formats (PNG, JPG, WebP), and enforce size limits (max 10MB). Return file path for processing.",
@@ -394,7 +394,7 @@
         "expansionPrompt": "Break down the file upload handling service into subtasks for format validation, thumbnail generation, and storage management."
       },
       {
-        "id": "12",
+        "id": 12,
         "title": "Create Scene Template System",
         "description": "Develop a system for managing scene templates for video generation.",
         "details": "Define hardcoded scene templates in templates.py for different styles (luxury, energetic, minimal, bold) with video prompts, voiceover templates, and text overlays.",
@@ -410,7 +410,7 @@
         "expansionPrompt": "Detail the scene template system creation into subtasks for template definition and accessibility verification."
       },
       {
-        "id": "13",
+        "id": 13,
         "title": "Build Script Generator with Claude Integration",
         "description": "Develop a script generator using Claude API for scene generation.",
         "details": "Implement script_generator.py to analyze product images, generate structured scene JSON, fill voiceover text, and create hooks and CTAs using Claude 3.5 Sonnet API.",
@@ -426,7 +426,7 @@
         "expansionPrompt": "Break down this task with a focus on build script generator with claude integration."
       },
       {
-        "id": "14",
+        "id": 14,
         "title": "Develop Voiceover Generator with ElevenLabs",
         "description": "Create a voiceover generator using ElevenLabs API.",
         "details": "Implement voiceover_generator.py to combine voiceover text, call ElevenLabs API, download MP3, validate audio duration, and save to temporary storage.",
@@ -442,7 +442,7 @@
         "expansionPrompt": "Break down this task with a focus on develop voiceover generator with elevenlabs."
       },
       {
-        "id": "15",
+        "id": 15,
         "title": "Build Video Scene Generator with Replicate/Kling",
         "description": "Develop a video scene generator using the new ReplicateClient wrapper and Kling model to support multiple scene types with style coherence.",
         "status": "done",
@@ -490,7 +490,7 @@
         "expansionPrompt": "Break down this task with a focus on build video scene generator with replicate/kling."
       },
       {
-        "id": "16",
+        "id": 16,
         "title": "Create CTA Image Generator with Replicate/FLUX",
         "description": "Develop a CTA image generator using the new ReplicateClient wrapper and FLUX model.",
         "status": "done",
@@ -542,7 +542,7 @@
         "expansionPrompt": "Break down this task with a focus on create cta image generator with replicate/flux."
       },
       {
-        "id": "17",
+        "id": 17,
         "title": "Develop Video Composer with FFmpeg/MoviePy",
         "description": "Create a video composer to assemble final video from generated assets.",
         "details": "Implement video_composer.py to load assets, create video clips, add transitions, sync audio, add background music, overlays, and export final video.",
@@ -560,7 +560,7 @@
         "expansionPrompt": "Break down this task with a focus on develop video composer with ffmpeg/moviepy."
       },
       {
-        "id": "18",
+        "id": 18,
         "title": "Build Asset Manager",
         "description": "Develop an asset manager to handle file operations and cleanup.",
         "details": "Implement asset_manager.py to create temporary directories, manage file downloads, handle cleanup, implement retry logic, and validate file integrity.",
@@ -611,7 +611,7 @@
         "expansionPrompt": "Divide the asset manager development into subtasks for file operations, cleanup, and retry logic implementation."
       },
       {
-        "id": "19",
+        "id": 19,
         "title": "Create Pipeline Orchestrator",
         "description": "Develop an orchestrator to coordinate pipeline steps and manage progress.",
         "details": "Implement orchestrator.py to run asset generation in parallel, publish progress updates, handle errors, implement retry logic, update job status, and clean up files.",
@@ -628,7 +628,7 @@
         "expansionPrompt": "Break down this task with a focus on create pipeline orchestrator."
       },
       {
-        "id": "20",
+        "id": 20,
         "title": "Configure Redis for Job Queue System",
         "description": "Set up Redis for job queue management and real-time updates.",
         "details": "Configure Redis for job queue storage, status cache, pub/sub channels, connection pooling, and automatic reconnection.",
@@ -643,7 +643,7 @@
         "updatedAt": "2025-11-14T19:09:11.390Z"
       },
       {
-        "id": "21",
+        "id": 21,
         "title": "Develop Queue Worker",
         "description": "Create a worker to process jobs from the Redis queue.",
         "details": "Implement worker.py to listen to the Redis job queue, process jobs sequentially, handle failures, perform health checks, and log operations. Enable horizontal scaling.",
@@ -659,7 +659,7 @@
         "expansionPrompt": "Break down this task with a focus on develop queue worker."
       },
       {
-        "id": "22",
+        "id": 22,
         "title": "Design Job Database Schema",
         "description": "Implement database models for job and stage tracking.",
         "details": "Design and implement SQLite models for Job and Stage tables to track job status, progress, and errors. Ensure easy migration to PostgreSQL.",
@@ -674,7 +674,7 @@
         "updatedAt": "2025-11-14T19:09:59.485Z"
       },
       {
-        "id": "23",
+        "id": 23,
         "title": "Set Up Development Environment Configuration",
         "description": "Create environment configuration for development.",
         "details": "Create a comprehensive .env.example file with API keys, Redis connection, database URL, CORS origins, debug settings, and storage paths.",
@@ -689,7 +689,7 @@
         "updatedAt": "2025-11-14T19:10:32.758Z"
       },
       {
-        "id": "24",
+        "id": 24,
         "title": "Create Docker Setup",
         "description": "Develop Docker configuration for development and deployment.",
         "details": "Create docker-compose.yml for Redis, backend, and frontend containers. Configure volume mounts, network settings, and environment variable passing.",
@@ -704,7 +704,7 @@
         "updatedAt": "2025-11-14T19:10:45.775Z"
       },
       {
-        "id": "25",
+        "id": 25,
         "title": "Implement Error Handling System",
         "description": "Develop a comprehensive error handling system for the application.",
         "details": "Implement error handling at API and pipeline levels, with user-friendly messages, retry mechanisms, and fallback strategies. Log errors for analysis.",
@@ -718,7 +718,7 @@
         "expansionPrompt": "Break down this task with a focus on implement error handling system."
       },
       {
-        "id": "26",
+        "id": 26,
         "title": "Create Replicate API Wrapper",
         "description": "Build a modular, reusable wrapper class for Replicate API interactions with proper error handling, retry logic, and logging.",
         "details": "Create backend/services/replicate_client.py with:\n\n## Core Features:\n- **ReplicateClient class** with singleton pattern for client reuse\n- **API token management** from environment variables (REPLICATE_API_TOKEN)\n- **Retry logic** with exponential backoff for transient failures\n- **Error handling** using replicate.exceptions.ModelError\n- **File output handling** with automatic download to temp storage\n- **Async support** for concurrent predictions\n- **Logging integration** with structlog\n- **Webhook support** (optional for background jobs)\n\n## Key Methods:\n1. `__init__(api_token: str = None, max_retries: int = 3)`\n2. `run_model(model_id: str, input_params: dict, use_file_output: bool = True) -> Union[FileOutput, str]`\n3. `run_model_async(model_id: str, input_params: dict) -> Any`\n4. `create_prediction(model_id: str, version_id: str, input_params: dict, webhook: str = None) -> Prediction`\n5. `download_output(output: FileOutput, save_path: str) -> str`\n6. `wait_for_prediction(prediction: Prediction, timeout: int = 600) -> Prediction`\n\n## Error Handling:\n- Catch ModelError and log prediction details\n- Retry on rate limits (with backoff)\n- Retry on network errors\n- Fail fast on validation errors\n\n## Configuration:\n- REPLICATE_API_TOKEN from env\n- MAX_RETRIES configurable\n- TIMEOUT configurable\n- Temp storage path configurable\n\n## Integration Points:\n- Use with AssetManager for file downloads\n- Use with structlog for logging\n- Compatible with Tasks 15, 16 (video/image generation)",
@@ -732,7 +732,7 @@
         "subtasks": []
       },
       {
-        "id": "27",
+        "id": 27,
         "title": "Set Up Next.js API Routes with File-Backed Storage",
         "description": "Implement Next.js API routes for project management with file-based persistence using TypeScript.",
         "details": "1. **Create API Routes**: Implement `/api/projects` for creating new projects and `/api/projects/[id]` for retrieving and updating existing projects.\n   - Use Next.js API route conventions to define these endpoints.\n   - Ensure proper HTTP methods are used: POST for creation, GET for retrieval, and PUT for updates.\n\n2. **File-Backed Storage**: Implement file-based storage using `.dev-projects.json` for development.\n   - Use Node.js `fs` module to read and write JSON data.\n   - Implement functions to handle file I/O operations safely, ensuring data integrity.\n\n3. **TypeScript Interfaces**: Define TypeScript interfaces for `Project` and `Scene` types.\n   - Ensure interfaces cover all necessary fields and types.\n   - Use these interfaces to enforce type safety across the API routes.\n\n4. **Error Handling**: Implement comprehensive error handling for file operations and API responses.\n   - Return appropriate HTTP status codes and messages for different error scenarios.\n\n5. **Environment Configuration**: Ensure the file path for `.dev-projects.json` is configurable via environment variables.",
@@ -820,7 +820,7 @@
         ]
       },
       {
-        "id": "33",
+        "id": 33,
         "title": "Create PhaseTracker Component Using Kibo UI MCP",
         "description": "Develop a PhaseTracker component to visually represent the generation pipeline progress using Kibo UI MCP.",
         "details": "Implement the PhaseTracker component in `frontend/src/components/PhaseTracker.tsx` using Kibo UI MCP to design a horizontal stepper with 5 phases: Scenes, Images, Videos, Lip-sync, and Compose. Each phase should display completion status (pending/in-progress/completed/error), progress percentage, phase icon, and estimated time. Use `shadcn/ui` components like `Badge`, `Progress`, and custom icons from `lucide-react`. Ensure responsive design that collapses to a vertical layout on mobile devices. The component should accept `currentPhase` and `overallProgress` as props with TypeScript types. Consider accessibility and ensure the component is keyboard navigable.",
@@ -882,7 +882,7 @@
         ]
       },
       {
-        "id": "32",
+        "id": 32,
         "title": "Create ProjectHeader Component Using Kibo UI MCP",
         "description": "Develop a reusable ProjectHeader component to display project metadata using Kibo UI MCP and shadcn/ui components.",
         "details": "1. **Component Structure**: Create `frontend/src/components/ProjectHeader.tsx` to define the ProjectHeader component.\n   - Use TypeScript interfaces to define props for project data (title, ID, status, created date, mode, concept prompt).\n\n2. **UI Design**: Utilize Kibo UI MCP and shadcn/ui components to design the UI.\n   - Display project title and ID prominently.\n   - Implement a status badge with color coding for different project statuses (e.g., creating-scenes, generating-images, etc.).\n   - Integrate a Progress component to show overall project progress.\n   - Display metadata such as created date, mode, and concept prompt.\n   - Add control buttons (Start Generation, Cancel, Download when complete) with appropriate actions.\n\n3. **Styling**: Ensure the component matches the dark theme with blue accents.\n   - Use CSS modules or styled-components for styling.\n   - Ensure responsive design for mobile, tablet, and desktop views.\n\n4. **Integration**: Ensure the component is reusable and can be integrated into different parts of the application.",
@@ -942,7 +942,7 @@
         ]
       },
       {
-        "id": "31",
+        "id": 31,
         "title": "Design and Implement Project Dashboard Page Layout",
         "description": "Create a dynamic route and layout for the project dashboard page using v0 MCP, ensuring responsiveness and theme consistency.",
         "details": "1. **Create Dynamic Route**: Implement a new dynamic route at `frontend/src/app/project/[id]/page.tsx` for the project dashboard.\n\n2. **Layout Design**: Use v0 MCP to design the page layout including:\n   - **Navigation Header**: Similar to the /create page.\n   - **Project Header Section**: Display project title, status, and metadata.\n   - **Phase Tracker Section**: Show generation workflow (Scenes → Images → Videos → Lip-sync → Compose).\n   - **Main Content Area**: Implement a responsive grid for scene cards (1 column on mobile, 2 columns on tablets, 3 columns on desktops).\n   - **Asset Gallery Section**: Display generated images and videos.\n   - **Final Video Player Section**: Display when the project is complete.\n\n3. **Styling**: Follow the dark theme with blue accents using Tailwind CSS for responsive design.\n\n4. **Data Fetching**: On component mount, fetch project data using the API client and handle loading states appropriately.",
@@ -1026,7 +1026,7 @@
         ]
       },
       {
-        "id": "30",
+        "id": 30,
         "title": "Integrate Backend with /create Page and Redirect to /project/[id]",
         "description": "Modify the /create page to integrate with the backend for project creation and redirect to the project page.",
         "details": "1. **Modify API Call**: Replace the mock API call in `frontend/src/app/create/page.tsx` (lines 129-141) with a real call to the backend. Use the `createProject` function from the API client.\n   - Pass form data including `mode`, `prompt`, `characterDescription`, `uploadedImages/Audio`, and `characterReferenceImageId`.\n\n2. **Handle Response**: Extract `projectId` from the API response.\n\n3. **Redirect Logic**: Implement logic to redirect the user to `/project/[projectId]` upon successful project creation.\n\n4. **Loading and Error Handling**: Implement loading states and error handling using toast notifications to inform the user of the process status.\n\n5. **Maintain Existing Functionality**: Ensure all existing validation and character generation functionalities remain intact.",
@@ -1039,7 +1039,7 @@
         "subtasks": []
       },
       {
-        "id": "29",
+        "id": 29,
         "title": "Create API Client Layer for Python Backend Calls",
         "description": "Develop a type-safe API client in TypeScript for interacting with Python backend endpoints.",
         "details": "Implement the API client in `frontend/src/lib/api/client.ts` to wrap all Python backend endpoints with type-safe functions. Use TypeScript to define return types and ensure type safety. Implement functions for `createProject`, `getProject`, `generateScenes`, `generateVideo`, `generateLipSync`, `getVideo`, and `generateCharacterReference`. Utilize the `API_URL` from environment variables for endpoint URLs. Implement error handling using try-catch blocks and custom error classes. Research best practices for fetch wrapper libraries and error handling patterns in Next.js, such as using Axios or Fetch API with custom hooks for data fetching. Ensure the client is modular and reusable across the application.",
@@ -1115,7 +1115,7 @@
         ]
       },
       {
-        "id": "28",
+        "id": 28,
         "title": "Update TypeScript Types to Match project.json Schema",
         "description": "Revise TypeScript interfaces in /types/project.ts to align with the latest project.json schema.",
         "details": "1. **Analyze project.json**: Review the current project.json schema to identify all fields and their types, including `conceptPrompt`, `characterImage`, `productDescription`, `productImage`, `audioBackingTrack`, and scene-specific fields like `audioClip`, `videoClip`, `lipSyncedVideoClip` with `url` and `duration` properties.\n\n2. **Update Interfaces**: Modify the `Project` and `Scene` interfaces in /types/project.ts to include all identified fields. Ensure that nested types are accurately represented using TypeScript's advanced type features.\n\n3. **Status Enums**: Update all status enums to reflect the new generation phases: `creating-scenes`, `generating-images`, `generating-videos`, `generating-lipsync`, `composing`, `completed`, `error`.\n\n4. **Best Practices**: Use Context7 MCP to research and apply best practices for defining complex nested types in TypeScript, ensuring maintainability and clarity.",
@@ -1126,7 +1126,7 @@
         "subtasks": []
       },
       {
-        "id": "38",
+        "id": 38,
         "title": "Integrate Components and Logic into /project/[id] Page",
         "description": "Complete the project dashboard by integrating components and implementing logic for the /project/[id] page.",
         "details": "1. **Component Integration**: Import and use `ProjectHeader`, `PhaseTracker`, `ProjectSceneCard`, `AssetGallery`, and `FinalVideoPlayer` components in the `/project/[id]` page.\n   - Ensure each component is correctly positioned and styled according to the design specifications.\n\n2. **Real-time Updates**: Implement the `useProjectPolling` hook to fetch and update project status in real-time.\n   - Ensure polling stops when the project is completed or encounters an error.\n\n3. **Orchestration Functions**: Implement functions for the 'Start Generation' button to trigger `startFullGeneration`.\n   - Wire up regeneration buttons in scene cards to call respective regenerate functions.\n\n4. **State Management**: Use a state management library (e.g., Redux or Context API) to manage project data, scenes, and generation progress.\n   - Implement loading states, error handling, and toast notifications for user feedback.\n\n5. **Conditional Rendering**: Implement logic to conditionally render components based on project status.\n   - Show `PhaseTracker` during generation, `AssetGallery` when assets are available, and `FinalVideoPlayer` when the project is complete.\n\n6. **Accessibility Features**: Add keyboard shortcuts and ensure all components are accessible.\n   - Implement ARIA roles and attributes where necessary.",
@@ -1225,7 +1225,7 @@
         ]
       },
       {
-        "id": "37",
+        "id": 37,
         "title": "Implement AssetGallery and FinalVideoPlayer Components",
         "description": "Develop AssetGallery and FinalVideoPlayer components using Kibo UI MCP with responsive design and accessibility features.",
         "status": "pending",
@@ -1309,7 +1309,7 @@
         ]
       },
       {
-        "id": "36",
+        "id": 36,
         "title": "Implement Generation Orchestration Logic for /project/[id] Page",
         "description": "Develop orchestration functions to manage the sequential generation workflow by coordinating Python backend endpoints.",
         "details": "1. **File Setup**: Create `frontend/src/lib/orchestration.ts` to house orchestration functions.\n\n2. **Function Implementation**:\n   - `startFullGeneration(projectId)`: Sequentially call backend endpoints for generating scenes, images, videos, lip-syncs, and composing the final video. Implement error handling and retry logic with exponential backoff. Use async/await for sequential operations and Promise.all for parallel tasks.\n   - `regenerateScene(projectId, sceneId)`, `regenerateImage(projectId, sceneId)`, `regenerateVideo(projectId, sceneId)`, `regenerateLipSync(projectId, sceneId)`: Implement functions to handle individual regeneration tasks with error boundaries and progress callbacks.\n\n3. **Error Handling**: Utilize the error handling system from Task 25. Implement try-catch blocks and custom error classes for detailed logging.\n\n4. **Progress Updates**: Integrate with WebSocket (Task 10) for real-time progress updates. Provide callbacks to update UI state.\n\n5. **Research and Patterns**: Use Context7 MCP to explore async orchestration patterns in TypeScript. Implement best practices for error handling and state management.",
@@ -1395,7 +1395,7 @@
         ]
       },
       {
-        "id": "35",
+        "id": 35,
         "title": "Implement Project Status Polling Logic with useProjectPolling Hook",
         "description": "Develop a custom React hook to poll project status and update the UI in real-time on the /project/[id] page.",
         "details": "1. **Create Custom Hook**: Implement `useProjectPolling` in `frontend/src/hooks/useProjectPolling.ts`.\n   - Use `useEffect` to start polling `GET /api/mv/projects/{projectId}` every 3 seconds.\n   - Stop polling when project status is 'completed' or 'error'.\n   - Update local state with the latest project data, including scene statuses.\n   - Implement exponential backoff for network errors.\n   - Provide loading and error states.\n   - Clean up intervals on component unmount using `useEffect` cleanup function.\n\n2. **Integrate Hook**: Use the `useProjectPolling` hook in the `/project/[id]` page to automatically update the UI as scenes are generated.\n\n3. **Research Best Practices**: Use Context7 MCP to ensure best practices for polling in React hooks and cleanup patterns are followed.",
@@ -1457,7 +1457,7 @@
         ]
       },
       {
-        "id": "34",
+        "id": 34,
         "title": "Create ProjectSceneCard Component Using Kibo UI MCP",
         "description": "Develop a ProjectSceneCard component to display scene details and generation status using Kibo UI MCP.",
         "details": "Implement the ProjectSceneCard component in `frontend/src/components/ProjectSceneCard.tsx`. Use Kibo UI MCP and `shadcn/ui` components to design the card with the following features: 1) Card container with a header displaying the scene number and a status badge. 2) Scene prompt display area. 3) Image preview section with skeleton, spinner, and thumbnail transitions. 4) Video preview section with skeleton, spinner, and video player transitions. 5) Lip-sync video section. 6) Progress indicator for the current generation step. 7) Regenerate buttons for image, video, and lip-sync with a dropdown menu. 8) Error display with a retry button. Ensure the component accepts scene data as props with TypeScript interfaces. Implement hover effects and smooth transitions, matching the dark theme with blue accents. Ensure the layout is responsive for mobile, tablet, and desktop.",
@@ -1541,7 +1541,7 @@
         ]
       },
       {
-        "id": "39",
+        "id": 39,
         "title": "Update TypeScript Types for Video Trimming Fields",
         "description": "Add video trimming fields to the ProjectScene interface in TypeScript to align with the backend schema.",
         "status": "done",
@@ -1558,7 +1558,7 @@
         "updatedAt": "2025-11-23T03:54:59.167Z"
       },
       {
-        "id": "44",
+        "id": 44,
         "title": "Create VideoTrimmer Component with Timeline Scrubber UI",
         "description": "Develop a VideoTrimmer component featuring a timeline scrubber with dual handles for setting playback boundaries and real-time video preview updates.",
         "status": "done",
@@ -1612,7 +1612,7 @@
         "updatedAt": "2025-11-23T03:57:27.998Z"
       },
       {
-        "id": "45",
+        "id": 45,
         "title": "Implement trimScene API Client Function",
         "description": "Add a trimScene method to the API client to handle scene trimming via POST request and update the video player to respect trim boundaries.",
         "status": "done",
@@ -1630,12 +1630,12 @@
         "updatedAt": "2025-11-23T03:56:59.867Z"
       },
       {
-        "id": "46",
+        "id": 46,
         "title": "Implement regenerateScene API Client Function",
         "description": "Add a regenerateScene method to the API client to handle scene regeneration via POST request.",
         "details": "Implement the `regenerateScene` method in `frontend/src/lib/api/client.ts`. This method should construct a POST request to `/api/mv/projects/{id}/scenes/{sequence}/regenerate`. Use async/await to handle the asynchronous nature of the request. Ensure proper error handling by catching exceptions and logging errors. Consider using a retry mechanism for transient errors. The method should return a promise that resolves with the server response or rejects with an error message.",
         "testStrategy": "1. Write unit tests to mock the API call and verify the method sends the correct POST request with appropriate URL parameters. 2. Test error handling by simulating server errors and ensuring the method logs errors and rejects the promise. 3. Verify the method correctly handles successful responses by resolving the promise with the expected data. 4. Test the retry mechanism by simulating transient errors and ensuring the method retries the request as expected.",
-        "status": "done",
+        "status": "cancelled",
         "dependencies": [
           "23",
           "26"
@@ -1648,7 +1648,7 @@
         "updatedAt": "2025-11-23T03:57:08.387Z"
       },
       {
-        "id": "49",
+        "id": 49,
         "title": "Add 'Edit Scene' Button to ScenesPanel Scene Cards",
         "description": "Implement an 'Edit Scene' button on each scene card in the ScenesPanel to open the SceneEditModal with the selected scene data.",
         "details": "1. **Update ScenesPanel.tsx**: Locate the scene card component within `ScenesPanel.tsx`.\n   - Add a new button labeled 'Edit Scene' next to the existing controls on each scene card.\n   - Ensure the button is styled consistently with the existing UI elements.\n\n2. **Integrate SceneEditModal**: Import the `SceneEditModal` component.\n   - On button click, open the `SceneEditModal`.\n   - Pass the selected scene's data and necessary callbacks to handle updates and modal closure.\n\n3. **Callback Implementation**: Ensure that any changes made in the `SceneEditModal` are reflected back in the `ScenesPanel`.\n   - Implement state management to update the scene list when edits are saved.\n\n4. **Code Refactoring**: Ensure the code is clean and modular, possibly extracting the button logic into a separate component if needed for reusability.",
@@ -1663,10 +1663,10 @@
         "updatedAt": "2025-11-23T03:56:59.183Z"
       },
       {
-        "id": "50",
+        "id": 50,
         "title": "Move Regeneration Actions to SceneEditModal",
         "description": "Transfer regeneration actions from the ScenesPanel dropdown to the SceneEditModal's Actions section. Additionally, replace the MoreVertical dropdown menu with a prominent 'Edit' button on each scene card, styled to match the dark theme.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "10",
           "46"
@@ -1680,10 +1680,10 @@
         "expansionPrompt": "Create subtasks for UI updates and API integration for regeneration actions."
       },
       {
-        "id": "52",
+        "id": 52,
         "title": "Implement Modal Regeneration Progress Tracking",
         "description": "Add real-time progress display in SceneEditModal for regeneration phases, including progress percentage and estimated time remaining. Additionally, prevent modal closure during active operations by disabling the close button and backdrop clicks, and provide a visual indicator with a tooltip.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "9",
           "25",
@@ -1699,7 +1699,7 @@
             "description": "Create a UI component in SceneEditModal to display regeneration progress.",
             "dependencies": [],
             "details": "Design a progress bar and text indicators for regeneration phases. Ensure the close button is dimmed and shows a tooltip 'Operation in progress'.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Verify UI updates with mock data and tooltip displays correctly.",
             "parentId": "undefined"
           },
@@ -1711,7 +1711,7 @@
               1
             ],
             "details": "Use the job status endpoint to fetch progress data. Implement a mechanism to update the UI in real-time as data is received.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Test real-time updates with mock WebSocket data to ensure UI reflects current progress.",
             "parentId": "undefined"
           },
@@ -1723,7 +1723,7 @@
               2
             ],
             "details": "Integrate error handling as per Task 25. Provide user-friendly feedback and manage errors gracefully during the regeneration process.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": "Simulate errors and verify that user receives appropriate feedback and the system handles errors without crashing.",
             "parentId": "undefined"
           }
@@ -1733,7 +1733,7 @@
         "expansionPrompt": "Consider subtasks for UI design, real-time updates, and error handling implementation."
       },
       {
-        "id": "53",
+        "id": 53,
         "title": "Remove SceneDetailPanel Component from Edit Page",
         "description": "Remove the SceneDetailPanel component from the edit page and clean up related handlers.",
         "details": "1. Navigate to `frontend/src/app/edit/[id]/page.tsx` and locate the SceneDetailPanel component.\n2. Remove all instances and imports of SceneDetailPanel from the file.\n3. Identify and remove the handlers `handleUpdateScenePrompt` and `handleUpdateSceneNegativePrompt` if they are no longer needed.\n4. Ensure that any state or props related to SceneDetailPanel are cleaned up to prevent errors.\n5. Verify that the SceneEditModal now handles all editing functionalities previously managed by SceneDetailPanel.",
@@ -1748,7 +1748,7 @@
         "updatedAt": "2025-11-23T03:57:11.379Z"
       },
       {
-        "id": "54",
+        "id": 54,
         "title": "Implement Error Handling and User Feedback in SceneEditModal",
         "description": "Add error boundaries and user feedback for trim and regeneration failures in SceneEditModal.",
         "details": "1. **Error Boundaries**: Implement error boundaries in the `SceneEditModal` component to catch JavaScript errors in the component tree and display fallback UI.\n2. **Error Messages**: Add specific error messages for trim failures, regeneration failures, and network issues. Ensure messages are clear and provide guidance on possible actions.\n3. **Retry Mechanism**: Implement retry buttons for operations that fail due to transient errors, allowing users to attempt the operation again.\n4. **User Guidance**: Provide actionable feedback and guidance for resolving errors, such as checking network connections or adjusting input parameters.\n5. **Integration with Existing API Methods**: Ensure integration with `trimScene` and `regenerateScene` methods (Tasks 45 and 46) to handle errors appropriately and provide user feedback.",
@@ -1766,7 +1766,7 @@
         "expansionPrompt": "Break down into subtasks for error boundary implementation and user feedback design."
       },
       {
-        "id": "55",
+        "id": 55,
         "title": "Test and Optimize SceneEditModal Performance",
         "description": "Evaluate and enhance the performance of the SceneEditModal with various video sizes and FFmpeg.wasm efficiency.",
         "details": "1. **Performance Testing**: Conduct tests on the SceneEditModal using videos of different sizes to assess performance.\n   - Use tools like Chrome DevTools to monitor performance metrics such as load time and memory usage.\n\n2. **FFmpeg.wasm Optimization**: Ensure FFmpeg.wasm loads efficiently.\n   - Implement lazy loading and caching strategies to reduce initial load time.\n   - Profile FFmpeg operations to identify and optimize bottlenecks.\n\n3. **Timeline Scrubbing**: Verify that timeline scrubbing is smooth and responsive.\n   - Test scrubbing with different video lengths and formats.\n\n4. **Regeneration Flow Testing**: Test the regeneration flow with the actual backend.\n   - Simulate various scenarios including successful and failed generations.\n\n5. **Edge Case Validation**: Validate handling of edge cases such as missing videos, failed generations, and network errors.\n   - Ensure appropriate error messages and retry options are available.\n\n6. **Bundle Size Optimization**: Analyze and optimize the bundle size of the modal.\n   - Use tools like Webpack Bundle Analyzer to identify large dependencies and reduce size.",
@@ -1829,7 +1829,7 @@
         "expansionPrompt": "Divide into subtasks for performance testing, FFmpeg optimization, and edge case validation."
       },
       {
-        "id": "56",
+        "id": 56,
         "title": "Create SceneEditModal Component with shadcn Dialog",
         "description": "Develop the SceneEditModal component using shadcn/ui Dialog with specific styling and functionality requirements.",
         "status": "done",
@@ -1882,7 +1882,7 @@
         "updatedAt": "2025-11-23T04:03:30.699Z"
       },
       {
-        "id": "57",
+        "id": 57,
         "title": "Build Video Preview Section for SceneEditModal",
         "description": "Develop a video preview section within the SceneEditModal, featuring a compact video player with trimming functionality and playback boundary support. This section should always be visible at the top of the modal to provide visual context while editing prompts.",
         "status": "done",
@@ -1900,7 +1900,7 @@
         "updatedAt": "2025-11-23T04:28:19.229Z"
       },
       {
-        "id": "58",
+        "id": 58,
         "title": "Implement Prompt Editing Section in SceneEditModal",
         "description": "Develop the prompt editing section for SceneEditModal using shadcn/ui Textarea components with local state management and dark theme styling.",
         "details": "1. **Component Setup**: Enhance `SceneEditModal` in `frontend/src/components/SceneEditModal.tsx` to include a new section for editing prompts.\n   - Use shadcn/ui Textarea components for 'Scene Prompt' and 'Negative Prompt'.\n   - Add labels, placeholders, and character count indicators for each textarea.\n\n2. **Styling**: Implement dark theme styling using Tailwind CSS.\n   - Ensure clear visual separation between the prompt sections.\n   - Use helper text to inform users that changes will trigger video regeneration.\n\n3. **State Management**: Implement local state management to handle prompt changes.\n   - Changes should only be saved when the user clicks the action button, not on every input change.\n\n4. **UI Enhancements**: Ensure the UI is responsive and accessible, with clear visual cues for user actions.",
@@ -1917,7 +1917,7 @@
         "updatedAt": "2025-11-23T04:10:34.275Z"
       },
       {
-        "id": "59",
+        "id": 59,
         "title": "Implement Actions Section in SceneEditModal",
         "description": "Develop the actions section in SceneEditModal with buttons for saving, regenerating, and downloading scene operations. The section should be located at the bottom of the single-pane layout, below the video preview and prompt sections.",
         "status": "pending",
@@ -1936,7 +1936,7 @@
         "expansionPrompt": "Break down into subtasks for button functionality, loading states, and accessibility."
       },
       {
-        "id": "60",
+        "id": 60,
         "title": "Implement Elegant Progress Tracking in SceneEditModal",
         "description": "Create a visually appealing progress indicator in SceneEditModal for tracking operations like regenerating prompts, generating videos, and applying trims.",
         "details": "1. **UI Design**: Use the `shadcn/ui` Progress component to create a visually appealing progress bar with smooth animations. Ensure the design is prominent yet non-intrusive.\n2. **Operation Tracking**: Display the current operation (e.g., regenerating prompt, generating video, applying trim) along with progress percentage, phase information, and estimated time remaining.\n3. **Modal Behavior**: Disable the modal close button and dim other sections of the modal during active operations to focus user attention on the progress.\n4. **Success/Error States**: Implement clear success and error messaging using the error handling system from Task 25. Ensure messages are user-friendly and informative.\n5. **Integration**: Integrate with the `regenerateScene` and `trimScene` methods from Tasks 46 and 45 respectively, to initiate and track operations.\n6. **Real-Time Updates**: Use the job status endpoint from Task 9 to fetch real-time updates on progress and display them in the modal.",
@@ -1992,7 +1992,7 @@
         "expansionPrompt": "Consider subtasks for UI design, integration with API methods, and error handling."
       },
       {
-        "id": "61",
+        "id": 61,
         "title": "Implement Save & Regenerate Workflow in SceneEditModal",
         "description": "Develop a unified workflow in SceneEditModal for saving edits and regenerating videos with error handling.",
         "details": "1. **Local State Management**: Update the SceneEditModal component to manage local state for user-edited prompts and negative prompts.\n2. **Save & Regenerate Button**: Implement a 'Save & Regenerate Video' button that triggers the workflow.\n3. **updateScene Function**: Call `updateScene()` to save the edited prompts to the server. Ensure proper error handling and user feedback.\n4. **regenerateVideo Function**: Use the `regenerateScene` method from Task 46 to initiate video regeneration. Handle asynchronous operations with async/await.\n5. **Progress Display**: Integrate with the progress tracking system from Task 52 and Task 60 to show real-time progress in the modal.\n6. **Data Refetching**: After regeneration, refetch the project data to update the modal with the new video.\n7. **User Interaction**: Allow users to close the modal or continue editing after regeneration completes. Implement retry options for error scenarios using the error handling system from Task 25 and Task 54.",
@@ -2047,7 +2047,7 @@
         "expansionPrompt": "Divide into subtasks for state management, API integration, and user interaction design."
       },
       {
-        "id": "62",
+        "id": 62,
         "title": "Implement Lip-Sync Feature in SceneEditModal",
         "description": "Add a lip-sync feature to the SceneEditModal with a button to generate lip-sync using the existing endpoint.",
         "details": "1. **UI Update**: Add a 'Generate Lip-Sync' button in the Actions section of the SceneEditModal. Ensure the button is only enabled if the `needsLipSync` flag is true and `audioClipUrl` is available.\n2. **API Integration**: On button click, call the existing lipsync endpoint (POST /api/mv/lipsync) or use `orchestration.generateLipSync`.\n3. **Progress Indication**: Implement a progress indicator to show the status of the lip-sync generation process.\n4. **Update Scene**: Once the lip-sync generation is complete, update the scene with the `lipSyncedVideoClipUrl`.\n5. **Status Badge**: Display a lip-sync status badge in the video preview section.\n6. **Error Handling**: Implement error handling with retry options for failed lip-sync generation attempts.\n7. **Loading States**: Use elegant loading states to enhance user experience during asynchronous operations.",
@@ -2065,7 +2065,7 @@
         "updatedAt": "2025-11-23T04:28:02.711Z"
       },
       {
-        "id": "63",
+        "id": 63,
         "title": "Add Scene Download Feature to SceneEditModal",
         "description": "Implement a download feature in the SceneEditModal with a button to download scenes.",
         "details": "1. **UI Update**: Add a 'Download Scene' button with a download icon in the Actions section of the SceneEditModal.\n   - Use a consistent style with other action buttons.\n\n2. **API Client Function**: Implement `downloadScene` function in the API client.\n   - Call the endpoint `GET /api/mv/projects/{projectId}/scenes/{sequence}/download`.\n   - Handle the response to trigger a browser download with the filename format `scene-{sequence}-{projectId}.mp4`.\n\n3. **Loading State**: Display a loading indicator while the download is being prepared.\n   - Disable the button during this state to prevent multiple requests.\n\n4. **Error Handling**: Implement error handling for failed downloads.\n   - Show a user-friendly error message if the download fails.",
@@ -2089,7 +2089,10 @@
       "completedCount": 48,
       "tags": [
         "master"
-      ]
+      ],
+      "created": "2025-11-23T11:18:08.244Z",
+      "description": "Tasks for master context",
+      "updated": "2025-11-23T11:25:06.202Z"
     }
   }
 }

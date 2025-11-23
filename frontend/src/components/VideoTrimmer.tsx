@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { Slider } from "@/components/ui/slider"
 import { Card } from "@/components/ui/card"
 import { Scissors } from "lucide-react"
 import { formatPreciseTime } from '@/lib/utils/time'
@@ -10,14 +9,18 @@ export interface VideoTrimmerProps {
   videoDuration: number
   initialTrimPoints: { in: number; out: number }
   onTrimPointsChange: (trimPoints: { in: number; out: number }) => void
+  videoUrl?: string
 }
 
 export function VideoTrimmer({
   videoDuration,
   initialTrimPoints,
   onTrimPointsChange,
+  videoUrl,
 }: VideoTrimmerProps) {
   const [trimPoints, setTrimPoints] = React.useState(initialTrimPoints)
+  const [isDragging, setIsDragging] = React.useState<'in' | 'out' | null>(null)
+  const timelineRef = React.useRef<HTMLDivElement>(null)
 
   // Ensure trim points are within valid range
   React.useEffect(() => {
@@ -30,19 +33,76 @@ export function VideoTrimmer({
     setTrimPoints({ in: validatedIn, out: validatedOut })
   }, [initialTrimPoints, videoDuration])
 
-  const handleSliderChange = (values: number[]) => {
-    if (values.length !== 2) return
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || isDragging) return
 
-    const newTrimPoints = {
-      in: Math.min(values[0], values[1]),
-      out: Math.max(values[0], values[1]),
+    const rect = timelineRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percentage = x / rect.width
+    const time = percentage * videoDuration
+
+    // Snap to closest trim point
+    const distanceToIn = Math.abs(time - trimPoints.in)
+    const distanceToOut = Math.abs(time - trimPoints.out)
+
+    if (distanceToIn < distanceToOut) {
+      const newTrimPoints = { ...trimPoints, in: Math.max(0, Math.min(time, trimPoints.out - 0.1)) }
+      setTrimPoints(newTrimPoints)
+      onTrimPointsChange(newTrimPoints)
+    } else {
+      const newTrimPoints = { ...trimPoints, out: Math.min(videoDuration, Math.max(time, trimPoints.in + 0.1)) }
+      setTrimPoints(newTrimPoints)
+      onTrimPointsChange(newTrimPoints)
     }
-
-    setTrimPoints(newTrimPoints)
-    onTrimPointsChange(newTrimPoints)
   }
 
+  const handleMouseDown = (point: 'in' | 'out') => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsDragging(point)
+  }
+
+  React.useEffect(() => {
+    if (!isDragging || !timelineRef.current || typeof window === 'undefined') {
+      return undefined
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!timelineRef.current) return
+
+      const rect = timelineRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const percentage = Math.max(0, Math.min(1, x / rect.width))
+      const time = percentage * videoDuration
+
+      if (isDragging === 'in') {
+        const newIn = Math.max(0, Math.min(time, trimPoints.out - 0.1))
+        const newTrimPoints = { ...trimPoints, in: newIn }
+        setTrimPoints(newTrimPoints)
+        onTrimPointsChange(newTrimPoints)
+      } else if (isDragging === 'out') {
+        const newOut = Math.min(videoDuration, Math.max(time, trimPoints.in + 0.1))
+        const newTrimPoints = { ...trimPoints, out: newOut }
+        setTrimPoints(newTrimPoints)
+        onTrimPointsChange(newTrimPoints)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(null)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, trimPoints, videoDuration, onTrimPointsChange])
+
   const trimDuration = trimPoints.out - trimPoints.in
+  const inPercentage = (trimPoints.in / videoDuration) * 100
+  const outPercentage = (trimPoints.out / videoDuration) * 100
 
   return (
     <Card className="bg-gray-900 border-gray-800 p-6 space-y-4">
@@ -57,37 +117,58 @@ export function VideoTrimmer({
       </div>
 
       <div className="space-y-6">
-        {/* Timeline Scrubber with Dual Handles */}
-        <div className="space-y-3">
-          <Slider
-            min={0}
-            max={videoDuration}
-            step={0.1}
-            value={[trimPoints.in, trimPoints.out]}
-            onValueChange={handleSliderChange}
-            className="w-full"
-            aria-label="Video trim points"
+        {/* Timeline with Video Preview */}
+        <div
+          ref={timelineRef}
+          onClick={handleTimelineClick}
+          className="relative w-full h-24 bg-gray-800/50 rounded-lg overflow-hidden cursor-pointer select-none border-2 border-cyan-500/50"
+          style={{
+            backgroundImage: videoUrl ? 'linear-gradient(to right, rgba(0,0,0,0.3), rgba(0,0,0,0.3))' : undefined,
+          }}
+        >
+          {/* Trimmed overlay - before in point */}
+          <div
+            className="absolute top-0 bottom-0 left-0 bg-black/70 pointer-events-none z-10"
+            style={{ width: `${inPercentage}%` }}
           />
 
-          {/* Visual Timeline Markers */}
-          <div className="relative h-8 bg-gray-800/50 rounded-md overflow-hidden">
-            {/* Full timeline background */}
-            <div className="absolute inset-0 bg-gray-700/30" />
+          {/* Trimmed overlay - after out point */}
+          <div
+            className="absolute top-0 bottom-0 right-0 bg-black/70 pointer-events-none z-10"
+            style={{ width: `${100 - outPercentage}%` }}
+          />
 
-            {/* Highlighted trim region */}
-            <div
-              className="absolute h-full bg-blue-500/30 border-l-2 border-r-2 border-blue-500"
-              style={{
-                left: `${(trimPoints.in / videoDuration) * 100}%`,
-                width: `${(trimDuration / videoDuration) * 100}%`,
-              }}
-            />
-
-            {/* Time markers */}
-            <div className="absolute inset-0 flex items-center justify-between px-3 text-xs text-muted-foreground font-mono">
-              <span>0:00</span>
-              <span>{formatPreciseTime(videoDuration)}</span>
+          {/* In point marker with thick border */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 hover:w-2 transition-all"
+            style={{ left: `${inPercentage}%` }}
+            onMouseDown={handleMouseDown('in')}
+          >
+            {/* Thick border indicator */}
+            <div className="absolute top-0 bottom-0 -left-1 w-3 bg-cyan-500/80 rounded-l" />
+            {/* Time label */}
+            <div className="absolute -top-6 left-0 -translate-x-1/2 bg-cyan-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap font-mono">
+              {formatPreciseTime(trimPoints.in)}
             </div>
+          </div>
+
+          {/* Out point marker with thick border */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 hover:w-2 transition-all"
+            style={{ left: `${outPercentage}%` }}
+            onMouseDown={handleMouseDown('out')}
+          >
+            {/* Thick border indicator */}
+            <div className="absolute top-0 bottom-0 -right-1 w-3 bg-cyan-500/80 rounded-r" />
+            {/* Time label */}
+            <div className="absolute -top-6 left-0 -translate-x-1/2 bg-cyan-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap font-mono">
+              {formatPreciseTime(trimPoints.out)}
+            </div>
+          </div>
+
+          {/* Filename/duration display */}
+          <div className="absolute top-2 left-2 text-white text-xs font-mono bg-black/50 px-2 py-1 rounded z-5">
+            {formatPreciseTime(videoDuration)}
           </div>
         </div>
 
@@ -97,7 +178,7 @@ export function VideoTrimmer({
             <div className="text-xs text-muted-foreground uppercase tracking-wide">
               In Point
             </div>
-            <div className="text-lg font-mono font-semibold text-blue-400">
+            <div className="text-lg font-mono font-semibold text-cyan-400">
               {formatPreciseTime(trimPoints.in)}
             </div>
           </div>
@@ -106,16 +187,16 @@ export function VideoTrimmer({
             <div className="text-xs text-muted-foreground uppercase tracking-wide">
               Out Point
             </div>
-            <div className="text-lg font-mono font-semibold text-blue-400">
+            <div className="text-lg font-mono font-semibold text-cyan-400">
               {formatPreciseTime(trimPoints.out)}
             </div>
           </div>
 
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 space-y-1">
-            <div className="text-xs text-blue-300/70 uppercase tracking-wide">
+          <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3 space-y-1">
+            <div className="text-xs text-cyan-300/70 uppercase tracking-wide">
               Trim Duration
             </div>
-            <div className="text-lg font-mono font-semibold text-blue-400">
+            <div className="text-lg font-mono font-semibold text-cyan-400">
               {formatPreciseTime(trimDuration)}
             </div>
           </div>

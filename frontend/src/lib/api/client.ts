@@ -586,7 +586,7 @@ export async function trimScene(
 
     const response = await apiFetch<ProjectScene>(url, {
       method: 'POST',
-      body: JSON.stringify(trimPoints),
+      body: JSON.stringify({ trimPoints }),
     })
 
     console.log(`[API] Scene ${sequence} trimmed successfully`, {
@@ -811,44 +811,6 @@ export async function getDirectorConfigs(): Promise<{ configs: string[] }> {
   return apiFetch<{ configs: string[] }>(url, {
     method: 'GET',
   })
-}
-
-/**
- * Regenerate a specific scene in a project
- * @param projectId Project identifier
- * @param sequence Scene sequence number
- * @returns Regenerated scene response
- */
-export async function regenerateScene(
-  projectId: string,
-  sequence: number
-): Promise<ProjectScene> {
-  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}/regenerate`
-
-  try {
-    return await apiFetch<ProjectScene>(
-      url,
-      {
-        method: 'POST',
-        body: JSON.stringify({}), // Empty body - backend will use existing scene data
-      },
-      {
-        maxRetries: 2, // Moderate retries for scene regeneration
-      }
-    )
-  } catch (error) {
-    // Log the regeneration error for debugging
-    console.error(
-      `[API] Scene regeneration failed for project ${projectId}, scene ${sequence}:`,
-      error instanceof APIError ? {
-        errorCode: error.errorCode,
-        statusCode: error.statusCode,
-        message: error.message,
-        details: error.details,
-      } : error
-    )
-    throw error
-  }
 }
 
 /**

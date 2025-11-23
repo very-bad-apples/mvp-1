@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +8,7 @@ import { Loader2, Edit, Video, AlertCircle } from 'lucide-react'
 import type { Project, ProjectScene } from '@/types/project'
 import { useSceneToast } from '@/hooks/useSceneToast'
 import { getSceneVideoUrl } from '@/lib/utils/video'
+import { SceneEditModal } from '@/components/SceneEditModal'
 
 interface ScenesPanelProps {
   project: Project
@@ -22,13 +24,17 @@ export function ScenesPanel({
   onProjectUpdate,
 }: ScenesPanelProps) {
   const sceneToast = useSceneToast()
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedSceneForEdit, setSelectedSceneForEdit] = useState<ProjectScene | null>(null)
 
-  const handleEditScene = (sceneId: string) => {
-    const sceneSequence = parseInt(sceneId.replace('scene-', ''))
-    sceneToast.showInfo(
-      'Edit Scene',
-      `Opening editor for Scene ${sceneSequence}`
-    )
+  const handleEditScene = (scene: ProjectScene) => {
+    setSelectedSceneForEdit(scene)
+    setEditModalOpen(true)
+  }
+
+  const handleSceneUpdate = () => {
+    // Refresh the project data when a scene is updated
+    onProjectUpdate()
   }
 
   const getSceneStatus = (scene: ProjectScene) => {
@@ -134,7 +140,7 @@ export function ScenesPanel({
                   <Button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleEditScene(sceneId)
+                      handleEditScene(scene)
                     }}
                     className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white border-blue-500/50"
                     size="sm"
@@ -162,6 +168,17 @@ export function ScenesPanel({
           })
         )}
       </div>
+
+      {/* Scene Edit Modal */}
+      {selectedSceneForEdit && (
+        <SceneEditModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          scene={selectedSceneForEdit}
+          projectId={project.projectId}
+          onSceneUpdate={handleSceneUpdate}
+        />
+      )}
     </div>
   )
 }
