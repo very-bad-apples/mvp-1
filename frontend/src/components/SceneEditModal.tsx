@@ -309,37 +309,9 @@ export function SceneEditModal({
       >
         {/* Header - Fixed at top */}
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-semibold">
-              Edit Scene {scene.sequence}
-            </DialogTitle>
-
-            {/* Custom close button with operation check */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => handleOpenChange(false)}
-                    disabled={isOperationInProgress}
-                    className={cn(
-                      "rounded-sm opacity-70 ring-offset-background transition-opacity",
-                      "hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                      "disabled:pointer-events-none disabled:opacity-30",
-                      "p-2"
-                    )}
-                    aria-label={isOperationInProgress ? "Operation in progress" : "Close"}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                {isOperationInProgress && (
-                  <TooltipContent>
-                    <p>Operation in progress</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <DialogTitle className="text-xl font-semibold">
+            Edit Scene {scene.sequence}
+          </DialogTitle>
         </DialogHeader>
 
         {/* Scrollable Content Area - Grows to fill available space */}
