@@ -1145,23 +1145,29 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                     """Upload character reference images to cloud storage."""
                     storage = get_storage_backend()
                     urls = {}
-                    
+
+                    # Import cleanup function
+                    from services.s3_storage import delete_local_file_after_upload
+
                     for image in images:
                         try:
                             # Determine file extension from path
                             from pathlib import Path
                             ext = Path(image.path).suffix.lstrip('.')
-                            
+
                             cloud_path = f"character_references/{image.id}.{ext}"
                             url = await storage.upload_file(
                                 image.path,
                                 cloud_path
                             )
-                            
+
+                            # Delete local file after successful upload
+                            delete_local_file_after_upload(image.path)
+
                             # Update image with cloud URL
                             image.cloud_url = url
                             urls[image.id] = url
-                            
+
                             logger.info(
                                 "character_image_uploaded_to_cloud",
                                 image_id=image.id,
@@ -1174,7 +1180,7 @@ async def generate_character_reference(request: GenerateCharacterReferenceReques
                                 error=str(e)
                             )
                             # Continue with other images
-                    
+
                     return urls
                 
                 # Run async upload in separate thread to avoid event loop conflicts
@@ -1372,6 +1378,10 @@ async def upload_character_reference(
                     extension=ext,
                     image_url=image_url
                 )
+
+                # Delete local file after successful upload
+                from services.s3_storage import delete_local_file_after_upload
+                delete_local_file_after_upload(str(temp_file_path))
             except Exception as e:
                 logger.error(
                     "character_reference_upload_to_cloud_failed",
@@ -1383,31 +1393,6 @@ async def upload_character_reference(
                 )
                 # Continue without cloud URL - file is still saved locally
                 image_url = None
-        
-        # Clean up temp file after successful upload (or if cloud storage not configured)
-        # Only delete if cloud storage succeeded OR cloud storage is not configured
-        if image_url or not settings.STORAGE_BUCKET:
-            try:
-                if temp_file_path.exists():
-                    temp_file_path.unlink()
-                    logger.debug(
-                        "temp_file_cleaned_up",
-                        image_id=image_id,
-                        temp_path=str(temp_file_path)
-                    )
-            except Exception as e:
-                logger.warning(
-                    "failed_to_cleanup_temp_file",
-                    image_id=image_id,
-                    temp_path=str(temp_file_path),
-                    error=str(e)
-                )
-        else:
-            logger.info(
-                "temp_file_kept_due_to_upload_failure",
-                image_id=image_id,
-                temp_path=str(temp_file_path)
-            )
         
         return JSONResponse(
             content={

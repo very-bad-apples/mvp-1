@@ -12,6 +12,7 @@ import tempfile
 import time
 import shutil
 import requests
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from typing import Optional, List
@@ -410,7 +411,11 @@ async def generate_scene_video_background(
                     s3_key=s3_key,
                     content_type="video/mp4"
                 )
-                
+
+                # Delete local video file after successful upload
+                from services.s3_storage import delete_local_file_after_upload
+                delete_local_file_after_upload(video_path)
+
                 logger.info(
                     "scene_video_uploaded_to_s3",
                     project_id=project_id,
@@ -1715,6 +1720,10 @@ async def trim_scene_video(
                 s3_key=new_working_clip_s3_key,
                 content_type="video/mp4"
             )
+
+            # Delete local trimmed video file after successful upload
+            from services.s3_storage import delete_local_file_after_upload
+            delete_local_file_after_upload(trimmed_video_path)
 
             # Update scene record
             scene_item.workingVideoClipS3Key = new_working_clip_s3_key
