@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle, Scissors } from 'lucide-react'
 import { ProjectScene } from '@/types/project'
 import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
@@ -64,6 +64,7 @@ export function SceneEditModal({
   // Video preview state
   const [isPlaying, setIsPlaying] = useState(false)
   const [showOriginal, setShowOriginal] = useState(false)
+  const [originalVideoDuration, setOriginalVideoDuration] = useState<number>(0)
   const [trimPoints, setTrimPoints] = useState<{ in: number; out: number }>(
     scene.trimPoints || { in: 0, out: scene.duration || 0 }
   )
@@ -82,22 +83,58 @@ export function SceneEditModal({
     editedPrompt !== (scene.prompt || '') ||
     editedNegativePrompt !== (scene.negativePrompt || '')
 
+  // For trimming, ALWAYS use the original video (so users see the full clip)
+  // Priority: originalVideoClipUrl first (true original), then videoClipUrl (may be working version)
+  const originalVideoUrl = scene.originalVideoClipUrl || scene.videoClipUrl
+
+  // For the toggle: default shows original (for trimming), toggle shows working result
+  const currentVideoUrl = showOriginal ? getSceneVideoUrl(scene, false) : originalVideoUrl
+
   // Sync local state when scene changes
   useEffect(() => {
     setEditedPrompt(scene.prompt || '')
     setEditedNegativePrompt(scene.negativePrompt || '')
-    setTrimPoints(scene.trimPoints || { in: 0, out: scene.duration || 0 })
+    // Don't initialize trim points here - wait for video metadata to load
+    // This ensures we use the original video duration, not the trimmed duration
     setShowOriginal(false)
     setIsPlaying(false)
     // Reset any error states when scene changes
     setLipSyncStatus('idle')
-  }, [scene.sequence, scene.prompt, scene.negativePrompt, scene.trimPoints, scene.duration])
+    // Reset original video duration
+    setOriginalVideoDuration(0)
+  }, [scene.sequence, scene.duration, open]) // Re-sync when modal opens
 
-  // Get current video URL based on toggle state
-  const currentVideoUrl = getSceneVideoUrl(scene, showOriginal)
+  /**
+   * Handle video metadata loaded - sets up trimmer with original video duration
+   */
+  const handleVideoLoadedMetadata = () => {
+    const video = videoRef.current
+    if (!video || !video.duration || !isFinite(video.duration)) return
 
-  // Get actual video duration (use scene duration as fallback)
-  const videoDuration = scene.duration || 0
+    setOriginalVideoDuration(video.duration)
+
+    // Initialize trim points: use saved points or default to full video
+    setTrimPoints(scene.trimPoints || { in: 0, out: video.duration })
+  }
+
+  /**
+   * Handle video load errors
+   */
+  const handleVideoError = () => {
+    const video = videoRef.current
+    if (video?.error) {
+      console.error('Video load error:', video.error.message)
+    }
+  }
+
+  // Use the original video duration for the trimmer (not the trimmed duration)
+  // Don't use scene.duration as fallback - it's the TRIMMED duration and will break the trimmer
+  const videoDuration = originalVideoDuration
+
+  // Check if scene is actually trimmed (not just default trim points)
+  const isTrimmed = scene.trimPoints &&
+    originalVideoDuration > 0 &&
+    (scene.trimPoints.in > 0 || scene.trimPoints.out < originalVideoDuration)
 
   /**
    * Handle modal close with operation check
@@ -330,21 +367,27 @@ export function SceneEditModal({
                     <div className="flex items-center gap-2">
                       <Video className="h-4 w-4 text-cyan-500" />
                       <span className="text-sm font-medium">
-                        {showOriginal ? 'Original Video' : 'Working Video'}
+                        {showOriginal ? 'Working Video (Preview)' : 'Original Video (Trimming)'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={getStatusVariant(scene.status)} className="text-xs">
                         {scene.status}
                       </Badge>
-                      {scene.lipSyncedVideoClipUrl && scene.videoClipUrl && (
+                      {isTrimmed && (
+                        <Badge variant="outline" className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400">
+                          <Scissors className="h-3 w-3 mr-1" />
+                          Trimmed
+                        </Badge>
+                      )}
+                      {(scene.workingVideoClipUrl || scene.lipSyncedVideoClipUrl) && scene.videoClipUrl && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setShowOriginal(!showOriginal)}
                           className="text-xs"
                         >
-                          {showOriginal ? 'Show Working' : 'Show Original'}
+                          {showOriginal ? 'Show Original' : 'Preview Result'}
                         </Button>
                       )}
                     </div>
@@ -359,6 +402,8 @@ export function SceneEditModal({
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}
                       onEnded={() => setIsPlaying(false)}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                      onError={handleVideoError}
                     />
 
                     {/* Play/Pause Overlay */}
@@ -377,10 +422,10 @@ export function SceneEditModal({
                       </Button>
                     </div>
 
-                    {/* Trim indicator overlay */}
-                    {scene.trimPoints && (
+                    {/* Trim indicator overlay - only show when previewing working video */}
+                    {isTrimmed && showOriginal && (
                       <div className="absolute top-2 left-2 bg-cyan-500/90 text-white text-xs px-2 py-1 rounded">
-                        Trimmed: {formatVideoTime(scene.trimPoints.in)} - {formatVideoTime(scene.trimPoints.out)}
+                        Trimmed: {formatVideoTime(scene.trimPoints!.in)} - {formatVideoTime(scene.trimPoints!.out)}
                       </div>
                     )}
                   </div>
@@ -400,28 +445,38 @@ export function SceneEditModal({
 
                   {/* Video Trimmer */}
                   <div className="space-y-3 pt-4 border-t border-border">
-                    <VideoTrimmer
-                      videoDuration={videoDuration}
-                      initialTrimPoints={trimPoints}
-                      onTrimPointsChange={setTrimPoints}
-                      videoUrl={currentVideoUrl}
-                    />
+                    {videoDuration > 0 ? (
+                      <>
+                        <VideoTrimmer
+                          key={`trimmer-${scene.sequence}-${open}`} // Force re-mount when scene/modal changes
+                          videoDuration={videoDuration}
+                          initialTrimPoints={trimPoints}
+                          onTrimPointsChange={setTrimPoints}
+                          videoUrl={currentVideoUrl}
+                        />
 
-                    {/* Apply Trim Button */}
-                    <div className="flex items-center justify-end gap-3">
-                      <p className="text-xs text-muted-foreground">
-                        Trim points: {formatVideoTime(trimPoints.in)} - {formatVideoTime(trimPoints.out)}
-                      </p>
-                      <Button
-                        onClick={handleApplyTrim}
-                        disabled={isApplyingTrim || isOperationInProgress}
-                        size="sm"
-                        className="bg-cyan-600 hover:bg-cyan-700"
-                      >
-                        {isApplyingTrim && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {isApplyingTrim ? 'Applying...' : 'Apply Trim Points'}
-                      </Button>
-                    </div>
+                        {/* Apply Trim Button */}
+                        <div className="flex items-center justify-end gap-3">
+                          <p className="text-xs text-muted-foreground">
+                            Trim points: {formatVideoTime(trimPoints.in)} - {formatVideoTime(trimPoints.out)}
+                          </p>
+                          <Button
+                            onClick={handleApplyTrim}
+                            disabled={isApplyingTrim || isOperationInProgress}
+                            size="sm"
+                            className="bg-cyan-600 hover:bg-cyan-700"
+                          >
+                            {isApplyingTrim && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {isApplyingTrim ? 'Applying...' : 'Apply Trim Points'}
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center py-8 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                        <span className="text-sm">Loading video metadata...</span>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (

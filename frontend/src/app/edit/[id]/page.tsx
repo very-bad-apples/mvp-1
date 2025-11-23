@@ -530,7 +530,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
               <Button
                 variant="outline"
                 className="border-gray-600 text-white hover:bg-gray-800"
-                onClick={() => window.location.href = `/result/${params.id}`}
+                onClick={() => window.location.href = '/create'}
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Result
