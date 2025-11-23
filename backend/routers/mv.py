@@ -733,7 +733,7 @@ async def generate_scene_video(
     project_id: str,
     scene_sequence: int,
     write_to_db: bool = True,
-    backend: str = "gemini"
+    backend: str = "replicate"
 ):
     """
     Generate video for a specific scene.
