@@ -12,6 +12,7 @@ import tempfile
 import time
 import shutil
 import requests
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from typing import Optional, List
@@ -25,6 +26,7 @@ from mv_schemas import (
     TrimSceneRequest,
     AddSceneRequest,
     AddSceneResponse,
+    DeleteSceneResponse,
     ComposeRequest,
     ComposeResponse,
     FinalVideoResponse,
@@ -34,6 +36,8 @@ from mv_models import (
     MVProjectItem,
     create_project_metadata,
     create_scene_item,
+    resequence_display_order,
+    recalculate_scene_counters,
 )
 from mv.scene_generator import generate_scenes, generate_scenes_legacy
 from mv.video_generator import generate_video
@@ -53,16 +57,21 @@ router = APIRouter(prefix="/api/mv", tags=["MV Projects"])
 async def get_next_scene_sequence(project_id: str) -> int:
     """
     Get the next sequence number for a new scene in a project.
-    
-    Queries all existing scenes for the project and returns max(sequence) + 1.
-    Returns 1 if no scenes exist.
-    
+
+    IMPORTANT: sequence is part of the SK (SCENE#{sequence:03d}) and must be unique
+    and immutable. We cannot reuse sequence numbers even after deletions.
+
+    This function returns max(existing sequences) + 1 to ensure uniqueness.
+
+    Note: displaySequence is used for UI ordering and is resequenced after deletions,
+    but sequence must always increment and never be reused.
+
     Args:
         project_id: Project UUID
-        
+
     Returns:
-        Next sequence number (1-indexed)
-        
+        Next unique sequence number (1-indexed)
+
     Raises:
         DoesNotExist: If project doesn't exist (should be checked before calling)
     """
@@ -70,15 +79,12 @@ async def get_next_scene_sequence(project_id: str) -> int:
     
     try:
         # Query all scenes for this project
-        scenes = MVProjectItem.query(
+        scenes = list(MVProjectItem.query(
             pk,
             MVProjectItem.SK.startswith("SCENE#")
-        )
+        ))
         
-        # Extract sequence numbers
-        sequences = [scene.sequence for scene in scenes if hasattr(scene, 'sequence') and scene.sequence is not None]
-        
-        if not sequences:
+        if not scenes:
             logger.info(
                 "no_existing_scenes",
                 project_id=project_id,
@@ -86,11 +92,28 @@ async def get_next_scene_sequence(project_id: str) -> int:
             )
             return 1
         
-        next_sequence = max(sequences) + 1
+        # Ensure all scenes have displaySequence set (migration)
+        for scene in scenes:
+            if scene.displaySequence is None:
+                scene.displaySequence = scene.sequence
+                scene.updatedAt = datetime.now(timezone.utc)
+                scene.save()
+
+        # Use max(sequence) + 1 to ensure we never reuse a sequence number
+        # sequence is part of SK and must be unique across all scenes (including deleted ones)
+        sequences = [s.sequence for s in scenes if s.sequence is not None]
+
+        if sequences:
+            next_sequence = max(sequences) + 1
+        else:
+            # Fallback: use 1 if no scenes have sequence set (edge case)
+            next_sequence = 1
+
         logger.info(
             "next_scene_sequence_calculated",
             project_id=project_id,
-            max_sequence=max(sequences),
+            scene_count=len(scenes),
+            max_sequence=max(sequences) if sequences else None,
             next_sequence=next_sequence
         )
         return next_sequence
@@ -823,9 +846,26 @@ async def get_project(project_id: str):
             MVProjectItem.SK.startswith("SCENE#")
         )
 
+        # Migration: Populate displaySequence for existing scenes that don't have it
+        scene_items_list = list(scene_items)
+        for scene_item in scene_items_list:
+            if scene_item.displaySequence is None:
+                scene_item.displaySequence = scene_item.sequence
+                scene_item.updatedAt = datetime.now(timezone.utc)
+                scene_item.save()
+                logger.info(
+                    "migrated_scene_display_sequence",
+                    project_id=project_id,
+                    sequence=scene_item.sequence,
+                    display_sequence=scene_item.displaySequence
+                )
+
+        # Sort scene items by displaySequence (fallback to sequence for compatibility)
+        scene_items_list.sort(key=lambda s: s.displaySequence if s.displaySequence is not None else (s.sequence or 0))
+
         s3_service = get_s3_storage_service()
 
-        for scene_item in scene_items:
+        for scene_item in scene_items_list:
             # Generate presigned URLs for scene assets
             reference_urls = []
             if scene_item.referenceImageS3Keys:
@@ -855,7 +895,7 @@ async def get_project(project_id: str):
                 trim_points = json.loads(scene_item.trimPoints)
 
             scenes.append(SceneResponse(
-                sequence=scene_item.sequence,
+                sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
                 status=scene_item.status,
                 prompt=scene_item.prompt,
                 negativePrompt=scene_item.negativePrompt,
@@ -874,8 +914,7 @@ async def get_project(project_id: str):
                 updatedAt=scene_item.updatedAt
             ))
 
-        # Sort scenes by sequence
-        scenes.sort(key=lambda s: s.sequence)
+        # Scenes are already sorted by displaySequence from scene_items_list sorting above
 
         # Generate presigned URLs for project assets
         character_url = None
@@ -1146,7 +1185,7 @@ async def update_scene(
             trim_points = json.loads(scene_item.trimPoints)
 
         return SceneResponse(
-            sequence=scene_item.sequence,
+            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,
@@ -1389,16 +1428,21 @@ async def add_scene(
                 reference_image_s3_keys=reference_image_s3_keys
             )
             scene_item.save()
-            
-            # Reload scene item to ensure we have the latest saved values
+
+            # Resequence displaySequence for all scenes to ensure sequential numbering [1, 2, 3, ...]
+            # This is necessary because sequence numbers are immutable and never reused
+            resequence_display_order(project_id)
+
+            # Reload scene item to ensure we have the latest saved values (including updated displaySequence)
             pk = f"PROJECT#{project_id}"
             sk = f"SCENE#{next_sequence:03d}"
             scene_item = MVProjectItem.get(pk, sk)
-            
+
             logger.info(
                 "scene_item_created",
                 project_id=project_id,
                 sequence=next_sequence,
+                display_sequence=scene_item.displaySequence,
                 reference_image_count=len(scene_item.referenceImageS3Keys) if scene_item.referenceImageS3Keys else 0
             )
         except Exception as create_error:
@@ -1513,7 +1557,7 @@ async def add_scene(
             trim_points = json.loads(scene_item.trimPoints)
 
         scene_response = SceneResponse(
-            sequence=scene_item.sequence,
+            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,
@@ -1551,6 +1595,258 @@ async def add_scene(
             detail={
                 "error": "InternalError",
                 "message": "Failed to add scene",
+                "details": str(e)
+            }
+        )
+
+
+@router.delete(
+    "/projects/{project_id}/scenes/{sequence}",
+    response_model=DeleteSceneResponse,
+    summary="Delete Scene",
+    description="""
+Delete a scene from a project.
+
+This endpoint:
+1. Validates project and scene exist
+2. Ensures at least 2 scenes exist (cannot delete last scene)
+3. Checks project status (cannot delete during composition)
+4. Deletes the scene item from DynamoDB
+5. Resequences remaining scenes' displaySequence
+6. Recalculates project counters (sceneCount, completedScenes, failedScenes)
+
+**Note:** S3 assets are NOT deleted. Only the scene record is removed.
+""",
+    status_code=200
+)
+async def delete_scene(
+    project_id: str,
+    sequence: int,
+):
+    """
+    Delete a scene from a project.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+
+    Returns:
+        DeleteSceneResponse with deletion details
+
+    Raises:
+        404: Project or scene not found
+        400: Cannot delete last remaining scene
+        409: Cannot delete scene during composition
+        500: Database or internal error
+    """
+    try:
+        logger.info(
+            "delete_scene_request",
+            project_id=project_id,
+            sequence=sequence
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Validate sequence
+        if sequence < 1:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid sequence number",
+                    "details": "Sequence must be >= 1"
+                }
+            )
+
+        # Retrieve and validate project exists
+        pk = f"PROJECT#{project_id}"
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            logger.warning("project_not_found_for_delete_scene", project_id=project_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Check project status - cannot delete during composition
+        if project_item.status in ["composing", "pending"]:
+            logger.warning(
+                "invalid_project_state_for_delete_scene",
+                project_id=project_id,
+                current_status=project_item.status
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Conflict",
+                    "message": f"Cannot delete scene: project is in '{project_item.status}' status",
+                    "details": "Scenes cannot be deleted during composition or while project is pending"
+                }
+            )
+
+        # Query all scenes to count total
+        scenes = list(MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        ))
+
+        # Ensure at least 2 scenes exist (cannot delete last scene)
+        if len(scenes) < 2:
+            logger.warning(
+                "cannot_delete_last_scene",
+                project_id=project_id,
+                current_scene_count=len(scenes)
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Cannot delete last remaining scene",
+                    "details": f"Project must have at least 2 scenes. Current count: {len(scenes)}"
+                }
+            )
+
+        # Find scene by displaySequence (or sequence as fallback)
+        # We can't use SK directly because after deletions, SKs don't match display order
+        scene_item = None
+        for scene in scenes:
+            # Match by displaySequence first (what user sees), then fallback to sequence
+            if scene.displaySequence == sequence:
+                scene_item = scene
+                break
+            elif scene.displaySequence is None and scene.sequence == sequence:
+                # Fallback for scenes without displaySequence set
+                scene_item = scene
+                break
+        
+        if scene_item is None:
+            logger.warning(
+                "scene_not_found_for_delete",
+                project_id=project_id,
+                requested_sequence=sequence,
+                available_scenes=[(s.sequence, s.displaySequence) for s in scenes]
+            )
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Scene {sequence} not found in project {project_id}",
+                    "details": f"The specified scene does not exist. Available scenes: {[s.displaySequence if s.displaySequence is not None else s.sequence for s in scenes]}"
+                }
+            )
+
+        # Store deleted sequence for response (use displaySequence for user-facing response)
+        deleted_sequence = scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence
+
+        # Delete the scene item
+        try:
+            scene_item.delete()
+            logger.info(
+                "scene_deleted",
+                project_id=project_id,
+                sequence=sequence,
+                deleted_sequence=deleted_sequence
+            )
+        except Exception as delete_error:
+            logger.error(
+                "failed_to_delete_scene",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(delete_error),
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "DatabaseError",
+                    "message": "Failed to delete scene",
+                    "details": str(delete_error)
+                }
+            )
+
+        # Resequence remaining scenes' displaySequence
+        try:
+            resequence_display_order(project_id)
+            logger.info(
+                "resequencing_completed",
+                project_id=project_id,
+                deleted_sequence=deleted_sequence
+            )
+        except Exception as reseq_error:
+            logger.error(
+                "failed_to_resequence_after_delete",
+                project_id=project_id,
+                error=str(reseq_error),
+                exc_info=True
+            )
+            # Non-fatal error, but log it clearly
+            # Continue anyway - counters will still be updated
+
+        # Recalculate project counters
+        try:
+            recalculate_scene_counters(project_id)
+            # Reload project to get updated counts
+            project_item = MVProjectItem.get(pk, "METADATA")
+            remaining_count = project_item.sceneCount or 0
+        except Exception as counter_error:
+            logger.error(
+                "failed_to_recalculate_counters_after_delete",
+                project_id=project_id,
+                error=str(counter_error),
+                exc_info=True
+            )
+            # Fallback: calculate remaining count manually
+            remaining_scenes = list(MVProjectItem.query(
+                pk,
+                MVProjectItem.SK.startswith("SCENE#")
+            ))
+            remaining_count = len(remaining_scenes)
+
+        logger.info(
+            "delete_scene_success",
+            project_id=project_id,
+            deleted_sequence=deleted_sequence,
+            remaining_scene_count=remaining_count
+        )
+
+        return DeleteSceneResponse(
+            message="Scene deleted successfully",
+            deletedSequence=deleted_sequence,
+            remainingSceneCount=remaining_count
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "delete_scene_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to delete scene",
                 "details": str(e)
             }
         )
@@ -1787,7 +2083,7 @@ async def trim_scene_video(
             trim_points = json.loads(scene_item.trimPoints)
 
         return SceneResponse(
-            sequence=scene_item.sequence,
+            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,

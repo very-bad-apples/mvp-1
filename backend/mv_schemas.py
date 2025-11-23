@@ -145,6 +145,22 @@ class AddSceneResponse(BaseModel):
         }
 
 
+class DeleteSceneResponse(BaseModel):
+    """Response model for deleting a scene from a project."""
+    message: str = Field(..., description="Success message")
+    deletedSequence: int = Field(..., description="Sequence number of the deleted scene")
+    remainingSceneCount: int = Field(..., description="Number of scenes remaining in the project")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Scene deleted successfully",
+                "deletedSequence": 2,
+                "remainingSceneCount": 4
+            }
+        }
+
+
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")

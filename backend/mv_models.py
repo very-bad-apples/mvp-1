@@ -105,6 +105,7 @@ class MVProjectItem(BaseDynamoModel):
     # Scene-specific Attributes (only for entityType="scene")
     # NOTE: All *S3Key fields store S3 object keys, NOT presigned URLs
     sequence = NumberAttribute(null=True)
+    displaySequence = NumberAttribute(null=True)  # Mutable field for UI ordering (sequence is immutable, part of SK)
     prompt = UnicodeAttribute(null=True)
     negativePrompt = UnicodeAttribute(null=True)
     referenceImageS3Keys = ListAttribute(of=UnicodeAttribute, null=True)  # List of S3 keys, not URLs
@@ -172,6 +173,7 @@ class MVProjectItem(BaseDynamoModel):
         elif self.entityType == "scene":
             result.update({
                 "sequence": self.sequence,
+                "displaySequence": self.displaySequence,
                 "prompt": self.prompt,
                 "negativePrompt": self.negativePrompt,
                 "referenceImageS3Keys": list(self.referenceImageS3Keys) if self.referenceImageS3Keys is not None else [],
@@ -296,6 +298,7 @@ def create_scene_item(
     item.entityType = "scene"
     item.projectId = project_id
     item.sequence = sequence
+    item.displaySequence = sequence  # Initialize displaySequence to match sequence
     item.status = "pending"
     item.createdAt = now
     item.updatedAt = now
@@ -425,4 +428,125 @@ def decrement_completed_scene(project_id: str) -> None:
     """
     # Just recalculate the count - this is idempotent
     increment_completed_scene(project_id)
+
+
+def resequence_display_order(project_id: str) -> None:
+    """
+    Update displaySequence for all remaining scenes after a scene deletion.
+    Renumbers scenes sequentially starting from 1, sorted by current displaySequence.
+
+    Args:
+        project_id: Project UUID
+
+    Raises:
+        DoesNotExist: If project not found
+    """
+    pk = f"PROJECT#{project_id}"
+    try:
+        # Query all scenes for this project
+        scenes = list(MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        ))
+
+        if not scenes:
+            logger.info(
+                "no_scenes_to_resequence",
+                project_id=project_id
+            )
+            return
+
+        # First, ensure all scenes have displaySequence set (migration)
+        for scene in scenes:
+            if scene.displaySequence is None:
+                scene.displaySequence = scene.sequence
+                scene.updatedAt = datetime.now(timezone.utc)
+                scene.save()
+
+        # Sort by displaySequence (fallback to sequence if displaySequence is None)
+        scenes.sort(key=lambda s: s.displaySequence if s.displaySequence is not None else (s.sequence or 0))
+
+        # Renumber sequentially starting from 1
+        updated_count = 0
+        for i, scene in enumerate(scenes, start=1):
+            if scene.displaySequence != i:
+                scene.displaySequence = i
+                scene.updatedAt = datetime.now(timezone.utc)
+                scene.save()
+                updated_count += 1
+
+        logger.info(
+            "display_order_resequenced",
+            project_id=project_id,
+            total_scenes=len(scenes),
+            updated_count=updated_count
+        )
+    except DoesNotExist:
+        logger.error("project_not_found_for_resequence", project_id=project_id)
+        raise
+    except Exception as e:
+        logger.error(
+            "failed_to_resequence_display_order",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        raise
+
+
+def recalculate_scene_counters(project_id: str) -> None:
+    """
+    Recalculate sceneCount, completedScenes, and failedScenes from scratch.
+    This method is idempotent - it counts actual scene records rather than
+    incrementing/decrementing, preventing counter inconsistencies.
+
+    Args:
+        project_id: Project UUID
+
+    Raises:
+        DoesNotExist: If project not found
+    """
+    pk = f"PROJECT#{project_id}"
+    try:
+        # Query all scenes for this project
+        scenes = list(MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        ))
+
+        # Count scenes by status
+        total_count = len(scenes)
+        completed_count = sum(1 for scene in scenes if scene.status == "completed")
+        failed_count = sum(1 for scene in scenes if scene.status == "failed")
+
+        # Update project metadata with accurate counts
+        project_item = MVProjectItem.get(pk, "METADATA")
+        old_scene_count = project_item.sceneCount or 0
+        old_completed = project_item.completedScenes or 0
+        old_failed = project_item.failedScenes or 0
+
+        project_item.sceneCount = total_count
+        project_item.completedScenes = completed_count
+        project_item.failedScenes = failed_count
+        project_item.updatedAt = datetime.now(timezone.utc)
+        project_item.save()
+
+        logger.info(
+            "scene_counters_recalculated",
+            project_id=project_id,
+            scene_count={"old": old_scene_count, "new": total_count},
+            completed_scenes={"old": old_completed, "new": completed_count},
+            failed_scenes={"old": old_failed, "new": failed_count}
+        )
+    except DoesNotExist:
+        logger.error("project_not_found_for_counter_recalc", project_id=project_id)
+        raise
+    except Exception as e:
+        logger.error(
+            "failed_to_recalculate_counters",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        raise
 
