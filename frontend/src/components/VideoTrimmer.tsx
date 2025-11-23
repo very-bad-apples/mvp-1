@@ -21,6 +21,12 @@ export function VideoTrimmer({
   const [trimPoints, setTrimPoints] = React.useState(initialTrimPoints)
   const [isDragging, setIsDragging] = React.useState<'in' | 'out' | null>(null)
   const timelineRef = React.useRef<HTMLDivElement>(null)
+  const trimPointsRef = React.useRef(trimPoints)
+
+  // Keep ref in sync with state
+  React.useEffect(() => {
+    trimPointsRef.current = trimPoints
+  }, [trimPoints])
 
   // Ensure trim points are within valid range
   React.useEffect(() => {
@@ -78,17 +84,19 @@ export function VideoTrimmer({
         const newIn = Math.max(0, Math.min(time, trimPoints.out - 0.1))
         const newTrimPoints = { ...trimPoints, in: newIn }
         setTrimPoints(newTrimPoints)
-        onTrimPointsChange(newTrimPoints)
+        // Don't call onTrimPointsChange during drag - only on mouseup
       } else if (isDragging === 'out') {
         const newOut = Math.min(videoDuration, Math.max(time, trimPoints.in + 0.1))
         const newTrimPoints = { ...trimPoints, out: newOut }
         setTrimPoints(newTrimPoints)
-        onTrimPointsChange(newTrimPoints)
+        // Don't call onTrimPointsChange during drag - only on mouseup
       }
     }
 
     const handleMouseUp = () => {
       setIsDragging(null)
+      // Update parent only when drag ends, using the latest trimPoints from ref
+      onTrimPointsChange(trimPointsRef.current)
     }
 
     window.addEventListener('mousemove', handleMouseMove)
@@ -140,7 +148,7 @@ export function VideoTrimmer({
 
           {/* In point marker with thick border */}
           <div
-            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 hover:w-2 transition-all"
+            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 transition-shadow hover:shadow-[0_0_8px_2px_rgba(6,182,212,0.6)]"
             style={{ left: `${inPercentage}%` }}
             onMouseDown={handleMouseDown('in')}
           >
@@ -154,7 +162,7 @@ export function VideoTrimmer({
 
           {/* Out point marker with thick border */}
           <div
-            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 hover:w-2 transition-all"
+            className="absolute top-0 bottom-0 w-1 bg-cyan-500 cursor-ew-resize z-20 transition-shadow hover:shadow-[0_0_8px_2px_rgba(6,182,212,0.6)]"
             style={{ left: `${outPercentage}%` }}
             onMouseDown={handleMouseDown('out')}
           >
