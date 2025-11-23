@@ -222,6 +222,18 @@ class S3StorageService:
             )
             raise Exception(f"Failed to delete file from S3: {e}")
 
+    def delete_s3_object(self, s3_key: str) -> None:
+        """
+        Delete object from S3 (alias for delete_file for consistency).
+
+        Args:
+            s3_key: S3 object key to delete
+
+        Raises:
+            Exception: If deletion fails
+        """
+        self.delete_file(s3_key)
+
 
 def generate_s3_key(project_id: str, file_type: str, filename: str = None) -> str:
     """
@@ -294,6 +306,27 @@ def generate_scene_s3_key(project_id: str, sequence: int, asset_type: str) -> st
         raise ValueError(f"Unknown scene asset type: {asset_type}. Supported types: {list(type_extensions.keys())}")
 
     return f"{base_path}/{asset_type}.{ext}"
+
+
+def generate_working_clip_s3_key(
+    project_id: str,
+    sequence: int,
+    timestamp: int
+) -> str:
+    """
+    Generate S3 key for working clip (versioned with timestamp).
+
+    Format: mv/projects/{project_id}/scenes/{sequence}/working_clip_{timestamp}.mp4
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number
+        timestamp: Unix timestamp (seconds)
+
+    Returns:
+        S3 object key
+    """
+    return f"mv/projects/{project_id}/scenes/{sequence:03d}/working_clip_{timestamp}.mp4"
 
 
 def validate_s3_key(s3_key: Optional[str], field_name: str = "S3 key") -> Optional[str]:

@@ -6,6 +6,7 @@ Handles scene generation and related music video pipeline operations.
 
 import os
 import uuid
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -791,6 +792,34 @@ async def generate_scene_video(
                 }
             )
 
+        # NEW: Clean up old clips before regeneration
+        from services.s3_storage import get_s3_storage_service
+        s3_service = get_s3_storage_service()
+
+        # Delete old original clip (if exists and different from working clip)
+        if scene_item.originalVideoClipS3Key:
+            try:
+                logger.debug("deleting_old_original_clip", s3_key=scene_item.originalVideoClipS3Key)
+                s3_service.delete_s3_object(scene_item.originalVideoClipS3Key)
+            except Exception as del_error:
+                logger.warning("failed_to_delete_old_original_clip", error=str(del_error))
+
+        # Delete old working clip (if exists and different from original)
+        if scene_item.workingVideoClipS3Key and scene_item.workingVideoClipS3Key != scene_item.originalVideoClipS3Key:
+            try:
+                logger.debug("deleting_old_working_clip", s3_key=scene_item.workingVideoClipS3Key)
+                s3_service.delete_s3_object(scene_item.workingVideoClipS3Key)
+            except Exception as del_error:
+                logger.warning("failed_to_delete_old_working_clip", error=str(del_error))
+
+        # Clear video clip fields (will be reset after generation)
+        scene_item.originalVideoClipS3Key = None
+        scene_item.workingVideoClipS3Key = None
+        scene_item.trimPoints = None
+        scene_item.status = "processing"
+        scene_item.updatedAt = datetime.now(timezone.utc)
+        scene_item.save()
+
         # Prepare reference image (use scene's reference images or project's character/product image)
         reference_image_base64 = None
         reference_s3_key = None
@@ -913,7 +942,33 @@ async def generate_scene_video(
             # Track if scene was already completed
             was_completed = scene_item.status == "completed"
 
-            scene_item.videoClipS3Key = video_s3_key
+            # Initialize video clip fields (same as generate_scene_video_background)
+            from mv.video_trimmer import get_video_duration
+            # Get video duration from uploaded file
+            video_file_for_duration = BytesIO(video_bytes)
+            temp_video_path = None
+            try:
+                import tempfile
+                temp_dir = tempfile.mkdtemp()
+                temp_video_path = os.path.join(temp_dir, "temp_video.mp4")
+                with open(temp_video_path, 'wb') as f:
+                    f.write(video_bytes)
+                actual_duration = get_video_duration(temp_video_path)
+            except Exception as dur_error:
+                logger.warning("failed_to_get_video_duration", error=str(dur_error))
+                actual_duration = scene_item.duration or 8.0
+            finally:
+                if temp_video_path and os.path.exists(temp_video_path):
+                    try:
+                        import shutil
+                        shutil.rmtree(os.path.dirname(temp_video_path))
+                    except Exception:
+                        pass
+
+            scene_item.originalVideoClipS3Key = validate_s3_key(video_s3_key, "originalVideoClipS3Key")
+            scene_item.workingVideoClipS3Key = validate_s3_key(video_s3_key, "workingVideoClipS3Key")  # Same as original initially
+            scene_item.trimPoints = json.dumps({"in": 0.0, "out": actual_duration})  # Full clip
+            scene_item.duration = actual_duration  # Actual duration
             scene_item.status = "completed"
             scene_item.updatedAt = datetime.now(timezone.utc)
             scene_item.save()
@@ -1902,7 +1957,18 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                     # Update scene record (validate S3 key to ensure it's not a URL)
                     # Only set S3 key if we have a valid one (S3 upload succeeded or S3 not configured)
                     if video_s3_key:
-                        scene_item.videoClipS3Key = validate_s3_key(video_s3_key, "videoClipS3Key")
+                        # Initialize video clip fields
+                        from mv.video_trimmer import get_video_duration
+                        actual_duration = scene_item.duration or 8.0
+                        if video_path and os.path.exists(video_path):
+                            try:
+                                actual_duration = get_video_duration(video_path)
+                            except Exception as dur_error:
+                                logger.warning("failed_to_get_video_duration", error=str(dur_error))
+                        scene_item.originalVideoClipS3Key = validate_s3_key(video_s3_key, "originalVideoClipS3Key")
+                        scene_item.workingVideoClipS3Key = validate_s3_key(video_s3_key, "workingVideoClipS3Key")
+                        scene_item.trimPoints = json.dumps({"in": 0.0, "out": actual_duration})
+                        scene_item.duration = actual_duration
                     scene_item.videoGenerationJobId = video_id
                     # Only mark completed if S3 upload succeeded or S3 is not configured
                     if video_s3_key or not settings.STORAGE_BUCKET:
@@ -2416,7 +2482,7 @@ where the video's lip movements match the provided audio track.
    - Provide `project_id` and `sequence` (scene number)
    - Endpoint automatically fetches:
      - Audio from `project.audioBackingTrackS3Key` (from YouTube URL or uploaded audio)
-     - Video from `scene.videoClipS3Key` (generated scene video)
+     - Video from `scene.workingVideoClipS3Key` (generated scene video, may be trimmed)
    - Generates presigned URLs and sends to Replicate
    - Saves result to `scene.lipSyncedVideoClipS3Key` in DynamoDB
 

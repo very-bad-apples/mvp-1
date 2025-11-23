@@ -3,7 +3,7 @@ Pydantic schemas for Music Video project API endpoints.
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -21,7 +21,15 @@ class SceneResponse(BaseModel):
     duration: float
     referenceImageUrls: List[str] = Field(default_factory=list, description="List of presigned S3 URLs for reference images")
     audioClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for scene audio clip")
-    videoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for generated video clip")
+    
+    # Video clip fields (NEW)
+    originalVideoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for unmodified Veo-generated clip")
+    workingVideoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for trimmed/edited clip")
+    trimPoints: Optional[Dict[str, float]] = Field(None, description="Trim points: {'in': 0.0, 'out': 8.0}")
+    
+    # Backward compatibility (DEPRECATED)
+    videoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for video clip (alias for workingVideoClipUrl)")
+    
     needsLipSync: bool
     lipSyncedVideoClipUrl: Optional[str] = Field(None, description="Presigned S3 URL for lip-synced video clip")
     retryCount: int = 0
@@ -39,6 +47,9 @@ class SceneResponse(BaseModel):
                 "duration": 8.0,
                 "referenceImageUrls": ["https://s3.amazonaws.com/..."],
                 "audioClipUrl": "https://s3.amazonaws.com/...",
+                "originalVideoClipUrl": "https://s3.amazonaws.com/...",
+                "workingVideoClipUrl": "https://s3.amazonaws.com/...",
+                "trimPoints": {"in": 1.5, "out": 7.2},
                 "videoClipUrl": "https://s3.amazonaws.com/...",
                 "needsLipSync": True,
                 "lipSyncedVideoClipUrl": "https://s3.amazonaws.com/...",
@@ -60,6 +71,39 @@ class SceneUpdateRequest(BaseModel):
             "example": {
                 "prompt": "Updated scene description with more details",
                 "negativePrompt": "Updated negative prompt"
+            }
+        }
+
+
+class TrimSceneRequest(BaseModel):
+    """Request model for trimming a scene video."""
+    trimPoints: Dict[str, float]
+
+    @field_validator('trimPoints')
+    @classmethod
+    def validate_trim_points(cls, v):
+        """Validate trim points structure and basic constraints."""
+        if 'in' not in v or 'out' not in v:
+            raise ValueError("trimPoints must contain 'in' and 'out' keys")
+
+        if not isinstance(v['in'], (int, float)) or not isinstance(v['out'], (int, float)):
+            raise ValueError("Trim points must be numeric")
+
+        if v['in'] < 0:
+            raise ValueError("in point must be >= 0")
+
+        if v['out'] <= v['in']:
+            raise ValueError("out point must be > in point")
+
+        return v
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "trimPoints": {
+                    "in": 1.5,
+                    "out": 7.2
+                }
             }
         }
 
@@ -180,7 +224,7 @@ class ProjectUpdateRequest(BaseModel):
 class SceneWorkerUpdateRequest(BaseModel):
     """Request model for updating scene data (used by workers, not user-facing)."""
     status: Optional[str] = None
-    videoClipS3Key: Optional[str] = None
+    workingVideoClipS3Key: Optional[str] = None  # Updated to use new field name
     lipSyncedVideoClipS3Key: Optional[str] = None
     errorMessage: Optional[str] = None
 
@@ -188,7 +232,7 @@ class SceneWorkerUpdateRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "status": "completed",
-                "videoClipS3Key": "mv/projects/550e8400/scenes/001/video.mp4"
+                "workingVideoClipS3Key": "mv/projects/550e8400/scenes/001/video.mp4"
             }
         }
 

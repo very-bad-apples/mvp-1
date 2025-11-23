@@ -84,7 +84,7 @@ def main():
                     print(f"   Status: {scene.status}")
                     prompt = getattr(scene, 'prompt', 'No prompt')
                     print(f"   Prompt: {prompt[:100]}...")
-                    video_key = getattr(scene, 'videoClipS3Key', None)
+                    video_key = getattr(scene, 'workingVideoClipS3Key', None) or getattr(scene, 'originalVideoClipS3Key', None)
                     if video_key:
                         print(f"   Video: {video_key}")
                     duration = getattr(scene, 'duration', 0)

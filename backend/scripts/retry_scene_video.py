@@ -98,8 +98,10 @@ async def retry_scene_video(project_id: str, sequence: int):
     print(f"  Final status: {scene_item.status}")
     if scene_item.errorMessage:
         print(f"  Error: {scene_item.errorMessage}")
-    if scene_item.videoClipS3Key:
-        print(f"  Video S3 key: {scene_item.videoClipS3Key}")
+    if scene_item.workingVideoClipS3Key:
+        print(f"  Working Video S3 key: {scene_item.workingVideoClipS3Key}")
+    if scene_item.originalVideoClipS3Key:
+        print(f"  Original Video S3 key: {scene_item.originalVideoClipS3Key}")
 
 
 def main():
