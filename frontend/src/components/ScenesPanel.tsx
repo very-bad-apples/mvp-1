@@ -33,7 +33,17 @@ export function ScenesPanel({
   onProjectUpdate,
 }: ScenesPanelProps) {
   const [regeneratingScenes, setRegeneratingScenes] = useState<Set<string>>(new Set())
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const { toast } = useToast()
+
+  const handleEditScene = (sceneId: string) => {
+    setEditingSceneId(sceneId)
+    // TODO: Open SceneEditModal when it's implemented (Task 56)
+    toast({
+      title: 'Edit Scene',
+      description: 'Scene editing modal will be implemented in Task 56',
+    })
+  }
 
   const handleRegenerateScene = async (scene: ProjectScene, type: 'prompt' | 'video' | 'all') => {
     const sceneId = `scene-${scene.sequence}`
@@ -246,6 +256,20 @@ export function ScenesPanel({
                   <p className="text-sm text-gray-300 line-clamp-2 leading-relaxed">
                     {scene.prompt || 'No description available'}
                   </p>
+
+                  {/* Edit Scene Button */}
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditScene(sceneId)
+                    }}
+                    className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white border-blue-500/50"
+                    size="sm"
+                    disabled={isRegenerating}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Scene
+                  </Button>
 
                   {/* Error Message */}
                   {scene.errorMessage && (

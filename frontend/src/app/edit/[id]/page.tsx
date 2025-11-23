@@ -8,10 +8,9 @@ import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { ScenesPanel } from '@/components/ScenesPanel'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { generateScenes, composeVideo, updateScene } from '@/lib/api/client'
+import { generateScenes, composeVideo } from '@/lib/api/client'
 import { useToast } from '@/hooks/useToast'
 import { SceneGenerationOverlay } from '@/components/SceneGenerationOverlay'
-import { SceneDetailPanel } from '@/components/SceneDetailPanel'
 import { startFullGeneration } from '@/lib/orchestration'
 
 export default function EditPage({ params }: { params: { id: string } }) {
@@ -470,58 +469,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
   }
 
-  // Handle scene prompt update
-  const handleUpdateScenePrompt = async (sceneSequence: number, newPrompt: string) => {
-    if (!project) return
-
-    try {
-      // Update the scene via the new dedicated endpoint
-      await updateScene(params.id, sceneSequence, { prompt: newPrompt })
-
-      toast({
-        title: "Prompt Updated",
-        description: `Scene ${sceneSequence} prompt has been updated successfully.`,
-      })
-
-      // Refetch project to get updated data
-      await refetch()
-    } catch (error) {
-      console.error('Error updating scene prompt:', error)
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update scene prompt",
-        variant: "destructive",
-      })
-      throw error
-    }
-  }
-
-  // Handle scene negative prompt update
-  const handleUpdateSceneNegativePrompt = async (sceneSequence: number, newNegativePrompt: string) => {
-    if (!project) return
-
-    try {
-      // Update the scene via the dedicated endpoint
-      await updateScene(params.id, sceneSequence, { negativePrompt: newNegativePrompt })
-
-      toast({
-        title: "Negative Prompt Updated",
-        description: `Scene ${sceneSequence} negative prompt has been updated successfully.`,
-      })
-
-      // Refetch project to get updated data
-      await refetch()
-    } catch (error) {
-      console.error('Error updating scene negative prompt:', error)
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update scene negative prompt",
-        variant: "destructive",
-      })
-      throw error
-    }
-  }
-
   // Loading state
   if (loading && !project) {
     return (
@@ -643,15 +590,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
                 onAudioMuteChange={project?.audioBackingTrackUrl ? handleAudioMuteChange : undefined}
               />
             </div>
-
-            {/* Scene Detail Panel - Only show when a scene is selected */}
-            {selectedScene && (
-              <SceneDetailPanel
-                scene={selectedScene}
-                onUpdatePrompt={handleUpdateScenePrompt}
-                onUpdateNegativePrompt={handleUpdateSceneNegativePrompt}
-              />
-            )}
           </div>
         </div>
       </div>

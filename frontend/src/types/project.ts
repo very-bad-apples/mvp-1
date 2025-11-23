@@ -84,6 +84,15 @@ export interface ProjectScene {
   /** Lip-synced video clip URL (presigned S3 URL) */
   lipSyncedVideoClipUrl?: string | null
 
+  /** Original video clip URL before trimming (presigned S3 URL) */
+  originalVideoClipUrl?: string
+
+  /** Working video clip URL after trimming (presigned S3 URL) */
+  workingVideoClipUrl?: string
+
+  /** Trim points for video clip (in and out points in seconds) */
+  trimPoints?: { in: number; out: number }
+
   /** Retry count for failed generations */
   retryCount: number
 
