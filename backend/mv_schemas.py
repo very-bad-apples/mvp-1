@@ -108,6 +108,43 @@ class TrimSceneRequest(BaseModel):
         }
 
 
+class AddSceneRequest(BaseModel):
+    """Request model for adding a new scene to an existing project."""
+    sceneConcept: str = Field(..., min_length=1, max_length=2000, description="User's concept for the new scene")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "sceneConcept": "A dramatic close-up of the artist performing with intense emotion"
+            }
+        }
+
+
+class AddSceneResponse(BaseModel):
+    """Response model for adding a new scene to a project."""
+    scene: SceneResponse = Field(..., description="The newly created scene")
+    message: str = Field(default="Scene added successfully", description="Success message")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "scene": {
+                    "sequence": 5,
+                    "status": "pending",
+                    "prompt": "A dramatic close-up of the artist performing with intense emotion",
+                    "negativePrompt": "No background distractions",
+                    "duration": 8.0,
+                    "referenceImageUrls": ["https://s3.amazonaws.com/..."],
+                    "needsLipSync": True,
+                    "retryCount": 0,
+                    "createdAt": "2025-01-21T10:00:00Z",
+                    "updatedAt": "2025-01-21T10:00:00Z"
+                },
+                "message": "Scene added successfully"
+            }
+        }
+
+
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")
