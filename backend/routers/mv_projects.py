@@ -9,7 +9,9 @@ import os
 import asyncio
 import structlog
 import tempfile
-import os
+import time
+import shutil
+import requests
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional, List
@@ -20,6 +22,9 @@ from mv_schemas import (
     ProjectResponse,
     ProjectUpdateRequest,
     SceneUpdateRequest,
+    TrimSceneRequest,
+    AddSceneRequest,
+    AddSceneResponse,
     ComposeRequest,
     ComposeResponse,
     FinalVideoResponse,
@@ -44,6 +49,62 @@ import json
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/mv", tags=["MV Projects"])
+
+
+async def get_next_scene_sequence(project_id: str) -> int:
+    """
+    Get the next sequence number for a new scene in a project.
+    
+    Queries all existing scenes for the project and returns max(sequence) + 1.
+    Returns 1 if no scenes exist.
+    
+    Args:
+        project_id: Project UUID
+        
+    Returns:
+        Next sequence number (1-indexed)
+        
+    Raises:
+        DoesNotExist: If project doesn't exist (should be checked before calling)
+    """
+    pk = f"PROJECT#{project_id}"
+    
+    try:
+        # Query all scenes for this project
+        scenes = MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        )
+        
+        # Extract sequence numbers
+        sequences = [scene.sequence for scene in scenes if hasattr(scene, 'sequence') and scene.sequence is not None]
+        
+        if not sequences:
+            logger.info(
+                "no_existing_scenes",
+                project_id=project_id,
+                next_sequence=1
+            )
+            return 1
+        
+        next_sequence = max(sequences) + 1
+        logger.info(
+            "next_scene_sequence_calculated",
+            project_id=project_id,
+            max_sequence=max(sequences),
+            next_sequence=next_sequence
+        )
+        return next_sequence
+        
+    except Exception as e:
+        logger.error(
+            "failed_to_get_next_scene_sequence",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        # Default to 1 if query fails (edge case)
+        return 1
 
 
 async def generate_scenes_and_videos_background(
@@ -340,6 +401,10 @@ async def generate_scene_video_background(
                     asset_type="video"
                 )
                 
+                # Extract video duration before upload
+                from mv.video_trimmer import get_video_duration
+                actual_duration = get_video_duration(video_path)
+                
                 # Upload video to S3 (using upload_file_from_path for simplicity)
                 s3_service.upload_file_from_path(
                     file_path=video_path,
@@ -351,16 +416,21 @@ async def generate_scene_video_background(
                     "scene_video_uploaded_to_s3",
                     project_id=project_id,
                     sequence=sequence,
-                    s3_key=s3_key
+                    s3_key=s3_key,
+                    duration=actual_duration
                 )
                 
-                # Update scene record with S3 key
+                # Update scene record with video clip fields
                 pk = f"PROJECT#{project_id}"
                 sk = f"SCENE#{sequence:03d}"
                 
                 try:
                     scene_item = MVProjectItem.get(pk, sk)
-                    scene_item.videoClipS3Key = s3_key
+                    # Initialize video clip fields
+                    scene_item.originalVideoClipS3Key = s3_key
+                    scene_item.workingVideoClipS3Key = s3_key  # Same as original initially
+                    scene_item.trimPoints = json.dumps({"in": 0.0, "out": actual_duration})  # Full clip
+                    scene_item.duration = actual_duration  # Actual duration
                     scene_item.status = "completed"
                     scene_item.updatedAt = datetime.now(timezone.utc)
                     scene_item.save()
@@ -748,13 +818,23 @@ async def get_project(project_id: str):
             if scene_item.audioClipS3Key:
                 audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
 
-            video_url = None
-            if scene_item.videoClipS3Key:
-                video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+            # Video clip URLs (NEW)
+            original_video_url = None
+            if scene_item.originalVideoClipS3Key:
+                original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+            working_video_url = None
+            if scene_item.workingVideoClipS3Key:
+                working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
 
             lipsynced_url = None
             if scene_item.lipSyncedVideoClipS3Key:
                 lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+            # Parse trim points
+            trim_points = None
+            if scene_item.trimPoints:
+                trim_points = json.loads(scene_item.trimPoints)
 
             scenes.append(SceneResponse(
                 sequence=scene_item.sequence,
@@ -764,7 +844,10 @@ async def get_project(project_id: str):
                 duration=scene_item.duration,
                 referenceImageUrls=reference_urls,
                 audioClipUrl=audio_url,
-                videoClipUrl=video_url,
+                originalVideoClipUrl=original_video_url,
+                workingVideoClipUrl=working_video_url,
+                videoClipUrl=working_video_url,  # Backward compatibility
+                trimPoints=trim_points,
                 needsLipSync=scene_item.needsLipSync,
                 lipSyncedVideoClipUrl=lipsynced_url,
                 retryCount=scene_item.retryCount or 0,
@@ -1026,13 +1109,23 @@ async def update_scene(
         if scene_item.audioClipS3Key:
             audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
 
-        video_url = None
-        if scene_item.videoClipS3Key:
-            video_url = s3_service.generate_presigned_url(scene_item.videoClipS3Key)
+        # Video clip URLs (NEW)
+        original_video_url = None
+        if scene_item.originalVideoClipS3Key:
+            original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+        working_video_url = None
+        if scene_item.workingVideoClipS3Key:
+            working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
 
         lipsynced_url = None
         if scene_item.lipSyncedVideoClipS3Key:
             lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        # Parse trim points
+        trim_points = None
+        if scene_item.trimPoints:
+            trim_points = json.loads(scene_item.trimPoints)
 
         return SceneResponse(
             sequence=scene_item.sequence,
@@ -1042,7 +1135,10 @@ async def update_scene(
             duration=scene_item.duration,
             referenceImageUrls=reference_urls,
             audioClipUrl=audio_url,
-            videoClipUrl=video_url,
+            originalVideoClipUrl=original_video_url,
+            workingVideoClipUrl=working_video_url,
+            videoClipUrl=working_video_url,  # Backward compatibility
+            trimPoints=trim_points,
             needsLipSync=scene_item.needsLipSync or False,
             lipSyncedVideoClipUrl=lipsynced_url,
             retryCount=scene_item.retryCount or 0,
@@ -1066,6 +1162,647 @@ async def update_scene(
             detail={
                 "error": "InternalError",
                 "message": "Failed to update scene",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/projects/{project_id}/scenes",
+    response_model=AddSceneResponse,
+    status_code=201,
+    summary="Add New Scene to Project",
+    description="""
+Generate and add a single new scene to an existing project with automatic video generation.
+
+This endpoint:
+1. Validates project exists and is in valid state (completed or processing)
+2. Gets next sequence number for the new scene
+3. Generates a single scene using project's context (mode, director config, reference images)
+4. Creates scene item in DynamoDB with new sequence
+5. Triggers video generation in background
+6. Returns the newly created scene
+
+**Project State Requirements:**
+- Project must exist and be in "completed" or "processing" status
+- Cannot add scenes to "pending" (initial generation in progress)
+- Cannot add scenes to "failed" (needs retry of original generation)
+- Cannot add scenes to "composing" (final video generation in progress)
+
+**Scene Generation:**
+- Uses project's existing mode (music-video or ad-creative)
+- Uses project's director config (if set)
+- Uses project's character reference image (if exists)
+- Uses project's character description as personality profile
+
+**Example Request:**
+```json
+{
+  "sceneConcept": "A dramatic close-up of the artist performing with intense emotion"
+}
+```
+"""
+)
+async def add_scene(
+    project_id: str,
+    request: AddSceneRequest
+):
+    """
+    Add a new scene to an existing project.
+
+    Args:
+        project_id: Project UUID
+        request: Scene concept description
+
+    Returns:
+        AddSceneResponse with newly created scene
+
+    Raises:
+        404: Project not found
+        400: Invalid project state or scene concept validation failed
+        500: Scene generation or creation failed
+    """
+    try:
+        logger.info(
+            "add_scene_request",
+            project_id=project_id,
+            scene_concept_preview=request.sceneConcept[:50] if request.sceneConcept else ""
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Retrieve and validate project exists
+        pk = f"PROJECT#{project_id}"
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            logger.warning("project_not_found_for_add_scene", project_id=project_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Validate project state - only allow adding scenes to completed or processing projects
+        if project_item.status not in ["completed", "processing"]:
+            logger.warning(
+                "invalid_project_state_for_add_scene",
+                project_id=project_id,
+                current_status=project_item.status
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": f"Cannot add scene: project is in '{project_item.status}' status",
+                    "details": "Scenes can only be added to projects with 'completed' or 'processing' status"
+                }
+            )
+
+        # Get project context for scene generation
+        project_mode = project_item.mode or "music-video"  # Default to music-video if not set
+        director_config = project_item.directorConfig
+        character_description = project_item.characterDescription or ""
+        character_image_s3_key = project_item.characterImageS3Key
+        product_image_s3_key = project_item.productImageS3Key
+
+        logger.info(
+            "project_context_retrieved",
+            project_id=project_id,
+            mode=project_mode,
+            has_director_config=director_config is not None,
+            has_character_image=character_image_s3_key is not None,
+            has_product_image=product_image_s3_key is not None
+        )
+
+        # Get next sequence number
+        next_sequence = await get_next_scene_sequence(project_id)
+        logger.info(
+            "next_sequence_calculated",
+            project_id=project_id,
+            next_sequence=next_sequence
+        )
+
+        # Generate single scene using project's context
+        try:
+            scenes, _output_files = generate_scenes(
+                mode=project_mode,
+                concept_prompt=request.sceneConcept,
+                personality_profile=character_description,
+                director_config=director_config,
+                number_of_scenes_override=1
+            )
+        except Exception as gen_error:
+            logger.error(
+                "scene_generation_failed",
+                project_id=project_id,
+                error=str(gen_error),
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GenerationError",
+                    "message": "Failed to generate scene",
+                    "details": str(gen_error)
+                }
+            )
+
+        # Validate exactly one scene was generated
+        if not scenes or len(scenes) != 1:
+            logger.error(
+                "invalid_scene_count",
+                project_id=project_id,
+                expected=1,
+                actual=len(scenes) if scenes else 0
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GenerationError",
+                    "message": f"Expected 1 scene, got {len(scenes) if scenes else 0}",
+                    "details": "Scene generation returned unexpected number of scenes"
+                }
+            )
+
+        generated_scene = scenes[0]
+
+        # Prepare reference image S3 keys
+        # Use product image for ad-creative mode, character image for music-video mode
+        reference_image_s3_keys = []
+        if project_mode == "ad-creative" and product_image_s3_key:
+            reference_image_s3_keys = [product_image_s3_key]
+        elif character_image_s3_key:
+            reference_image_s3_keys = [character_image_s3_key]
+
+        logger.info(
+            "preparing_scene_creation",
+            project_id=project_id,
+            sequence=next_sequence,
+            mode=project_mode,
+            has_reference_images=len(reference_image_s3_keys) > 0,
+            reference_image_s3_keys=reference_image_s3_keys,
+            using_product_image=project_mode == "ad-creative" and product_image_s3_key is not None
+        )
+
+        # Create scene item in DynamoDB
+        try:
+            scene_item = create_scene_item(
+                project_id=project_id,
+                sequence=next_sequence,
+                prompt=generated_scene.description,
+                negative_prompt=generated_scene.negative_description,
+                duration=8.0,  # Default duration
+                needs_lipsync=True,  # TODO: Determine based on mode
+                reference_image_s3_keys=reference_image_s3_keys
+            )
+            scene_item.save()
+            
+            # Reload scene item to ensure we have the latest saved values
+            pk = f"PROJECT#{project_id}"
+            sk = f"SCENE#{next_sequence:03d}"
+            scene_item = MVProjectItem.get(pk, sk)
+            
+            logger.info(
+                "scene_item_created",
+                project_id=project_id,
+                sequence=next_sequence,
+                reference_image_count=len(scene_item.referenceImageS3Keys) if scene_item.referenceImageS3Keys else 0
+            )
+        except Exception as create_error:
+            logger.error(
+                "scene_item_creation_failed",
+                project_id=project_id,
+                sequence=next_sequence,
+                error=str(create_error),
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "DatabaseError",
+                    "message": "Failed to create scene item",
+                    "details": str(create_error)
+                }
+            )
+
+        # Update project's sceneCount
+        try:
+            project_item.sceneCount = (project_item.sceneCount or 0) + 1
+            project_item.updatedAt = datetime.now(timezone.utc)
+            project_item.save()
+            logger.info(
+                "project_scene_count_updated",
+                project_id=project_id,
+                new_count=project_item.sceneCount
+            )
+        except Exception as update_error:
+            logger.warning(
+                "failed_to_update_scene_count",
+                project_id=project_id,
+                error=str(update_error),
+                exc_info=True
+            )
+            # Non-fatal error, continue
+
+        # Extract character/product reference ID from S3 key if exists
+        # Use product image ID for ad-creative mode, character image ID for music-video mode
+        character_reference_id = None
+        reference_s3_key = None
+        if project_mode == "ad-creative" and product_image_s3_key:
+            reference_s3_key = product_image_s3_key
+        elif character_image_s3_key:
+            reference_s3_key = character_image_s3_key
+        
+        if reference_s3_key:
+            # Extract UUID from S3 key (format: character_references/{uuid}.{ext})
+            try:
+                parts = reference_s3_key.split('/')
+                if len(parts) >= 2 and parts[-2] == 'character_references':
+                    character_reference_id = parts[-1].split('.')[0]  # Remove extension
+            except Exception:
+                pass  # If extraction fails, character_reference_id stays None
+
+        # Trigger video generation in background
+        try:
+            asyncio.create_task(
+                generate_scene_video_background(
+                    project_id=project_id,
+                    sequence=next_sequence,
+                    prompt=generated_scene.description,
+                    negative_prompt=generated_scene.negative_description,
+                    character_reference_id=character_reference_id,
+                    duration=8.0
+                )
+            )
+            logger.info(
+                "video_generation_queued",
+                project_id=project_id,
+                sequence=next_sequence
+            )
+        except Exception as task_error:
+            logger.error(
+                "failed_to_queue_video_generation",
+                project_id=project_id,
+                sequence=next_sequence,
+                error=str(task_error),
+                exc_info=True
+            )
+            # Non-fatal error, scene is created but video generation will need manual trigger
+
+        # Build response with presigned URLs
+        s3_service = get_s3_storage_service()
+
+        reference_urls = []
+        if scene_item.referenceImageS3Keys:
+            for key in scene_item.referenceImageS3Keys:
+                reference_urls.append(s3_service.generate_presigned_url(key))
+
+        audio_url = None
+        if scene_item.audioClipS3Key:
+            audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+        # Video clip URLs (will be None for new scene)
+        original_video_url = None
+        if scene_item.originalVideoClipS3Key:
+            original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+        working_video_url = None
+        if scene_item.workingVideoClipS3Key:
+            working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
+
+        lipsynced_url = None
+        if scene_item.lipSyncedVideoClipS3Key:
+            lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        # Parse trim points
+        trim_points = None
+        if scene_item.trimPoints:
+            trim_points = json.loads(scene_item.trimPoints)
+
+        scene_response = SceneResponse(
+            sequence=scene_item.sequence,
+            status=scene_item.status,
+            prompt=scene_item.prompt,
+            negativePrompt=scene_item.negativePrompt,
+            duration=scene_item.duration,
+            referenceImageUrls=reference_urls,
+            audioClipUrl=audio_url,
+            originalVideoClipUrl=original_video_url,
+            workingVideoClipUrl=working_video_url,
+            videoClipUrl=working_video_url,  # Backward compatibility
+            trimPoints=trim_points,
+            needsLipSync=scene_item.needsLipSync or False,
+            lipSyncedVideoClipUrl=lipsynced_url,
+            retryCount=scene_item.retryCount or 0,
+            errorMessage=scene_item.errorMessage,
+            createdAt=scene_item.createdAt,
+            updatedAt=scene_item.updatedAt
+        )
+
+        return AddSceneResponse(
+            scene=scene_response,
+            message="Scene added successfully"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "add_scene_error",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to add scene",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
+    "/projects/{project_id}/scenes/{sequence}/trim",
+    response_model=SceneResponse,
+    summary="Trim Scene Video",
+    description="""
+Trim a scene's video clip to specified IN/OUT points.
+
+This endpoint:
+1. Validates trim points (clamps to valid range: 0 to video duration)
+2. Downloads original clip from S3 to temporary file
+3. Trims video using moviepy
+4. Deletes old working clip from S3 (if different from original)
+5. Uploads new trimmed clip to S3 with versioned filename
+6. Updates scene with new workingVideoClipS3Key and trimPoints
+7. Updates scene duration to reflect trimmed clip duration
+
+**Note:** This is a synchronous operation. Response returns when trim is complete.
+
+**Trim Points:**
+- IN point: Start time in seconds (millisecond precision)
+- OUT point: End time in seconds (millisecond precision)
+- Automatically clamped to valid range [0, video_duration]
+- Minimum clip duration: 0.1 seconds
+
+**Example Request:**
+```json
+{
+  "trimPoints": {
+    "in": 1.5,
+    "out": 7.2
+  }
+}
+```
+"""
+)
+async def trim_scene_video(
+    project_id: str,
+    sequence: int,
+    trim_request: TrimSceneRequest
+):
+    """
+    Trim a scene's video clip.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+        trim_request: Trim points (in, out)
+
+    Returns:
+        Updated SceneResponse with new working clip URL
+
+    Raises:
+        404: Project or scene not found
+        400: Invalid trim points or missing original clip
+        500: Trim operation failed
+    """
+    try:
+        logger.info(
+            "trim_scene_request",
+            project_id=project_id,
+            sequence=sequence,
+            trim_points=trim_request.trimPoints
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Validate sequence
+        if sequence < 1:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid sequence number",
+                    "details": "Sequence must be >= 1"
+                }
+            )
+
+        # Retrieve scene
+        pk = f"PROJECT#{project_id}"
+        sk = f"SCENE#{sequence:03d}"
+
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+        except DoesNotExist:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Scene {sequence} not found in project {project_id}",
+                    "details": "The specified scene does not exist"
+                }
+            )
+
+        # Validate original clip exists
+        if not scene_item.originalVideoClipS3Key:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Cannot trim scene: original video clip not available",
+                    "details": "Scene must have a generated video clip before trimming"
+                }
+            )
+
+        # Extract trim points
+        in_point = trim_request.trimPoints["in"]
+        out_point = trim_request.trimPoints["out"]
+
+        # Import dependencies
+        from mv.video_trimmer import trim_video, get_video_duration
+        from services.s3_storage import get_s3_storage_service, generate_working_clip_s3_key
+
+        s3_service = get_s3_storage_service()
+
+        # Download original clip from S3 to temp file
+        temp_dir = tempfile.mkdtemp()
+        try:
+            original_video_path = os.path.join(temp_dir, "original.mp4")
+
+            logger.debug("downloading_original_clip", s3_key=scene_item.originalVideoClipS3Key)
+            # Download using presigned URL
+            original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+            response = requests.get(original_video_url, stream=True)
+            response.raise_for_status()
+            with open(original_video_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            # Get video duration for validation
+            video_duration = get_video_duration(original_video_path)
+            logger.debug("original_video_duration", duration=video_duration)
+
+            # Trim video
+            trimmed_video_path = os.path.join(temp_dir, "trimmed.mp4")
+            trim_metadata = trim_video(
+                source_video_path=original_video_path,
+                output_path=trimmed_video_path,
+                in_point=in_point,
+                out_point=out_point
+            )
+
+            logger.info("video_trimmed", metadata=trim_metadata)
+
+            # Generate new working clip S3 key with timestamp
+            timestamp = int(time.time())
+            new_working_clip_s3_key = generate_working_clip_s3_key(
+                project_id=project_id,
+                sequence=sequence,
+                timestamp=timestamp
+            )
+
+            # Delete old working clip from S3 (if different from original)
+            if scene_item.workingVideoClipS3Key and scene_item.workingVideoClipS3Key != scene_item.originalVideoClipS3Key:
+                try:
+                    logger.debug("deleting_old_working_clip", s3_key=scene_item.workingVideoClipS3Key)
+                    s3_service.delete_s3_object(scene_item.workingVideoClipS3Key)
+                except Exception as del_error:
+                    logger.warning("failed_to_delete_old_working_clip", error=str(del_error))
+                    # Non-critical error, continue
+
+            # Upload trimmed clip to S3
+            logger.debug("uploading_trimmed_clip", s3_key=new_working_clip_s3_key)
+            s3_service.upload_file_from_path(
+                file_path=trimmed_video_path,
+                s3_key=new_working_clip_s3_key,
+                content_type="video/mp4"
+            )
+
+            # Update scene record
+            scene_item.workingVideoClipS3Key = new_working_clip_s3_key
+            scene_item.trimPoints = json.dumps({
+                "in": trim_metadata["in_point"],
+                "out": trim_metadata["out_point"]
+            })
+            scene_item.duration = trim_metadata["duration"]  # Update to trimmed duration
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+
+            logger.info(
+                "scene_trim_complete",
+                project_id=project_id,
+                sequence=sequence,
+                working_clip_s3_key=new_working_clip_s3_key,
+                duration=trim_metadata["duration"]
+            )
+
+        finally:
+            # Clean up temp files
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as cleanup_error:
+                logger.warning("temp_cleanup_failed", error=str(cleanup_error))
+
+        # Generate presigned URLs for response
+        reference_urls = []
+        if scene_item.referenceImageS3Keys:
+            for key in scene_item.referenceImageS3Keys:
+                reference_urls.append(s3_service.generate_presigned_url(key))
+
+        audio_url = None
+        if scene_item.audioClipS3Key:
+            audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+        original_video_url = None
+        if scene_item.originalVideoClipS3Key:
+            original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+        working_video_url = None
+        if scene_item.workingVideoClipS3Key:
+            working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
+
+        lipsynced_url = None
+        if scene_item.lipSyncedVideoClipS3Key:
+            lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        trim_points = None
+        if scene_item.trimPoints:
+            trim_points = json.loads(scene_item.trimPoints)
+
+        return SceneResponse(
+            sequence=scene_item.sequence,
+            status=scene_item.status,
+            prompt=scene_item.prompt,
+            negativePrompt=scene_item.negativePrompt,
+            duration=scene_item.duration,
+            referenceImageUrls=reference_urls,
+            audioClipUrl=audio_url,
+            originalVideoClipUrl=original_video_url,
+            workingVideoClipUrl=working_video_url,
+            videoClipUrl=working_video_url,  # Backward compatibility
+            trimPoints=trim_points,
+            needsLipSync=scene_item.needsLipSync or False,
+            lipSyncedVideoClipUrl=lipsynced_url,
+            retryCount=scene_item.retryCount or 0,
+            errorMessage=scene_item.errorMessage,
+            createdAt=scene_item.createdAt,
+            updatedAt=scene_item.updatedAt
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "trim_scene_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to trim scene video",
                 "details": str(e)
             }
         )
@@ -1178,157 +1915,6 @@ async def start_generation(project_id: str):
                         "details": "Project mode must be 'music-video' or 'ad-creative'"
                     }
                 )
-
-        # Update project status to processing IMMEDIATELY
-        # This allows the UI to update before the long-running Gemini call
-        project_item.status = "processing"
-        project_item.GSI1PK = "processing"
-        project_item.updatedAt = datetime.now(timezone.utc)
-        project_item.save()
-
-        logger.info(
-            "generation_started_status_updated",
-            project_id=project_id,
-            status="processing"
-        )
-
-        # Return updated project IMMEDIATELY so UI can show "processing" state
-        # Scene generation will happen in background
-        response = await get_project(project_id)
-
-        # Start background task for scene generation and video generation
-        # This runs asynchronously so the endpoint can return immediately
-        task = asyncio.create_task(
-            generate_scenes_and_videos_background(
-                project_id=project_id,
-                concept_prompt=project_item.conceptPrompt,
-                character_description=project_item.characterDescription,
-                character_image_s3_key=project_item.characterImageS3Key
-            )
-        )
-
-        # Add error callback to log any unhandled exceptions
-        def main_task_done_callback(t):
-            try:
-                t.result()  # This will raise if task had an exception
-            except Exception as e:
-                logger.error(
-                    "main_background_generation_task_failed",
-                    project_id=project_id,
-                    error=str(e),
-                    exc_info=True
-                )
-        task.add_done_callback(main_task_done_callback)
-
-        logger.info(
-            "background_generation_queued",
-            project_id=project_id
-        )
-
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("start_generation_error", project_id=project_id, error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "InternalError",
-                "message": "Failed to start generation",
-                "details": str(e)
-            }
-        )
-
-
-@router.post(
-    "/projects/{project_id}/generate",
-    response_model=ProjectResponse,
-    summary="Start Project Generation",
-    description="""
-Start the generation workflow for a project.
-
-This endpoint:
-1. Validates the project exists
-2. Checks if scenes already exist (returns error if they do)
-3. Updates project status to "processing" immediately
-4. Returns the updated project immediately (for UI responsiveness)
-5. Generates scene descriptions using Gemini in the background
-6. Creates scene records in DynamoDB
-7. Triggers video generation for each scene
-
-**Note:** This endpoint returns immediately. Scene generation and video generation
-happen asynchronously in the background. Use polling to track progress.
-"""
-)
-async def start_generation(project_id: str):
-    """
-    Start generation workflow for a project.
-
-    Args:
-        project_id: Project UUID
-
-    Returns:
-        ProjectResponse with generated scenes
-    """
-    try:
-        logger.info("start_generation_request", project_id=project_id)
-
-        # Validate project_id format
-        try:
-            project_id = str(uuid.UUID(project_id))
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Invalid project ID format",
-                    "details": "Project ID must be a valid UUID"
-                }
-            )
-
-        # Retrieve project metadata
-        pk = f"PROJECT#{project_id}"
-
-        try:
-            project_item = MVProjectItem.get(pk, "METADATA")
-        except DoesNotExist:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "NotFound",
-                    "message": f"Project {project_id} not found",
-                    "details": "The specified project does not exist"
-                }
-            )
-
-        # Check if scenes already exist
-        existing_scenes = MVProjectItem.query(
-            pk,
-            MVProjectItem.SK.startswith("SCENE#")
-        )
-        scene_count = sum(1 for _ in existing_scenes)
-
-        if scene_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": "Scenes already exist for this project",
-                    "details": f"Project already has {scene_count} scene(s). Generation can only be started once."
-                }
-            )
-
-        # Check if project is in valid state
-        if project_item.status not in ["pending", "failed"]:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "ValidationError",
-                    "message": f"Project is in '{project_item.status}' status",
-                    "details": "Generation can only be started for projects in 'pending' or 'failed' status"
-                }
-            )
 
         # Update project status to processing IMMEDIATELY
         # This allows the UI to update before the long-running Gemini call

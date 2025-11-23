@@ -192,6 +192,7 @@ def generate_scenes(
     concept_prompt: str,
     personality_profile: str,
     director_config: Optional[str] = None,
+    number_of_scenes_override: Optional[int] = None,
 ) -> tuple[list[Scene], dict[str, str]]:
     """
     Generate scene descriptions for a video project using mode-based templates.
@@ -204,6 +205,8 @@ def generate_scenes(
         concept_prompt: User's overall video concept
         personality_profile: Character or brand personality description
         director_config: Optional director style to inject (e.g., "Wes-Anderson", "David-Lynch")
+        number_of_scenes_override: Optional override for template's number_of_scenes value.
+            When provided, replaces template value. Useful for generating single scenes.
 
     Returns:
         Tuple of (scene list, output file paths dict)
@@ -217,6 +220,8 @@ def generate_scenes(
         "generate_scenes_started",
         mode=mode,
         has_director_config=director_config is not None,
+        has_override=number_of_scenes_override is not None,
+        override_value=number_of_scenes_override,
         concept_preview=concept_prompt[:50] if concept_prompt else ""
     )
 
@@ -234,6 +239,16 @@ def generate_scenes(
     # Extract parameters from template
     prompt_template = template["prompt_template"]
     number_of_scenes = template["number_of_scenes"]
+    
+    # Apply override if provided
+    if number_of_scenes_override is not None:
+        logger.info(
+            "number_of_scenes_override_applied",
+            template_value=number_of_scenes,
+            override_value=number_of_scenes_override
+        )
+        number_of_scenes = number_of_scenes_override
+    
     video_characteristics = template["video_characteristics"]
     camera_angle = template["camera_angle"]
     duration_per_scene = template["duration_per_scene"]
@@ -324,7 +339,9 @@ Ensure ALL generated scenes reflect this aesthetic in their descriptions. Includ
         logger.warning(
             "scene_count_mismatch",
             expected=number_of_scenes,
-            actual=len(scenes)
+            actual=len(scenes),
+            override_used=number_of_scenes_override is not None,
+            override_value=number_of_scenes_override
         )
 
     # Save scenes to files
