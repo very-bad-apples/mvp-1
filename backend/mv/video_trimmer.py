@@ -147,8 +147,8 @@ def trim_video(
             in_point, out_point, original_duration
         )
 
-        # Trim video using subclip
-        trimmed_clip = clip.subclip(in_point, out_point)
+        # Trim video using with_subclip (moviepy 2.0.0 API)
+        trimmed_clip = clip.with_subclip(in_point, out_point)
         trimmed_duration = trimmed_clip.duration
 
         logger.debug(
