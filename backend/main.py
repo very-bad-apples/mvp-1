@@ -247,7 +247,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         path=request.url.path,
         method=request.method,
         error=str(exc),
-        exc_type=type(exc).__name__
+        exc_type=type(exc).__name__,
+        exc_info=True
     )
 
     return JSONResponse(
@@ -256,6 +257,12 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": "Internal server error",
             "message": "An unexpected error occurred. Please try again later.",
             "details": str(exc) if app.debug else None
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true"
         }
     )
 

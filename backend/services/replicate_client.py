@@ -178,6 +178,14 @@ class ReplicateClient:
                 output_type=type(output).__name__,
             )
 
+            # Convert FileOutput to string URL if use_file_output is False
+            if not use_file_output:
+                from replicate.helpers import FileOutput
+                if isinstance(output, FileOutput):
+                    return str(output)
+                elif isinstance(output, list):
+                    return [str(item) if isinstance(item, FileOutput) else item for item in output]
+            
             return output
 
         except ModelError as e:
