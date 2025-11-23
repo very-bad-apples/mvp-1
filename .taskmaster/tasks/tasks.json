@@ -739,8 +739,8 @@
         "testStrategy": "1. **Unit Tests**: Write unit tests for each API route using Jest and Supertest.\n   - Test project creation, retrieval, and update scenarios.\n   - Simulate file read/write operations and verify data integrity.\n\n2. **Integration Tests**: Conduct integration tests to ensure end-to-end functionality.\n   - Test API routes with actual file I/O operations.\n   - Verify that TypeScript interfaces enforce correct data structures.\n\n3. **Error Scenarios**: Test error handling by simulating file access errors and invalid API requests.\n   - Ensure appropriate HTTP status codes and error messages are returned.\n\n4. **Environment Variable Tests**: Verify that the file path can be configured via environment variables and defaults correctly if not set.",
         "status": "done",
         "dependencies": [
-          23,
-          24
+          "23",
+          "24"
         ],
         "priority": "medium",
         "subtasks": [
@@ -751,7 +751,8 @@
             "dependencies": [],
             "details": "Define `/api/projects` for POST and `/api/projects/[id]` for GET and PUT methods.",
             "status": "done",
-            "testStrategy": "Write unit tests for each route using Jest and Supertest."
+            "testStrategy": "Write unit tests for each route using Jest and Supertest.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -762,7 +763,8 @@
             ],
             "details": "Use Node.js `fs` module to handle JSON data read/write operations.",
             "status": "done",
-            "testStrategy": "Simulate file operations and verify data integrity."
+            "testStrategy": "Simulate file operations and verify data integrity.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -771,7 +773,8 @@
             "dependencies": [],
             "details": "Define interfaces for `Project` and `Scene` covering all necessary fields.",
             "status": "done",
-            "testStrategy": "Ensure interfaces are used across API routes for type safety."
+            "testStrategy": "Ensure interfaces are used across API routes for type safety.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -783,7 +786,8 @@
             ],
             "details": "Return appropriate HTTP status codes and messages for errors.",
             "status": "done",
-            "testStrategy": "Test error scenarios to ensure proper handling and messaging."
+            "testStrategy": "Test error scenarios to ensure proper handling and messaging.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -794,7 +798,8 @@
             ],
             "details": "Use environment variables to set the file path dynamically.",
             "status": "done",
-            "testStrategy": "Verify configuration changes through environment variables."
+            "testStrategy": "Verify configuration changes through environment variables.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -809,7 +814,8 @@
             ],
             "details": "Test the complete flow from API request to file storage and response.",
             "status": "done",
-            "testStrategy": "Conduct integration tests using Jest and Supertest."
+            "testStrategy": "Conduct integration tests using Jest and Supertest.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -821,9 +827,9 @@
         "testStrategy": "1. Verify the component renders correctly with mock data for each phase.\n2. Test responsiveness by resizing the browser window to ensure the layout switches between horizontal and vertical appropriately.\n3. Check accessibility features, ensuring keyboard navigation and screen reader compatibility.\n4. Validate prop types and ensure the component updates correctly when `currentPhase` and `overallProgress` props change.\n5. Test integration with the project dashboard to ensure it displays real-time progress updates.",
         "status": "done",
         "dependencies": [
-          19,
-          10,
-          29
+          "19",
+          "10",
+          "29"
         ],
         "priority": "medium",
         "subtasks": [
@@ -834,7 +840,8 @@
             "dependencies": [],
             "details": "Create a basic stepper layout using Kibo UI MCP. Define TypeScript interfaces for phase data, including properties for status, progress, icon, and estimated time.",
             "status": "done",
-            "testStrategy": "Verify the stepper structure renders correctly with mock data."
+            "testStrategy": "Verify the stepper structure renders correctly with mock data.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -845,7 +852,8 @@
             ],
             "details": "Add each phase step to the stepper using lucide-react icons. Ensure each step can display its status and icon correctly.",
             "status": "done",
-            "testStrategy": "Check that each phase step displays the correct icon and status."
+            "testStrategy": "Check that each phase step displays the correct icon and status.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -856,7 +864,8 @@
             ],
             "details": "Use shadcn/ui components like Badge and Progress to display progress percentage and status. Include estimated time for each phase.",
             "status": "done",
-            "testStrategy": "Test that progress indicators and badges update correctly based on phase data."
+            "testStrategy": "Test that progress indicators and badges update correctly based on phase data.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -867,7 +876,8 @@
             ],
             "details": "Use CSS media queries to adjust the layout for mobile devices. Ensure the stepper collapses to a vertical layout on smaller screens.",
             "status": "done",
-            "testStrategy": "Resize the browser window to test layout changes and ensure responsiveness."
+            "testStrategy": "Resize the browser window to test layout changes and ensure responsiveness.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -879,7 +889,7 @@
         "testStrategy": "1. **Unit Testing**: Write unit tests using Jest and React Testing Library to verify component rendering and prop handling.\n   - Test each UI element (title, ID, status badge, progress bar, metadata, buttons) for correct rendering.\n\n2. **Responsive Design Test**: Verify the component's responsiveness on various screen sizes using browser developer tools.\n\n3. **Integration Test**: Integrate the component into a page and ensure it displays correctly with real project data.\n\n4. **UI/UX Review**: Conduct a review with designers to ensure theme consistency and usability.",
         "status": "done",
         "dependencies": [
-          29
+          "29"
         ],
         "priority": "medium",
         "subtasks": [
@@ -890,7 +900,8 @@
             "dependencies": [],
             "details": "Create `frontend/src/components/ProjectHeader.tsx`. Define props for project data including title, ID, status, created date, mode, and concept prompt using TypeScript interfaces.",
             "status": "done",
-            "testStrategy": "Write unit tests to ensure props are correctly defined and handled."
+            "testStrategy": "Write unit tests to ensure props are correctly defined and handled.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -901,7 +912,8 @@
             ],
             "details": "Use Kibo UI MCP and shadcn/ui components to display the project title and ID prominently. Implement a status badge with color coding for different project statuses.",
             "status": "done",
-            "testStrategy": "Test rendering of title, ID, and status badge with different statuses."
+            "testStrategy": "Test rendering of title, ID, and status badge with different statuses.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -912,7 +924,8 @@
             ],
             "details": "Use Kibo UI MCP components to add a progress bar. Display metadata including created date, mode, and concept prompt using appropriate UI elements.",
             "status": "done",
-            "testStrategy": "Verify correct rendering of progress bar and metadata information."
+            "testStrategy": "Verify correct rendering of progress bar and metadata information.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -923,7 +936,8 @@
             ],
             "details": "Implement control buttons (Start Generation, Cancel, Download) with event handlers. Use CSS modules or styled-components for styling. Ensure responsive design for mobile, tablet, and desktop views.",
             "status": "done",
-            "testStrategy": "Test button functionality and responsiveness on different screen sizes."
+            "testStrategy": "Test button functionality and responsiveness on different screen sizes.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -935,7 +949,7 @@
         "testStrategy": "1. **Route Testing**: Verify the dynamic route correctly loads the project dashboard for different project IDs.\n\n2. **Layout Verification**: Ensure all sections (navigation, headers, phase tracker, content area, asset gallery, video player) are correctly implemented and styled.\n\n3. **Responsive Design**: Test the layout on various devices to ensure responsiveness (1 column on mobile, 2 on tablets, 3 on desktops).\n\n4. **Data Handling**: Check that project data is fetched and displayed correctly, with appropriate loading states.\n\n5. **Theme Consistency**: Ensure the page adheres to the dark theme with blue accents across all components.",
         "status": "done",
         "dependencies": [
-          29
+          "29"
         ],
         "priority": "high",
         "subtasks": [
@@ -946,7 +960,8 @@
             "dependencies": [],
             "details": "Set up the file structure and basic page setup for the dynamic route. Ensure the route can handle different project IDs.",
             "status": "done",
-            "testStrategy": "Verify the dynamic route loads correctly for various project IDs."
+            "testStrategy": "Verify the dynamic route loads correctly for various project IDs.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -957,7 +972,8 @@
             ],
             "details": "Implement the navigation header using v0 MCP components. Ensure it matches the design of the /create page.",
             "status": "done",
-            "testStrategy": "Check the navigation header for consistency with the /create page."
+            "testStrategy": "Check the navigation header for consistency with the /create page.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -968,7 +984,8 @@
             ],
             "details": "Create the project header to display title, status, and metadata. Design the phase tracker to show the generation workflow.",
             "status": "done",
-            "testStrategy": "Ensure the project header and phase tracker display correct information and are styled properly."
+            "testStrategy": "Ensure the project header and phase tracker display correct information and are styled properly.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -979,7 +996,8 @@
             ],
             "details": "Implement a grid layout that adjusts from 1 column on mobile to 3 columns on desktops using Tailwind CSS.",
             "status": "done",
-            "testStrategy": "Test the grid layout responsiveness across different devices."
+            "testStrategy": "Test the grid layout responsiveness across different devices.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -990,7 +1008,8 @@
             ],
             "details": "Implement sections to display generated images, videos, and the final video player when the project is complete.",
             "status": "done",
-            "testStrategy": "Verify the asset gallery and video player sections display correctly and are styled consistently."
+            "testStrategy": "Verify the asset gallery and video player sections display correctly and are styled consistently.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -1001,7 +1020,8 @@
             ],
             "details": "On component mount, fetch project data and manage loading and error states appropriately.",
             "status": "done",
-            "testStrategy": "Test data fetching for correct data retrieval and error handling."
+            "testStrategy": "Test data fetching for correct data retrieval and error handling.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1013,7 +1033,7 @@
         "testStrategy": "1. **Unit Tests**: Mock the `createProject` API call to test the integration logic, ensuring correct data is sent and responses are handled.\n\n2. **Integration Tests**: Test the full workflow from form submission to redirection, verifying the correct page is loaded with the expected project ID.\n\n3. **Error Handling Tests**: Simulate API failures to ensure errors are caught and appropriate notifications are displayed.\n\n4. **Loading State Tests**: Verify that loading indicators are shown during the API call and removed upon completion.",
         "status": "done",
         "dependencies": [
-          29
+          "29"
         ],
         "priority": "high",
         "subtasks": []
@@ -1026,9 +1046,9 @@
         "testStrategy": "1. **Unit Tests**: Write unit tests for each API function to ensure they correctly handle successful responses and errors. Mock API responses using libraries like Jest and nock.\n2. **Integration Tests**: Test the API client in a development environment to verify real interactions with the backend.\n3. **Type Checking**: Use TypeScript's compiler to ensure there are no type errors in the API client.\n4. **Environment Variable Test**: Verify that the `API_URL` is correctly loaded from environment variables and used in API calls.",
         "status": "done",
         "dependencies": [
-          23,
-          26,
-          25
+          "23",
+          "26",
+          "25"
         ],
         "priority": "high",
         "subtasks": [
@@ -1039,7 +1059,8 @@
             "dependencies": [],
             "details": "Implement a fetch wrapper in `frontend/src/lib/api/client.ts` using TypeScript. Include error handling with try-catch blocks and define custom error classes. Use environment variables for `API_URL`.",
             "status": "done",
-            "testStrategy": "Write unit tests to ensure the fetch wrapper handles errors correctly and returns expected types."
+            "testStrategy": "Write unit tests to ensure the fetch wrapper handles errors correctly and returns expected types.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1050,7 +1071,8 @@
             ],
             "details": "Implement `createProject` and `getProject` functions using the fetch wrapper. Define TypeScript interfaces for request and response types to ensure type safety.",
             "status": "done",
-            "testStrategy": "Mock API responses and write unit tests for `createProject` and `getProject` functions."
+            "testStrategy": "Mock API responses and write unit tests for `createProject` and `getProject` functions.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1061,7 +1083,8 @@
             ],
             "details": "Implement `generateScenes`, `generateVideo`, and `generateLipSync` functions. Use the fetch wrapper and define TypeScript types for each function's inputs and outputs.",
             "status": "done",
-            "testStrategy": "Write unit tests to verify correct handling of API responses and errors for generation functions."
+            "testStrategy": "Write unit tests to verify correct handling of API responses and errors for generation functions.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1072,7 +1095,8 @@
             ],
             "details": "Implement `getVideo` and `generateCharacterReference` functions using the fetch wrapper. Ensure TypeScript types are defined for these functions.",
             "status": "done",
-            "testStrategy": "Test file retrieval functions with mocked API responses to ensure correct data handling."
+            "testStrategy": "Test file retrieval functions with mocked API responses to ensure correct data handling.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -1085,7 +1109,8 @@
             ],
             "details": "Implement retry logic with exponential backoff for transient errors. Ensure all functions have comprehensive error handling and return detailed error information.",
             "status": "done",
-            "testStrategy": "Simulate transient errors and verify retry logic works as expected. Ensure error handling provides clear error messages."
+            "testStrategy": "Simulate transient errors and verify retry logic works as expected. Ensure error handling provides clear error messages.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1108,10 +1133,10 @@
         "testStrategy": "1. **Component Testing**: Verify each component renders correctly and interacts as expected.\n   - Test `ProjectHeader`, `PhaseTracker`, `ProjectSceneCard`, `AssetGallery`, and `FinalVideoPlayer` individually and in combination.\n\n2. **Real-time Update Testing**: Simulate project status changes and verify the UI updates in real-time.\n   - Test polling logic to ensure it stops appropriately.\n\n3. **Orchestration Testing**: Test the 'Start Generation' button and regeneration buttons to ensure they trigger the correct backend processes.\n   - Verify error handling and retry logic.\n\n4. **State Management Testing**: Use unit tests to ensure state updates correctly reflect in the UI.\n   - Test loading states and error handling.\n\n5. **Conditional Rendering Testing**: Simulate different project statuses and verify the correct components are displayed.\n\n6. **Accessibility Testing**: Use tools like Axe or Lighthouse to ensure accessibility compliance.\n   - Test keyboard navigation and screen reader compatibility.",
         "status": "done",
         "dependencies": [
-          29,
-          35,
-          36,
-          37
+          "29",
+          "35",
+          "36",
+          "37"
         ],
         "priority": "high",
         "subtasks": [
@@ -1122,7 +1147,8 @@
             "dependencies": [],
             "details": "Ensure each component is correctly positioned and styled according to design specifications.\n<info added on 2025-11-17T16:26:56.609Z>\nCompleted component integration by creating ProjectPageClient.tsx as a client component. This component imports and integrates ProjectHeader, PhaseTracker, SceneCard (ProjectSceneCard equivalent), AssetGallery, and FinalVideoPlayer. All components are correctly positioned and styled according to the design. Implemented a server/client split pattern with proper Suspense boundaries.\n</info added on 2025-11-17T16:26:56.609Z>",
             "status": "done",
-            "testStrategy": "Verify each component renders correctly and interacts as expected."
+            "testStrategy": "Verify each component renders correctly and interacts as expected.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1133,7 +1159,8 @@
             ],
             "details": "Manage project data, scenes, and generation progress with loading states and error handling.\n<info added on 2025-11-17T16:27:17.991Z>\nState management is implemented using the useProjectPolling hook located at /frontend/src/hooks/useProjectPolling.ts. This hook provides comprehensive state management, including project data with real-time polling (3-second intervals), loading states, error handling with retry logic, exponential backoff for failures, automatic cleanup on unmount, and an isPolling status indicator. The ProjectPageClient component integrates this hook and uses its state (project, loading, error, refetch, isPolling) throughout the component. No additional state management library is needed as the polling hook handles all data consistency requirements.\n</info added on 2025-11-17T16:27:17.991Z>",
             "status": "done",
-            "testStrategy": "Test state updates and ensure data consistency across components."
+            "testStrategy": "Test state updates and ensure data consistency across components.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1144,7 +1171,8 @@
             ],
             "details": "Ensure polling stops when the project is completed or encounters an error.\n<info added on 2025-11-17T16:27:38.826Z>\nThe useProjectPolling hook is fully implemented and integrated at /frontend/src/hooks/useProjectPolling.ts, providing automatic polling every 3 seconds with exponential backoff for errors. It stops polling when the project reaches terminal states. In ProjectPageClient, the hook is used via: const { project, loading, error, refetch, isPolling } = useProjectPolling(projectId). The isPolling status is displayed in the header with a live indicator, and all real-time updates work correctly, updating the UI automatically through React state management.\n</info added on 2025-11-17T16:27:38.826Z>",
             "status": "done",
-            "testStrategy": "Simulate project status changes and verify real-time updates."
+            "testStrategy": "Simulate project status changes and verify real-time updates.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1155,7 +1183,8 @@
             ],
             "details": "Ensure the button triggers the correct orchestration functions and updates the UI accordingly.\n<info added on 2025-11-17T16:30:57.130Z>\nImplemented the Start Generation button with full orchestration. Created API endpoint at /api/projects/[id]/generate/route.ts that validates project state and triggers generation. The button appears in ProjectHeader when status is 'creating-scenes', calls the API endpoint, shows toast notifications for success/error, and automatically refetches project data to update the UI. Error handling includes proper HTTP status codes and user-friendly messages.\n</info added on 2025-11-17T16:30:57.130Z>",
             "status": "done",
-            "testStrategy": "Test button functionality and orchestration flow."
+            "testStrategy": "Test button functionality and orchestration flow.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -1166,7 +1195,8 @@
             ],
             "details": "Ensure each regeneration button triggers the correct function and updates the scene.\n<info added on 2025-11-17T16:31:02.605Z>\nImplemented all three regeneration functions with API endpoints: regenerate-image, regenerate-video, and regenerate-lipsync at /api/projects/[id]/scenes/[sceneId]/. Each endpoint validates project and scene existence, updates scene status to 'generating', increments retry count, and includes comprehensive error handling. In ProjectPageClient, the handleRegenerateImage, handleRegenerateVideo, and handleRegenerateLipsync functions call their respective endpoints, show toast notifications, and refetch project data. Regeneration buttons appear in SceneCard components for completed or failed scenes with proper conditional rendering.\n</info added on 2025-11-17T16:31:02.605Z>",
             "status": "done",
-            "testStrategy": "Verify regeneration functions are called correctly and scenes update as expected."
+            "testStrategy": "Verify regeneration functions are called correctly and scenes update as expected.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -1177,7 +1207,8 @@
             ],
             "details": "Show `PhaseTracker` during generation, `AssetGallery` when assets are available, and `FinalVideoPlayer` when complete.\n<info added on 2025-11-17T16:32:04.321Z>\nConditional rendering is fully implemented in ProjectPageClient. The component uses computed boolean flags (showPhaseTracker, showScenes, showAssets, showFinalVideo) based on project status to control component visibility. PhaseTracker shows during generation phases (not creating-scenes or completed), Scenes section shows when project.scenes exists, AssetGallery shows when scenes have completed videos, and FinalVideoPlayer shows when status is completed or finalVideoUrl exists. All conditional logic is tested and working correctly with proper state management.\n</info added on 2025-11-17T16:32:04.321Z>",
             "status": "done",
-            "testStrategy": "Test conditional rendering by simulating different project statuses."
+            "testStrategy": "Test conditional rendering by simulating different project statuses.",
+            "parentId": "undefined"
           },
           {
             "id": 7,
@@ -1188,7 +1219,8 @@
             ],
             "details": "Implement ARIA roles, keyboard shortcuts, and ensure all components are accessible.\n<info added on 2025-11-17T16:40:20.282Z>\nImplemented comprehensive error handling, loading states, and accessibility features. Error handling includes try-catch blocks in all async functions, toast notifications for errors with descriptive messages, error states with retry buttons, and proper HTTP error handling in API routes. Loading states include an initial loading spinner, polling indicator (Live badge), skeleton states in the parent page, and disabled button states during operations. Accessibility features include ARIA labels on all interactive elements (buttons, badges, navigation), ARIA roles (banner, main, region, article, progressbar, status), semantic HTML (header, nav, main, section, time), screen reader text (sr-only class), aria-live for real-time updates, aria-labelledby for sections, and proper alt text on images/videos. Build completed successfully with only minor linting warnings.\n</info added on 2025-11-17T16:40:20.282Z>",
             "status": "done",
-            "testStrategy": "Test accessibility features and error handling scenarios."
+            "testStrategy": "Test accessibility features and error handling scenarios.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1198,9 +1230,9 @@
         "description": "Develop AssetGallery and FinalVideoPlayer components using Kibo UI MCP with responsive design and accessibility features.",
         "status": "pending",
         "dependencies": [
-          29,
-          33,
-          5
+          "29",
+          "33",
+          "5"
         ],
         "priority": "medium",
         "details": "1. **AssetGallery Component**: Implemented in `frontend/src/components/AssetGallery.tsx`. Utilized Kibo UI MCP with `shadcn/ui` components like `Card`, `Dialog`, and `Button`. Displayed images and videos in a responsive grid with filtering options (images/videos/lipsync). Included lightbox functionality for full-size previews, thumbnail previews, download buttons, and modal views. Implemented skeleton loading states and ensured the design matches the dark theme with blue accents. Fully integrated and ready for production use.\n\n2. **FinalVideoPlayer Component**: Implement in `frontend/src/components/FinalVideoPlayer.tsx`. Use Kibo UI MCP to create a video player with custom controls (play/pause, timeline scrubbing, volume, fullscreen), download button, share functionality, and video metadata display. Ensure responsive design and accessibility, including keyboard navigation and screen reader support. Implement skeleton loading states and match the dark theme with blue accents.",
@@ -1213,7 +1245,8 @@
             "dependencies": [],
             "details": "Define interfaces for scenes, images, and videos. Ensure compatibility with project data from polling hook.\n<info added on 2025-11-17T16:07:58.890Z>\nCreated comprehensive TypeScript interfaces for AssetGallery component in /frontend/src/types/asset.ts. Defined Asset, AssetMetadata, AssetFilter, AssetGalleryProps, and AssetLightboxProps interfaces. These interfaces support images, videos, lipsync videos, and character references with proper typing for all component interactions including filtering, lightbox, download, and share functionality.\n</info added on 2025-11-17T16:07:58.890Z>",
             "status": "done",
-            "testStrategy": "Verify interfaces align with data structure."
+            "testStrategy": "Verify interfaces align with data structure.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1224,7 +1257,8 @@
             ],
             "details": "Use `Card`, `Dialog`, and `Button` from `shadcn/ui` to create a responsive grid layout with asset preview cards.\n<info added on 2025-11-17T16:15:09.151Z>\nImplemented comprehensive AssetGallery component in /frontend/src/components/AssetGallery.tsx with the following features: responsive grid layout (2/4/6 columns based on screen size), filter tabs for All, Character, Videos, and Lip-sync with asset counts, asset cards with hover effects showing download/share buttons, video preview on hover (plays on mouse enter), full-screen lightbox dialog with navigation between assets, download functionality for all asset types, share functionality with Web Share API fallback to clipboard, skeleton loading states, dark theme with blue accents matching project design, proper TypeScript typing, integrated into /app/project/[id]/page.tsx. Component uses shadcn/ui Card, Dialog, Button, Badge, Tabs, and Skeleton components as required.\n</info added on 2025-11-17T16:15:09.151Z>",
             "status": "done",
-            "testStrategy": "Test grid layout responsiveness and asset previews."
+            "testStrategy": "Test grid layout responsiveness and asset previews.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1235,7 +1269,8 @@
             ],
             "details": "Add buttons for downloading and sharing assets. Ensure functionality integrates with S3 URLs.\n<info added on 2025-11-17T16:19:50.699Z>\nDownload and share functionality has been fully implemented in the AssetGallery component. The download buttons appear on hover over asset cards and in the lightbox dialog footer. The handleDownload function fetches assets from URLs, creates blobs, and triggers browser downloads with automatic file naming based on asset type. It works with S3 URLs, handles CORS properly, and includes error handling with console logging.\n\nThe share buttons also appear on hover and in the lightbox dialog footer. The handleShare function uses the Web Share API on mobile devices and falls back to clipboard copy with user notification on desktops. It shares asset URLs with title and description metadata, with error handling for both methods. Both features are fully integrated and tested, working correctly with the existing S3 URL structure from the backend API.\n</info added on 2025-11-17T16:19:50.699Z>",
             "status": "done",
-            "testStrategy": "Test download and share functionality for all asset types."
+            "testStrategy": "Test download and share functionality for all asset types.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1244,7 +1279,8 @@
             "dependencies": [],
             "details": "Define interfaces for video metadata and controls. Ensure compatibility with project data from polling hook.",
             "status": "pending",
-            "testStrategy": "Verify interfaces align with video data structure."
+            "testStrategy": "Verify interfaces align with video data structure.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -1255,7 +1291,8 @@
             ],
             "details": "Use Kibo UI MCP to create custom video player controls including play/pause, timeline, and volume.",
             "status": "pending",
-            "testStrategy": "Test video playback controls across devices."
+            "testStrategy": "Test video playback controls across devices.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -1266,7 +1303,8 @@
             ],
             "details": "Add buttons for downloading and sharing videos. Ensure functionality integrates with S3 URLs.",
             "status": "pending",
-            "testStrategy": "Test download and share functionality for videos."
+            "testStrategy": "Test download and share functionality for videos.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1278,9 +1316,9 @@
         "testStrategy": "1. **Unit Tests**: Write tests for each orchestration function to ensure correct API calls and error handling. Use Jest to mock API responses.\n\n2. **Integration Tests**: Verify orchestration logic with the backend by simulating full generation workflows and individual regeneration tasks.\n\n3. **Error Handling Tests**: Induce errors in API calls to test retry logic and error boundaries.\n\n4. **Performance Tests**: Measure execution time for sequential and parallel operations to ensure efficiency.",
         "status": "done",
         "dependencies": [
-          9,
-          25,
-          29
+          "9",
+          "25",
+          "29"
         ],
         "priority": "high",
         "subtasks": [
@@ -1291,7 +1329,8 @@
             "dependencies": [],
             "details": "Investigate Context7 MCP documentation and examples to understand async orchestration patterns. Focus on error handling and state management.",
             "status": "done",
-            "testStrategy": "Review findings with team and document best practices."
+            "testStrategy": "Review findings with team and document best practices.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1302,7 +1341,8 @@
             ],
             "details": "Create a function that sequentially calls backend endpoints for scenes, images, videos, and lip-syncs. Use async/await for sequential operations and implement error handling with retries.",
             "status": "done",
-            "testStrategy": "Write unit tests to simulate API calls and verify sequential execution."
+            "testStrategy": "Write unit tests to simulate API calls and verify sequential execution.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1313,7 +1353,8 @@
             ],
             "details": "Use Promise.all to handle parallel execution of scene generation tasks. Ensure proper error handling and logging for each task.",
             "status": "done",
-            "testStrategy": "Test with mock API responses to ensure parallel execution and error handling."
+            "testStrategy": "Test with mock API responses to ensure parallel execution and error handling.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1324,7 +1365,8 @@
             ],
             "details": "Develop functions like regenerateScene, regenerateImage, etc., with error boundaries and progress callbacks.",
             "status": "done",
-            "testStrategy": "Unit test each function to verify correct API calls and error handling."
+            "testStrategy": "Unit test each function to verify correct API calls and error handling.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -1335,7 +1377,8 @@
             ],
             "details": "Use WebSocket to provide real-time updates. Implement callbacks to update the UI state based on progress.",
             "status": "done",
-            "testStrategy": "Test WebSocket integration to ensure real-time updates are reflected in the UI."
+            "testStrategy": "Test WebSocket integration to ensure real-time updates are reflected in the UI.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -1346,7 +1389,8 @@
             ],
             "details": "Utilize the error handling system from Task 25. Implement try-catch blocks and custom error classes for detailed logging and retry logic with exponential backoff.",
             "status": "done",
-            "testStrategy": "Test error scenarios to ensure retry logic and error boundaries function correctly."
+            "testStrategy": "Test error scenarios to ensure retry logic and error boundaries function correctly.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1358,9 +1402,9 @@
         "testStrategy": "1. **Unit Tests**: Write tests for `useProjectPolling` to ensure it correctly starts and stops polling, updates state, and handles errors.\n2. **Integration Tests**: Verify the hook integrates seamlessly with the `/project/[id]` page, updating the UI in real-time.\n3. **Error Handling Tests**: Simulate network errors to test exponential backoff and error state management.\n4. **Cleanup Verification**: Ensure intervals are cleared on component unmount to prevent memory leaks.",
         "status": "done",
         "dependencies": [
-          9,
-          25,
-          29
+          "9",
+          "25",
+          "29"
         ],
         "priority": "high",
         "subtasks": [
@@ -1371,7 +1415,8 @@
             "dependencies": [],
             "details": "Define the TypeScript types for the hook's state and return values. Create the initial structure in frontend/src/hooks/useProjectPolling.ts.",
             "status": "done",
-            "testStrategy": "Ensure TypeScript types are correctly defined and the hook compiles without errors."
+            "testStrategy": "Ensure TypeScript types are correctly defined and the hook compiles without errors.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1382,7 +1427,8 @@
             ],
             "details": "Use useEffect to set up a polling interval that calls GET /api/mv/projects/{projectId} every 3 seconds. Ensure the interval is cleared on component unmount.",
             "status": "done",
-            "testStrategy": "Test that the polling interval correctly triggers every 3 seconds and stops on unmount."
+            "testStrategy": "Test that the polling interval correctly triggers every 3 seconds and stops on unmount.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1393,7 +1439,8 @@
             ],
             "details": "Use useEffect to automatically stop polling when the project status is 'completed' or 'error'. Ensure intervals are cleaned up using the useEffect cleanup function.",
             "status": "done",
-            "testStrategy": "Verify polling stops when the project reaches a terminal state and intervals are cleaned up properly."
+            "testStrategy": "Verify polling stops when the project reaches a terminal state and intervals are cleaned up properly.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1404,7 +1451,8 @@
             ],
             "details": "Implement error handling to retry requests with exponential backoff on network errors. Update the hook to provide loading and error states.",
             "status": "done",
-            "testStrategy": "Simulate network errors and test that retries occur with exponential backoff. Verify loading and error states update correctly."
+            "testStrategy": "Simulate network errors and test that retries occur with exponential backoff. Verify loading and error states update correctly.",
+            "parentId": "undefined"
           }
         ]
       },
@@ -1416,7 +1464,7 @@
         "testStrategy": "1. Verify the component renders correctly with mock scene data. 2. Test responsiveness by resizing the browser window to ensure layout adapts for mobile, tablet, and desktop. 3. Check hover effects and transitions for smoothness. 4. Test each section (image, video, lip-sync) for correct loading and error handling. 5. Ensure the regenerate buttons function correctly with dropdown options. 6. Validate TypeScript interfaces for props. 7. Test dark theme styling with blue accents for consistency.",
         "status": "done",
         "dependencies": [
-          29
+          "29"
         ],
         "priority": "medium",
         "subtasks": [
@@ -1427,7 +1475,8 @@
             "dependencies": [],
             "details": "Implement the card container using Kibo UI MCP components. Include a header section that displays the scene number and a status badge. Ensure the design matches the dark theme with blue accents.",
             "status": "done",
-            "testStrategy": "Verify the header and status badge render correctly with mock data."
+            "testStrategy": "Verify the header and status badge render correctly with mock data.",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1438,7 +1487,8 @@
             ],
             "details": "Use `shadcn/ui` components to create an image preview area. Implement skeleton loading, spinner, and thumbnail transitions for smooth user experience.",
             "status": "done",
-            "testStrategy": "Test image loading states and transitions with mock images."
+            "testStrategy": "Test image loading states and transitions with mock images.",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1449,7 +1499,8 @@
             ],
             "details": "Implement video and lip-sync sections using appropriate player components. Ensure smooth transitions and controls for play, pause, and seek.",
             "status": "done",
-            "testStrategy": "Verify video and lip-sync playback functionality and transitions."
+            "testStrategy": "Verify video and lip-sync playback functionality and transitions.",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -1460,7 +1511,8 @@
             ],
             "details": "Add progress indicators to show the current generation step. Implement a dropdown menu for regeneration options for image, video, and lip-sync.",
             "status": "done",
-            "testStrategy": "Check progress indicators update correctly and dropdown menu functions as expected."
+            "testStrategy": "Check progress indicators update correctly and dropdown menu functions as expected.",
+            "parentId": "undefined"
           },
           {
             "id": 5,
@@ -1471,7 +1523,8 @@
             ],
             "details": "Create UI components to display error messages and provide retry options. Ensure error states are clearly communicated to the user.",
             "status": "done",
-            "testStrategy": "Simulate errors and verify error messages and retry functionality."
+            "testStrategy": "Simulate errors and verify error messages and retry functionality.",
+            "parentId": "undefined"
           },
           {
             "id": 6,
@@ -1482,22 +1535,564 @@
             "dependencies": [
               4
             ],
-            "parentTaskId": 40
+            "parentTaskId": 40,
+            "parentId": "undefined"
           }
         ]
+      },
+      {
+        "id": 39,
+        "title": "Update TypeScript Types for Video Trimming Fields",
+        "description": "Add video trimming fields to the ProjectScene interface in TypeScript to align with the backend schema.",
+        "status": "done",
+        "dependencies": [
+          "28"
+        ],
+        "priority": "medium",
+        "details": "1. **Review Backend Schema**: Examine the backend schema to understand the structure and types of `originalVideoClipUrl`, `workingVideoClipUrl`, and `trimPoints`.\n\n2. **Modify TypeScript Interfaces**: Update the `ProjectScene` interface in `frontend/src/types/project.ts` to include the new fields:\n   - `originalVideoClipUrl: string`\n   - `workingVideoClipUrl: string`\n   - `trimPoints: { in: number; out: number; }`\n\n3. **Ensure Consistency**: Verify that the new fields are consistent with the backend data types and any existing frontend logic.\n\n4. **Refactor Code**: Update any components or functions that interact with `ProjectScene` to handle the new fields appropriately.",
+        "testStrategy": "1. **Type Checking**: Use TypeScript's compiler to ensure there are no type errors after adding the new fields.\n\n2. **Unit Tests**: Write unit tests to verify that the `ProjectScene` interface correctly includes the new fields and that they are used correctly in the application.\n\n3. **Integration Tests**: Test the integration of the updated types with components that use `ProjectScene`, ensuring they handle the new fields correctly.\n\n4. **Manual Testing**: Manually verify that the application correctly displays and processes the new video trimming fields in the UI.",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "No expansion needed.",
+        "updatedAt": "2025-11-23T03:54:59.167Z"
+      },
+      {
+        "id": 44,
+        "title": "Create VideoTrimmer Component with Timeline Scrubber UI",
+        "description": "Develop a VideoTrimmer component featuring a timeline scrubber with dual handles for setting playback boundaries and real-time video preview updates.",
+        "status": "done",
+        "dependencies": [
+          "32",
+          "34"
+        ],
+        "priority": "medium",
+        "details": "Implement the VideoTrimmer component in `frontend/src/components/VideoTrimmer.tsx`. Use the `shadcn/ui` Slider component to create a custom timeline with dual handles representing the 'in' and 'out' points (trimPoints) of the video segment. Display the current trim range (e.g., '2.5s - 7.0s') and the duration of the selected range. Provide visual feedback with a highlighted region on the timeline. Ensure the component updates the video preview in real-time as the handles are dragged. Integrate with existing video player logic to restrict playback to the selected trimPoints. Store trimPoints in local state until the user applies them. Use TypeScript for type safety and ensure the component is responsive across different screen sizes.",
+        "testStrategy": "1. Verify the timeline scrubber renders correctly with dual handles.\n2. Test dragging the handles updates the video preview in real-time.\n3. Check that the current trim range and duration are displayed accurately.\n4. Ensure the component provides visual feedback with a highlighted region.\n5. Ensure the component is responsive and functions correctly on various devices and screen sizes.\n6. Conduct unit tests for handle movement logic and trimPoints storage.\n7. Perform integration testing with the video player to ensure playback is restricted to the selected range.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Timeline Scrubber with Dual Handles",
+            "description": "Develop the timeline scrubber using the `shadcn/ui` Slider component with dual handles for setting 'in' and 'out' points.",
+            "dependencies": [],
+            "details": "Use the `shadcn/ui` Slider component to create a custom timeline with dual handles. Ensure the handles represent the 'in' and 'out' points of the video segment. Display the current trim range and duration.",
+            "status": "pending",
+            "testStrategy": "Verify the timeline scrubber renders correctly with dual handles.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Integrate VideoTrimmer with Video Player Logic",
+            "description": "Connect the VideoTrimmer component to the existing video player logic to restrict playback to the selected trimPoints.",
+            "dependencies": [
+              1
+            ],
+            "details": "Ensure the component updates the video preview in real-time as the handles are dragged. Integrate with existing video player logic to restrict playback to the selected trimPoints.",
+            "status": "pending",
+            "testStrategy": "Test dragging the handles updates the video preview in real-time.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Ensure VideoTrimmer Component Responsiveness",
+            "description": "Make sure the VideoTrimmer component is responsive across different screen sizes.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Use CSS and responsive design techniques to ensure the VideoTrimmer component adapts to various screen sizes. Test on multiple devices.",
+            "status": "pending",
+            "testStrategy": "Check that the component renders correctly on different devices.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down the task into subtasks for implementing the timeline scrubber, integrating with the video player, and ensuring responsiveness.",
+        "updatedAt": "2025-11-23T03:57:27.998Z"
+      },
+      {
+        "id": 45,
+        "title": "Implement trimScene API Client Function",
+        "description": "Add a trimScene method to the API client to handle scene trimming via POST request and update the video player to respect trim boundaries.",
+        "status": "done",
+        "dependencies": [
+          "23",
+          "31"
+        ],
+        "priority": "medium",
+        "details": "Implement the trimScene method in `frontend/src/lib/api/client.ts`. This method should accept parameters for project ID, sequence, and trimPoints payload. Construct a POST request to `/api/mv/projects/{id}/scenes/{sequence}/trim`, passing the trimPoints in the request body. Ensure the method returns the updated scene data, including a working video URL. Update the video player component to read trimPoints from scene data and enforce playback boundaries, preventing seeking/playing outside the in/out range. The actual video file is not modified - only playback is restricted. Handle potential errors by implementing appropriate error handling and logging.",
+        "testStrategy": "1. Write unit tests to verify that the trimScene method constructs the correct POST request with the appropriate URL and payload.\n2. Mock API responses to ensure the method correctly processes and returns the updated scene data.\n3. Test error handling by simulating API failures and verifying that errors are logged and handled gracefully.\n4. Perform integration testing to ensure the method works as expected within the application context.\n5. Test the video player component to ensure it respects the trim boundaries and restricts playback accordingly.",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Consider subtasks for API request construction and error handling implementation.",
+        "updatedAt": "2025-11-23T03:56:59.867Z"
+      },
+      {
+        "id": 46,
+        "title": "Implement regenerateScene API Client Function",
+        "description": "Add a regenerateScene method to the API client to handle scene regeneration via POST request.",
+        "details": "Implement the `regenerateScene` method in `frontend/src/lib/api/client.ts`. This method should construct a POST request to `/api/mv/projects/{id}/scenes/{sequence}/regenerate`. Use async/await to handle the asynchronous nature of the request. Ensure proper error handling by catching exceptions and logging errors. Consider using a retry mechanism for transient errors. The method should return a promise that resolves with the server response or rejects with an error message.",
+        "testStrategy": "1. Write unit tests to mock the API call and verify the method sends the correct POST request with appropriate URL parameters. 2. Test error handling by simulating server errors and ensuring the method logs errors and rejects the promise. 3. Verify the method correctly handles successful responses by resolving the promise with the expected data. 4. Test the retry mechanism by simulating transient errors and ensuring the method retries the request as expected.",
+        "status": "cancelled",
+        "dependencies": [
+          "23",
+          "26"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Create subtasks for API request implementation and retry mechanism development.",
+        "updatedAt": "2025-11-23T03:57:08.387Z"
+      },
+      {
+        "id": 49,
+        "title": "Add 'Edit Scene' Button to ScenesPanel Scene Cards",
+        "description": "Implement an 'Edit Scene' button on each scene card in the ScenesPanel to open the SceneEditModal with the selected scene data.",
+        "details": "1. **Update ScenesPanel.tsx**: Locate the scene card component within `ScenesPanel.tsx`.\n   - Add a new button labeled 'Edit Scene' next to the existing controls on each scene card.\n   - Ensure the button is styled consistently with the existing UI elements.\n\n2. **Integrate SceneEditModal**: Import the `SceneEditModal` component.\n   - On button click, open the `SceneEditModal`.\n   - Pass the selected scene's data and necessary callbacks to handle updates and modal closure.\n\n3. **Callback Implementation**: Ensure that any changes made in the `SceneEditModal` are reflected back in the `ScenesPanel`.\n   - Implement state management to update the scene list when edits are saved.\n\n4. **Code Refactoring**: Ensure the code is clean and modular, possibly extracting the button logic into a separate component if needed for reusability.",
+        "testStrategy": "1. **UI Testing**: Verify the 'Edit Scene' button appears on each scene card and is styled correctly.\n2. **Modal Functionality**: Test that clicking the 'Edit Scene' button opens the `SceneEditModal` with the correct scene data.\n3. **Data Flow Verification**: Ensure changes made in the `SceneEditModal` are accurately reflected in the `ScenesPanel` upon saving.\n4. **Edge Cases**: Test with various scene data to ensure robustness, including scenes with missing or incomplete data.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 4,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "No expansion needed.",
+        "updatedAt": "2025-11-23T03:56:59.183Z"
+      },
+      {
+        "id": 50,
+        "title": "Move Regeneration Actions to SceneEditModal",
+        "description": "Transfer regeneration actions from the ScenesPanel dropdown to the SceneEditModal's Actions section. Additionally, replace the MoreVertical dropdown menu with a prominent 'Edit' button on each scene card, styled to match the dark theme.",
+        "status": "done",
+        "dependencies": [
+          "10",
+          "46"
+        ],
+        "priority": "medium",
+        "details": "1. **Remove Dropdown Actions**: Locate the three-dot dropdown menu in `ScenesPanel.tsx` and remove the 'Regenerate All', 'Regenerate Prompt', and 'Regenerate Video' actions. Replace the dropdown with a prominent 'Edit' button using the Edit icon from lucide-react, styled to match the dark theme.\n\n2. **Update SceneEditModal**: In `SceneEditModal.tsx`, add a new section labeled 'Actions'.\n   - Integrate buttons for 'Regenerate All', 'Regenerate Prompt', and 'Regenerate Video'.\n   - Provide clear descriptions for each action, explaining their purpose and expected outcomes.\n\n3. **Progress Tracking**: Implement progress indicators for each action using the WebSocket connection established in Task 10. Display real-time updates on the progress of each regeneration task.\n\n4. **API Integration**: Ensure the buttons trigger the appropriate API calls. Use the `regenerateScene` method from Task 46 for handling scene regeneration requests.\n\n5. **Error Handling**: Implement error handling to manage failed regeneration attempts, providing user feedback and retry options.",
+        "testStrategy": "1. **UI Testing**: Verify that the regeneration actions are removed from the ScenesPanel dropdown and appear correctly in the SceneEditModal. Ensure the 'Edit' button is prominently displayed and styled correctly.\n\n2. **Functionality Testing**: Test each regeneration button to ensure it triggers the correct API call and updates the UI with progress indicators.\n\n3. **Progress Tracking**: Simulate regeneration tasks and verify that progress updates are received and displayed in real-time.\n\n4. **Error Handling**: Test scenarios where regeneration fails to ensure appropriate error messages and retry options are presented to the user.",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Create subtasks for UI updates and API integration for regeneration actions."
+      },
+      {
+        "id": 52,
+        "title": "Implement Modal Regeneration Progress Tracking",
+        "description": "Add real-time progress display in SceneEditModal for regeneration phases, including progress percentage and estimated time remaining. Additionally, prevent modal closure during active operations by disabling the close button and backdrop clicks, and provide a visual indicator with a tooltip.",
+        "status": "done",
+        "dependencies": [
+          "9",
+          "25",
+          "46"
+        ],
+        "priority": "medium",
+        "details": "1. **Update SceneEditModal Component**: Modify the `SceneEditModal` component to include a progress bar and text indicators for the current regeneration phase (e.g., prompt generation, video generation). Disable the close button and backdrop clicks during active operations, showing a dimmed close button with a tooltip 'Operation in progress'.\n2. **Integrate with Regeneration API**: Use the `regenerateScene` method from Task 46 to initiate the regeneration process. Ensure the modal remains open during the entire process.\n3. **Real-Time Updates**: Implement a polling mechanism or WebSocket connection to receive real-time updates on the regeneration progress. Use the job status endpoint from Task 9 to fetch progress data.\n4. **Display Progress and Time Estimates**: Calculate and display the progress percentage and estimated time remaining based on the data received from the server.\n5. **Error Handling**: Integrate error handling as per Task 25 to manage any issues during the regeneration process, providing user-friendly feedback.\n6. **Prevent Modal Closure**: Implement logic to disable the modal close button (X) and prevent backdrop clicks when regeneration, trimming, or any async operation is in progress. Optionally, show a confirmation dialog if the user attempts to close the modal during an operation. Allow closure only when all operations are complete or failed.",
+        "testStrategy": "1. **Unit Tests**: Verify that the progress bar and text indicators update correctly based on mock data. Test that the close button is disabled and the tooltip is displayed during active operations.\n2. **Integration Tests**: Test the entire flow from initiating regeneration to completion, ensuring the modal displays accurate progress, remains open, and prevents closure during operations.\n3. **Error Handling Tests**: Simulate errors during regeneration and ensure the modal provides appropriate feedback and recovery options.\n4. **Performance Tests**: Ensure the real-time updates do not degrade the performance of the modal or the application.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and Implement UI for Progress Tracking",
+            "description": "Create a UI component in SceneEditModal to display regeneration progress.",
+            "dependencies": [],
+            "details": "Design a progress bar and text indicators for regeneration phases. Ensure the close button is dimmed and shows a tooltip 'Operation in progress'.",
+            "status": "done",
+            "testStrategy": "Verify UI updates with mock data and tooltip displays correctly.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Integrate Real-Time Updates for Regeneration Progress",
+            "description": "Implement real-time updates using WebSocket or polling for progress tracking.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use the job status endpoint to fetch progress data. Implement a mechanism to update the UI in real-time as data is received.",
+            "status": "done",
+            "testStrategy": "Test real-time updates with mock WebSocket data to ensure UI reflects current progress.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement Error Handling for Regeneration Process",
+            "description": "Add error handling mechanisms to manage issues during regeneration.",
+            "dependencies": [
+              2
+            ],
+            "details": "Integrate error handling as per Task 25. Provide user-friendly feedback and manage errors gracefully during the regeneration process.",
+            "status": "done",
+            "testStrategy": "Simulate errors and verify that user receives appropriate feedback and the system handles errors without crashing.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Consider subtasks for UI design, real-time updates, and error handling implementation."
+      },
+      {
+        "id": 53,
+        "title": "Remove SceneDetailPanel Component from Edit Page",
+        "description": "Remove the SceneDetailPanel component from the edit page and clean up related handlers.",
+        "details": "1. Navigate to `frontend/src/app/edit/[id]/page.tsx` and locate the SceneDetailPanel component.\n2. Remove all instances and imports of SceneDetailPanel from the file.\n3. Identify and remove the handlers `handleUpdateScenePrompt` and `handleUpdateSceneNegativePrompt` if they are no longer needed.\n4. Ensure that any state or props related to SceneDetailPanel are cleaned up to prevent errors.\n5. Verify that the SceneEditModal now handles all editing functionalities previously managed by SceneDetailPanel.",
+        "testStrategy": "1. Verify that the SceneDetailPanel component is completely removed from the edit page.\n2. Ensure there are no console errors or warnings related to missing components or handlers.\n3. Test the SceneEditModal to confirm it provides all necessary editing functionalities without issues.\n4. Conduct regression testing on the edit page to ensure no other functionalities are affected.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 3,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "No expansion needed.",
+        "updatedAt": "2025-11-23T03:57:11.379Z"
+      },
+      {
+        "id": 54,
+        "title": "Implement Error Handling and User Feedback in SceneEditModal",
+        "description": "Add error boundaries and user feedback for trim and regeneration failures in SceneEditModal.",
+        "details": "1. **Error Boundaries**: Implement error boundaries in the `SceneEditModal` component to catch JavaScript errors in the component tree and display fallback UI.\n2. **Error Messages**: Add specific error messages for trim failures, regeneration failures, and network issues. Ensure messages are clear and provide guidance on possible actions.\n3. **Retry Mechanism**: Implement retry buttons for operations that fail due to transient errors, allowing users to attempt the operation again.\n4. **User Guidance**: Provide actionable feedback and guidance for resolving errors, such as checking network connections or adjusting input parameters.\n5. **Integration with Existing API Methods**: Ensure integration with `trimScene` and `regenerateScene` methods (Tasks 45 and 46) to handle errors appropriately and provide user feedback.",
+        "testStrategy": "1. **Unit Tests**: Write tests to ensure error boundaries correctly catch errors and display fallback UI.\n2. **Integration Tests**: Simulate trim and regeneration failures to verify that error messages are displayed and retry buttons function correctly.\n3. **User Feedback Tests**: Test that user guidance is clear and actionable, and that retry mechanisms work as expected.\n4. **Network Error Simulation**: Simulate network issues to ensure appropriate error messages and retry options are presented.",
+        "status": "pending",
+        "dependencies": [
+          "45",
+          "46",
+          "52"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Break down into subtasks for error boundary implementation and user feedback design."
+      },
+      {
+        "id": 55,
+        "title": "Test and Optimize SceneEditModal Performance",
+        "description": "Evaluate and enhance the performance of the SceneEditModal with various video sizes and FFmpeg.wasm efficiency.",
+        "details": "1. **Performance Testing**: Conduct tests on the SceneEditModal using videos of different sizes to assess performance.\n   - Use tools like Chrome DevTools to monitor performance metrics such as load time and memory usage.\n\n2. **FFmpeg.wasm Optimization**: Ensure FFmpeg.wasm loads efficiently.\n   - Implement lazy loading and caching strategies to reduce initial load time.\n   - Profile FFmpeg operations to identify and optimize bottlenecks.\n\n3. **Timeline Scrubbing**: Verify that timeline scrubbing is smooth and responsive.\n   - Test scrubbing with different video lengths and formats.\n\n4. **Regeneration Flow Testing**: Test the regeneration flow with the actual backend.\n   - Simulate various scenarios including successful and failed generations.\n\n5. **Edge Case Validation**: Validate handling of edge cases such as missing videos, failed generations, and network errors.\n   - Ensure appropriate error messages and retry options are available.\n\n6. **Bundle Size Optimization**: Analyze and optimize the bundle size of the modal.\n   - Use tools like Webpack Bundle Analyzer to identify large dependencies and reduce size.",
+        "testStrategy": "1. **Load Testing**: Use automated tools to simulate multiple users interacting with the modal to test load handling.\n2. **Performance Profiling**: Use browser profiling tools to measure and optimize load times and memory usage.\n3. **Functional Testing**: Manually test timeline scrubbing and regeneration flows to ensure smooth operation.\n4. **Error Handling Tests**: Simulate network errors and missing video scenarios to verify error handling and user feedback.\n5. **Bundle Analysis**: Use Webpack Bundle Analyzer to ensure the bundle size is minimized and optimized.",
+        "status": "pending",
+        "dependencies": [
+          "54"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Conduct Performance Testing on SceneEditModal",
+            "description": "Test the SceneEditModal using videos of different sizes to assess performance.",
+            "dependencies": [],
+            "details": "Use Chrome DevTools to monitor performance metrics such as load time and memory usage. Test with small, medium, and large video files.",
+            "status": "pending",
+            "testStrategy": "Use automated tools to simulate multiple users interacting with the modal.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Optimize FFmpeg.wasm Loading and Execution",
+            "description": "Ensure FFmpeg.wasm loads efficiently and operates smoothly.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement lazy loading and caching strategies to reduce initial load time. Profile FFmpeg operations to identify and optimize bottlenecks.",
+            "status": "pending",
+            "testStrategy": "Profile FFmpeg operations and measure load times before and after optimization.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Validate Edge Case Handling in SceneEditModal",
+            "description": "Test handling of edge cases such as missing videos and network errors.",
+            "dependencies": [
+              1
+            ],
+            "details": "Simulate scenarios with missing videos, failed generations, and network errors. Ensure appropriate error messages and retry options are available.",
+            "status": "pending",
+            "testStrategy": "Manually test each edge case scenario and verify error handling.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Analyze and Optimize Bundle Size of SceneEditModal",
+            "description": "Reduce the bundle size of the SceneEditModal for better performance.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Webpack Bundle Analyzer to identify large dependencies and reduce size. Implement code splitting and tree shaking where applicable.",
+            "status": "pending",
+            "testStrategy": "Measure bundle size before and after optimization and ensure functionality remains intact.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 8,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Divide into subtasks for performance testing, FFmpeg optimization, and edge case validation."
+      },
+      {
+        "id": 56,
+        "title": "Create SceneEditModal Component with shadcn Dialog",
+        "description": "Develop the SceneEditModal component using shadcn/ui Dialog with specific styling and functionality requirements.",
+        "status": "done",
+        "dependencies": [
+          "32",
+          "34"
+        ],
+        "priority": "medium",
+        "details": "1. **Component Structure**: Create `frontend/src/components/SceneEditModal.tsx` to define the SceneEditModal component.\n   - Use shadcn/ui Dialog component for the base modal structure.\n   - Set modal width to `max-w-4xl` and height to `max-h-[90vh]` for an elegant appearance.\n\n2. **Styling**: Implement dark theme styling using Tailwind CSS.\n   - Ensure smooth animations for opening and closing the modal.\n   - Add a proper backdrop with opacity for focus.\n\n3. **Content Layout**: Design the modal with a single-pane layout.\n   - Include a header with the scene title and a close button.\n   - Create a scrollable content area with vertical sections for video preview (always visible at top), prompts, and actions.\n   - Add a footer to display status and duration.\n\n4. **Functionality**: Ensure the modal remains open during async operations.\n   - Implement logic to disable the close button during active operations.",
+        "testStrategy": "1. **UI Testing**: Verify the modal renders correctly with the specified width, height, and styling.\n   - Check the header, content area, and footer for correct layout and responsiveness.\n\n2. **Animation and Backdrop Test**: Ensure smooth animations and backdrop opacity are implemented.\n\n3. **Async Operation Test**: Simulate async operations to verify the modal remains open and the close button is disabled during active operations.\n\n4. **Close Button Test**: Ensure the close button functions correctly when allowed.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement SceneEditModal Component Structure",
+            "description": "Create the SceneEditModal component using shadcn/ui Dialog.",
+            "dependencies": [],
+            "details": "Develop `frontend/src/components/SceneEditModal.tsx` using shadcn/ui Dialog. Set modal width to `max-w-4xl` or `max-w-5xl`.",
+            "status": "pending",
+            "testStrategy": "Verify the component renders with the specified width.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Apply Dark Theme Styling with Tailwind CSS",
+            "description": "Style the SceneEditModal with a dark theme and smooth animations.",
+            "dependencies": [
+              1
+            ],
+            "details": "Use Tailwind CSS to implement dark theme styling. Ensure smooth animations for modal transitions and add a backdrop with opacity.",
+            "status": "pending",
+            "testStrategy": "Check for correct styling and smooth animations.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Handle Async Operations in Modal",
+            "description": "Ensure the modal remains open during async operations.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement logic to prevent closing the modal while async operations are in progress, ensuring user feedback during these operations.",
+            "status": "pending",
+            "testStrategy": "Test modal behavior during async operations to ensure it remains open.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Consider subtasks for component structure, styling, and async operation handling.",
+        "updatedAt": "2025-11-23T04:03:30.699Z"
+      },
+      {
+        "id": 57,
+        "title": "Build Video Preview Section for SceneEditModal",
+        "description": "Develop a video preview section within the SceneEditModal, featuring a compact video player with trimming functionality and playback boundary support. This section should always be visible at the top of the modal to provide visual context while editing prompts.",
+        "status": "done",
+        "dependencies": [
+          "56",
+          "45"
+        ],
+        "priority": "medium",
+        "details": "1. **Component Creation**: Develop a new component `VideoPreviewSection` within `frontend/src/components/SceneEditModal.tsx`.\n   - Use shadcn components for consistent styling.\n   - Ensure the component is reusable and modular.\n\n2. **Video Player**: Implement a compact video player (400-500px width, 16:9 aspect ratio) that displays the scene's video using `workingVideoClipUrl` or `lipSyncedVideoClipUrl` if available.\n   - Include play/pause controls, display the video duration, and show the trim range.\n   - Respect `trimPoints` for playback boundaries to prevent playing outside the in/out range.\n   - Show a scene status badge using shadcn components.\n   - Include a toggle to preview original vs lipsynced video.\n\n3. **Video Trimmer Integration**: Place the VideoTrimmer timeline scrubber directly below the video.\n   - Provide clear visual feedback for trimming actions.\n   - Add an \"Apply Trim Points\" button that saves boundaries via the `trimScene` API without modifying the video file.\n   - Implement a loading state while the API call is in progress.\n\n4. **Styling and Responsiveness**: Ensure the section is responsive and matches the modal's design aesthetics.\n   - Use Tailwind CSS for styling and ensure compatibility with the dark theme.\n   - Maintain elegant spacing for a clean layout.\n\n5. **API Integration**: Handle API interactions for trimming using async/await.\n   - Ensure proper error handling and user feedback.",
+        "testStrategy": "1. **UI Testing**: Verify the video player renders correctly with play/pause controls, displays the duration, and respects trim boundaries.\n   - Check the scene status badge for correct display.\n   - Test the toggle functionality between original and lipsynced video.\n\n2. **Trimming Functionality**: Test the VideoTrimmer for accurate timeline scrubbing and visual feedback.\n   - Ensure the \"Apply Trim Points\" button triggers the `trimScene` API and shows a loading state.\n\n3. **API Testing**: Mock the `trimScene` API to test successful and failed responses.\n   - Verify error handling and user notifications.\n\n4. **Responsive Design Test**: Ensure the video preview section is responsive across different screen sizes and maintains design integrity.",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Create subtasks for video player integration and trimming functionality.",
+        "updatedAt": "2025-11-23T04:28:19.229Z"
+      },
+      {
+        "id": 58,
+        "title": "Implement Prompt Editing Section in SceneEditModal",
+        "description": "Develop the prompt editing section for SceneEditModal using shadcn/ui Textarea components with local state management and dark theme styling.",
+        "details": "1. **Component Setup**: Enhance `SceneEditModal` in `frontend/src/components/SceneEditModal.tsx` to include a new section for editing prompts.\n   - Use shadcn/ui Textarea components for 'Scene Prompt' and 'Negative Prompt'.\n   - Add labels, placeholders, and character count indicators for each textarea.\n\n2. **Styling**: Implement dark theme styling using Tailwind CSS.\n   - Ensure clear visual separation between the prompt sections.\n   - Use helper text to inform users that changes will trigger video regeneration.\n\n3. **State Management**: Implement local state management to handle prompt changes.\n   - Changes should only be saved when the user clicks the action button, not on every input change.\n\n4. **UI Enhancements**: Ensure the UI is responsive and accessible, with clear visual cues for user actions.",
+        "testStrategy": "1. **UI Testing**: Verify that the textareas render correctly with labels, placeholders, and character counts.\n   - Check that the dark theme styling is applied consistently.\n\n2. **State Management Testing**: Ensure that prompt changes are only saved when the action button is clicked.\n   - Test that the local state updates correctly without saving on every change.\n\n3. **Accessibility Testing**: Verify that the textareas are accessible with screen readers and keyboard navigation.\n\n4. **Visual Separation**: Confirm that there is clear visual separation between the Scene Prompt and Negative Prompt sections.",
+        "status": "done",
+        "dependencies": [
+          "56"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Consider subtasks for UI design and state management implementation.",
+        "updatedAt": "2025-11-23T04:10:34.275Z"
+      },
+      {
+        "id": 59,
+        "title": "Implement Actions Section in SceneEditModal",
+        "description": "Develop the actions section in SceneEditModal with buttons for saving, regenerating, and downloading scene operations. The section should be located at the bottom of the single-pane layout, below the video preview and prompt sections.",
+        "status": "pending",
+        "dependencies": [
+          "50",
+          "56",
+          "58",
+          "46"
+        ],
+        "priority": "medium",
+        "details": "1. **Component Enhancement**: Update `SceneEditModal.tsx` to include a new 'Actions' section at the bottom of the single-pane layout.\n   - Add five buttons: 'Save & Regenerate Video', 'Regenerate Prompt', 'Regenerate Video', 'Generate Lip-Sync', and 'Download Scene'.\n   - Use lucide-react icons for each button to enhance visual clarity.\n   - Style buttons with a clear visual hierarchy using shadcn Button variants (default for 'Save & Regenerate', outline for others).\n   - Implement tooltips for each button to explain their actions.\n   - Organize buttons in a clean grid or flex layout with proper spacing.\n\n2. **Button Functionality**:\n   - **Save & Regenerate Video**: Enable only when prompts are edited. On click, save changes and call `orchestration.regenerateVideo()`.\n   - **Regenerate Prompt**: Call `orchestration.regenerateScenePrompt()` on click.\n   - **Regenerate Video**: Call `orchestration.regenerateVideo()` without changing prompts.\n   - **Generate Lip-Sync**: If the scene has audio, call `orchestration.generateLipSync()`.\n   - **Download Scene**: Trigger download of the scene video file.\n\n3. **Loading States**: Implement loading indicators for each button to show progress during asynchronous operations.\n\n4. **Accessibility**: Ensure all buttons are accessible, with appropriate ARIA labels and keyboard navigation support.",
+        "testStrategy": "1. **UI Testing**: Verify that the buttons render correctly with icons, tooltips, and proper styling.\n   - Check that the 'Save & Regenerate Video' button is only enabled when prompts are edited.\n\n2. **Functionality Testing**: Test each button to ensure it triggers the correct orchestration function.\n   - Verify that loading states are displayed during asynchronous operations.\n\n3. **Accessibility Testing**: Ensure buttons are accessible via keyboard and screen readers, with correct ARIA labels.\n\n4. **Integration Testing**: Confirm that the actions integrate seamlessly with the existing SceneEditModal functionality.",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down into subtasks for button functionality, loading states, and accessibility."
+      },
+      {
+        "id": 60,
+        "title": "Implement Elegant Progress Tracking in SceneEditModal",
+        "description": "Create a visually appealing progress indicator in SceneEditModal for tracking operations like regenerating prompts, generating videos, and applying trims.",
+        "details": "1. **UI Design**: Use the `shadcn/ui` Progress component to create a visually appealing progress bar with smooth animations. Ensure the design is prominent yet non-intrusive.\n2. **Operation Tracking**: Display the current operation (e.g., regenerating prompt, generating video, applying trim) along with progress percentage, phase information, and estimated time remaining.\n3. **Modal Behavior**: Disable the modal close button and dim other sections of the modal during active operations to focus user attention on the progress.\n4. **Success/Error States**: Implement clear success and error messaging using the error handling system from Task 25. Ensure messages are user-friendly and informative.\n5. **Integration**: Integrate with the `regenerateScene` and `trimScene` methods from Tasks 46 and 45 respectively, to initiate and track operations.\n6. **Real-Time Updates**: Use the job status endpoint from Task 9 to fetch real-time updates on progress and display them in the modal.",
+        "testStrategy": "1. **Unit Tests**: Verify that the progress indicator updates correctly based on mock data for different operations.\n2. **Integration Tests**: Test the integration with `regenerateScene` and `trimScene` methods to ensure the modal displays accurate progress and remains responsive.\n3. **UI Tests**: Ensure the progress bar is visually prominent and animations are smooth across different browsers and devices.\n4. **Error Handling Tests**: Simulate errors during operations to verify that error messages are displayed correctly and the modal behaves as expected.\n5. **User Experience Tests**: Conduct user testing to ensure the modal's behavior is intuitive and non-intrusive during active operations.",
+        "status": "pending",
+        "dependencies": [
+          "9",
+          "25",
+          "45",
+          "46",
+          "52"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Design and Implement Progress UI in SceneEditModal",
+            "description": "Create a visually appealing progress bar using the `shadcn/ui` Progress component.",
+            "dependencies": [],
+            "details": "Use the `shadcn/ui` Progress component to design a smooth, non-intrusive progress bar. Ensure it displays the current operation, progress percentage, and estimated time remaining.",
+            "status": "pending",
+            "testStrategy": "Perform UI tests to ensure the progress bar updates correctly with mock data.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Integrate Progress Tracking with API Methods",
+            "description": "Connect the progress UI with `regenerateScene` and `trimScene` methods to track operations.",
+            "dependencies": [
+              1
+            ],
+            "details": "Integrate the progress indicator with `regenerateScene` and `trimScene` methods. Ensure real-time updates using the job status endpoint from Task 9.",
+            "status": "pending",
+            "testStrategy": "Conduct integration tests to verify accurate progress display and responsiveness.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement Success and Error Messaging",
+            "description": "Add user-friendly success and error messages using the error handling system from Task 25.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Use the error handling system from Task 25 to display clear success and error messages. Ensure messages are informative and guide the user.",
+            "status": "pending",
+            "testStrategy": "Test error scenarios to ensure messages are displayed correctly and are user-friendly.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Consider subtasks for UI design, integration with API methods, and error handling."
+      },
+      {
+        "id": 61,
+        "title": "Implement Save & Regenerate Workflow in SceneEditModal",
+        "description": "Develop a unified workflow in SceneEditModal for saving edits and regenerating videos with error handling.",
+        "details": "1. **Local State Management**: Update the SceneEditModal component to manage local state for user-edited prompts and negative prompts.\n2. **Save & Regenerate Button**: Implement a 'Save & Regenerate Video' button that triggers the workflow.\n3. **updateScene Function**: Call `updateScene()` to save the edited prompts to the server. Ensure proper error handling and user feedback.\n4. **regenerateVideo Function**: Use the `regenerateScene` method from Task 46 to initiate video regeneration. Handle asynchronous operations with async/await.\n5. **Progress Display**: Integrate with the progress tracking system from Task 52 and Task 60 to show real-time progress in the modal.\n6. **Data Refetching**: After regeneration, refetch the project data to update the modal with the new video.\n7. **User Interaction**: Allow users to close the modal or continue editing after regeneration completes. Implement retry options for error scenarios using the error handling system from Task 25 and Task 54.",
+        "testStrategy": "1. **Unit Tests**: Verify that the local state updates correctly when prompts are edited.\n2. **Integration Tests**: Test the entire workflow from editing prompts to video regeneration, ensuring each step functions correctly.\n3. **Error Handling Tests**: Simulate errors in saving and regeneration to ensure retry options and error messages are displayed correctly.\n4. **UI Tests**: Check that the progress bar and status updates are displayed accurately during regeneration.",
+        "status": "pending",
+        "dependencies": [
+          "25",
+          "46",
+          "52",
+          "54"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Local State Management in SceneEditModal",
+            "description": "Update the SceneEditModal component to manage local state for user-edited prompts and negative prompts.",
+            "dependencies": [],
+            "details": "Modify the SceneEditModal component to include state hooks for managing user inputs. Ensure that changes to prompts are reflected in the local state and prepare the state for API integration.",
+            "status": "pending",
+            "testStrategy": "Write unit tests to verify that the local state updates correctly when prompts are edited.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Integrate Save & Regenerate API Functions",
+            "description": "Implement the 'Save & Regenerate Video' button and integrate with updateScene and regenerateScene API functions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Add a button to the SceneEditModal that triggers the save and regenerate workflow. Use the updateScene function to save changes and the regenerateScene function to regenerate the video. Handle errors and provide user feedback.",
+            "status": "pending",
+            "testStrategy": "Conduct integration tests to ensure the API functions are called correctly and handle errors gracefully.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Design User Interaction for Regeneration Workflow",
+            "description": "Design user interaction elements for the regeneration workflow, including progress display and error handling.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Integrate progress tracking using the system from Task 52. Ensure users can see real-time progress and handle errors using retry options from Task 25 and Task 54. Allow users to close the modal or continue editing after regeneration.",
+            "status": "pending",
+            "testStrategy": "Perform user interaction tests to ensure the progress display updates correctly and error handling provides appropriate feedback.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Divide into subtasks for state management, API integration, and user interaction design."
+      },
+      {
+        "id": 62,
+        "title": "Implement Lip-Sync Feature in SceneEditModal",
+        "description": "Add a lip-sync feature to the SceneEditModal with a button to generate lip-sync using the existing endpoint.",
+        "details": "1. **UI Update**: Add a 'Generate Lip-Sync' button in the Actions section of the SceneEditModal. Ensure the button is only enabled if the `needsLipSync` flag is true and `audioClipUrl` is available.\n2. **API Integration**: On button click, call the existing lipsync endpoint (POST /api/mv/lipsync) or use `orchestration.generateLipSync`.\n3. **Progress Indication**: Implement a progress indicator to show the status of the lip-sync generation process.\n4. **Update Scene**: Once the lip-sync generation is complete, update the scene with the `lipSyncedVideoClipUrl`.\n5. **Status Badge**: Display a lip-sync status badge in the video preview section.\n6. **Error Handling**: Implement error handling with retry options for failed lip-sync generation attempts.\n7. **Loading States**: Use elegant loading states to enhance user experience during asynchronous operations.",
+        "testStrategy": "1. **UI Testing**: Verify the 'Generate Lip-Sync' button appears correctly and is enabled/disabled based on the `needsLipSync` flag and `audioClipUrl`.\n2. **API Call Test**: Ensure the correct API endpoint is called with appropriate parameters when the button is clicked.\n3. **Progress Indicator Test**: Check that the progress indicator displays correctly during the lip-sync generation process.\n4. **Scene Update Test**: Confirm that the scene is updated with `lipSyncedVideoClipUrl` upon successful lip-sync generation.\n5. **Error Handling Test**: Simulate API failures to verify error handling and retry logic.\n6. **Status Badge Test**: Ensure the lip-sync status badge displays correctly in the video preview section.",
+        "status": "done",
+        "dependencies": [
+          "56",
+          "19"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Create subtasks for API integration and progress indication implementation.",
+        "updatedAt": "2025-11-23T04:28:02.711Z"
+      },
+      {
+        "id": 63,
+        "title": "Add Scene Download Feature to SceneEditModal",
+        "description": "Implement a download feature in the SceneEditModal with a button to download scenes.",
+        "details": "1. **UI Update**: Add a 'Download Scene' button with a download icon in the Actions section of the SceneEditModal.\n   - Use a consistent style with other action buttons.\n\n2. **API Client Function**: Implement `downloadScene` function in the API client.\n   - Call the endpoint `GET /api/mv/projects/{projectId}/scenes/{sequence}/download`.\n   - Handle the response to trigger a browser download with the filename format `scene-{sequence}-{projectId}.mp4`.\n\n3. **Loading State**: Display a loading indicator while the download is being prepared.\n   - Disable the button during this state to prevent multiple requests.\n\n4. **Error Handling**: Implement error handling for failed downloads.\n   - Show a user-friendly error message if the download fails.",
+        "testStrategy": "1. **UI Testing**: Verify the 'Download Scene' button appears correctly and is styled consistently with other buttons.\n2. **API Call Test**: Ensure the `downloadScene` function calls the correct API endpoint with appropriate parameters.\n3. **Download Verification**: Confirm that clicking the button triggers a download with the correct filename format.\n4. **Loading State Test**: Check that the loading indicator appears during download preparation and the button is disabled.\n5. **Error Handling Test**: Simulate a failed download and verify that an appropriate error message is displayed to the user.",
+        "status": "done",
+        "dependencies": [
+          "56"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "complexity": 5,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Consider subtasks for API client function implementation and error handling.",
+        "updatedAt": "2025-11-23T04:25:00.202Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-11-20T21:46:24.181Z",
-      "taskCount": 62,
-      "completedCount": 60,
+      "lastModified": "2025-11-23T04:28:19.230Z",
+      "taskCount": 56,
+      "completedCount": 48,
       "tags": [
         "master"
       ],
-      "created": "2025-11-20T21:46:32.903Z",
+      "created": "2025-11-23T11:18:08.244Z",
       "description": "Tasks for master context",
-      "updated": "2025-11-17T16:40:20.357Z"
+      "updated": "2025-11-23T11:25:06.202Z"
     }
   }
 }

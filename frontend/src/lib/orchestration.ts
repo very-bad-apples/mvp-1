@@ -28,7 +28,7 @@ import type {
   GenerateVideoRequest,
   LipsyncRequest,
 } from '@/types/api'
-import type { Project, ProjectStatus, Scene } from '@/types/project'
+import type { Project, ProjectStatus } from '@/types/project'
 
 /**
  * Orchestration phase types

@@ -4,20 +4,11 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Loader2, MoreVertical, RefreshCw, Edit, Video, AlertCircle } from 'lucide-react'
+import { Loader2, Edit, Video, AlertCircle } from 'lucide-react'
 import type { Project, ProjectScene } from '@/types/project'
-import {
-  regenerateScenePrompt,
-  regenerateVideo,
-  regenerateLipSync,
-} from '@/lib/orchestration'
-import { useToast } from '@/hooks/useToast'
+import { useSceneToast } from '@/hooks/useSceneToast'
+import { getSceneVideoUrl } from '@/lib/utils/video'
+import { SceneEditModal } from '@/components/SceneEditModal'
 
 interface ScenesPanelProps {
   project: Project
@@ -32,71 +23,18 @@ export function ScenesPanel({
   onSceneSelect,
   onProjectUpdate,
 }: ScenesPanelProps) {
-  const [regeneratingScenes, setRegeneratingScenes] = useState<Set<string>>(new Set())
-  const { toast } = useToast()
+  const sceneToast = useSceneToast()
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedSceneForEdit, setSelectedSceneForEdit] = useState<ProjectScene | null>(null)
 
-  const handleRegenerateScene = async (scene: ProjectScene, type: 'prompt' | 'video' | 'all') => {
-    const sceneId = `scene-${scene.sequence}`
-    setRegeneratingScenes(prev => new Set(prev).add(sceneId))
+  const handleEditScene = (scene: ProjectScene) => {
+    setSelectedSceneForEdit(scene)
+    setEditModalOpen(true)
+  }
 
-    try {
-      toast({
-        title: 'Regenerating Scene',
-        description: `Regenerating ${type} for Scene ${scene.sequence}...`,
-      })
-
-      const sceneIndex = scene.sequence - 1
-
-      if (type === 'prompt' || type === 'all') {
-        await regenerateScenePrompt(
-          project.projectId,
-          sceneIndex,
-          {
-            onProgress: (phase, idx, total, message) => {
-              console.log(`Regenerate prompt progress: ${message}`)
-            },
-            onError: (phase, idx, error) => {
-              console.error('Regenerate prompt error:', error)
-            },
-          }
-        )
-      }
-
-      if (type === 'video' || type === 'all') {
-        await regenerateVideo(
-          project.projectId,
-          sceneIndex,
-          {
-            onProgress: (phase, idx, total, message) => {
-              console.log(`Regenerate video progress: ${message}`)
-            },
-            onError: (phase, idx, error) => {
-              console.error('Regenerate video error:', error)
-            },
-          }
-        )
-      }
-
-      toast({
-        title: 'Regeneration Complete',
-        description: `Scene ${scene.sequence} has been regenerated successfully.`,
-      })
-
-      await onProjectUpdate()
-    } catch (error) {
-      console.error('Regeneration error:', error)
-      toast({
-        title: 'Regeneration Failed',
-        description: error instanceof Error ? error.message : 'Failed to regenerate scene',
-        variant: 'destructive',
-      })
-    } finally {
-      setRegeneratingScenes(prev => {
-        const next = new Set(prev)
-        next.delete(sceneId)
-        return next
-      })
-    }
+  const handleSceneUpdate = () => {
+    // Refresh the project data when a scene is updated
+    onProjectUpdate()
   }
 
   const getSceneStatus = (scene: ProjectScene) => {
@@ -146,7 +84,6 @@ export function ScenesPanel({
             const sceneId = `scene-${scene.sequence}`
             const isSelected = selectedSceneId === sceneId
             const status = getSceneStatus(scene)
-            const isRegenerating = regeneratingScenes.has(sceneId)
 
             return (
               <Card
@@ -167,61 +104,13 @@ export function ScenesPanel({
                       </Badge>
                       {getStatusBadge(status)}
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-gray-400 hover:text-white"
-                          disabled={isRegenerating}
-                        >
-                          {isRegenerating ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <MoreVertical className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRegenerateScene(scene, 'all')
-                          }}
-                          className="text-gray-200 hover:bg-gray-700"
-                        >
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Regenerate All
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRegenerateScene(scene, 'prompt')
-                          }}
-                          className="text-gray-200 hover:bg-gray-700"
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Regenerate Prompt
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleRegenerateScene(scene, 'video')
-                          }}
-                          className="text-gray-200 hover:bg-gray-700"
-                        >
-                          <Video className="mr-2 h-4 w-4" />
-                          Regenerate Video
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
 
                   {/* Video Thumbnail */}
                   <div className="relative aspect-video bg-gray-900 rounded-md overflow-hidden mb-2">
-                    {scene.videoClipUrl ? (
+                    {getSceneVideoUrl(scene) ? (
                       <video
-                        src={scene.videoClipUrl}
+                        src={getSceneVideoUrl(scene)}
                         className="w-full h-full object-cover pointer-events-none"
                         muted
                         preload="metadata"
@@ -247,6 +136,19 @@ export function ScenesPanel({
                     {scene.prompt || 'No description available'}
                   </p>
 
+                  {/* Edit Scene Button */}
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditScene(scene)
+                    }}
+                    className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white border-blue-500/50"
+                    size="sm"
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Scene
+                  </Button>
+
                   {/* Error Message */}
                   {scene.errorMessage && (
                     <p className="text-xs text-red-400 mt-2">
@@ -266,6 +168,17 @@ export function ScenesPanel({
           })
         )}
       </div>
+
+      {/* Scene Edit Modal */}
+      {selectedSceneForEdit && (
+        <SceneEditModal
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+          scene={selectedSceneForEdit}
+          projectId={project.projectId}
+          onSceneUpdate={handleSceneUpdate}
+        />
+      )}
     </div>
   )
 }

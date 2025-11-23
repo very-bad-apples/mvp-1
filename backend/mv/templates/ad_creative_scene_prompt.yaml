@@ -43,7 +43,7 @@ prompt_template: |
   ```
 
 # Generation parameters
-number_of_scenes: 2
+number_of_scenes: 4
 video_characteristics: "professional commercial, clean aesthetic, product-focused, 4k"
 camera_angle: "front - product showcase"
 duration_per_scene: 8.0

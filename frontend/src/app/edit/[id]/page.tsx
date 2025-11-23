@@ -8,10 +8,9 @@ import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { ScenesPanel } from '@/components/ScenesPanel'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { generateScenes, composeVideo, updateScene } from '@/lib/api/client'
+import { generateScenes, composeVideo } from '@/lib/api/client'
 import { useToast } from '@/hooks/useToast'
 import { SceneGenerationOverlay } from '@/components/SceneGenerationOverlay'
-import { SceneDetailPanel } from '@/components/SceneDetailPanel'
 import { startFullGeneration } from '@/lib/orchestration'
 
 export default function EditPage({ params }: { params: { id: string } }) {
@@ -27,6 +26,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
   const sceneGenerationTriggered = useRef(false)
   const overlayDismissed = useRef(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const lastAutoSelectedSceneRef = useRef<string | null>(null)
   const { toast } = useToast()
 
   // Fetch project data using the API client hook
@@ -65,30 +65,31 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     if (scenesWithVideos.length === 0) return
 
-    // Calculate which scene is playing at currentTime
+    // Find the scene that should be playing at current time
+    let targetSceneId: string | null = null
     let accumulatedTime = 0
+
     for (const scene of scenesWithVideos) {
       const sceneDuration = scene.duration || 0
       if (currentTime >= accumulatedTime && currentTime < accumulatedTime + sceneDuration) {
-        // This scene is currently playing - auto-select it
-        const sceneId = `scene-${scene.sequence}`
-        if (selectedSceneId !== sceneId) {
-          setSelectedSceneId(sceneId)
-        }
-        return
+        targetSceneId = `scene-${scene.sequence}`
+        break
       }
       accumulatedTime += sceneDuration
     }
 
     // If we're beyond all scenes, select the last scene
-    if (currentTime >= accumulatedTime && scenesWithVideos.length > 0) {
+    if (!targetSceneId && currentTime >= accumulatedTime && scenesWithVideos.length > 0) {
       const lastScene = scenesWithVideos[scenesWithVideos.length - 1]
-      const sceneId = `scene-${lastScene.sequence}`
-      if (selectedSceneId !== sceneId) {
-        setSelectedSceneId(sceneId)
-      }
+      targetSceneId = `scene-${lastScene.sequence}`
     }
-  }, [currentTime, project?.scenes, selectedSceneId])
+
+    // Only update if the target scene changed
+    if (targetSceneId && targetSceneId !== lastAutoSelectedSceneRef.current) {
+      lastAutoSelectedSceneRef.current = targetSceneId
+      setSelectedSceneId(targetSceneId)
+    }
+  }, [currentTime, project?.scenes])
 
   // Get the selected scene object from the ID
   const selectedScene = useMemo(() => {
@@ -102,6 +103,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
     if (!sceneId || !project?.scenes) {
       return
     }
+
+    // Reset auto-selection tracking when user manually selects
+    lastAutoSelectedSceneRef.current = null
 
     // Parse scene sequence from ID
     const sequence = parseInt(sceneId.replace('scene-', ''))
@@ -333,38 +337,51 @@ export default function EditPage({ params }: { params: { id: string } }) {
   }, [isPlaying, project?.audioBackingTrackUrl])
 
   // Sync audio currentTime with video currentTime
-  // Only sync when paused (user seeking) or when playback starts
+  // Sync when paused, when playback starts, or when user seeks during playback
   // During normal playback, let audio play naturally without constant syncing to avoid choppiness
   const lastSyncedTimeRef = useRef<number>(0)
   const wasPlayingRef = useRef<boolean>(false)
-  
+  const prevCurrentTimeRef = useRef<number>(0)
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !project?.audioBackingTrackUrl) return
+
+    // Calculate the change in currentTime to detect seek operations
+    const timeDelta = Math.abs(currentTime - prevCurrentTimeRef.current)
+
+    // Detect if this is a seek operation (large jump in time)
+    // Normal playback updates happen in small increments (< 0.5s)
+    // Seeks typically jump by larger amounts
+    const isSeekOperation = timeDelta > 0.5
 
     // Sync when playback starts (to ensure audio starts at correct position)
     if (isPlaying && !wasPlayingRef.current) {
       audio.currentTime = currentTime
       lastSyncedTimeRef.current = currentTime
       wasPlayingRef.current = true
+      prevCurrentTimeRef.current = currentTime
       return
     }
-    
+
     // Update ref when playback stops
     if (!isPlaying) {
       wasPlayingRef.current = false
     }
 
-    // Only sync when paused (user is seeking) - don't sync during playback
-    if (!isPlaying) {
+    // Sync when paused OR when a seek operation is detected while playing
+    if (!isPlaying || isSeekOperation) {
       const diff = Math.abs(audio.currentTime - currentTime)
       if (diff > 0.1) {
         audio.currentTime = currentTime
         lastSyncedTimeRef.current = currentTime
       }
     }
-    // During playback, don't sync - let audio play naturally
-    // The audio will stay in sync because both started at the same time
+
+    // Update previous time for next comparison
+    prevCurrentTimeRef.current = currentTime
+
+    // During normal playback (no seek), don't sync - let audio play naturally
   }, [currentTime, isPlaying, project?.audioBackingTrackUrl])
 
   // Sync audio volume with state
@@ -454,58 +471,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
         variant: "destructive",
       })
       setIsComposing(false)
-    }
-  }
-
-  // Handle scene prompt update
-  const handleUpdateScenePrompt = async (sceneSequence: number, newPrompt: string) => {
-    if (!project) return
-
-    try {
-      // Update the scene via the new dedicated endpoint
-      await updateScene(params.id, sceneSequence, { prompt: newPrompt })
-
-      toast({
-        title: "Prompt Updated",
-        description: `Scene ${sceneSequence} prompt has been updated successfully.`,
-      })
-
-      // Refetch project to get updated data
-      await refetch()
-    } catch (error) {
-      console.error('Error updating scene prompt:', error)
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update scene prompt",
-        variant: "destructive",
-      })
-      throw error
-    }
-  }
-
-  // Handle scene negative prompt update
-  const handleUpdateSceneNegativePrompt = async (sceneSequence: number, newNegativePrompt: string) => {
-    if (!project) return
-
-    try {
-      // Update the scene via the dedicated endpoint
-      await updateScene(params.id, sceneSequence, { negativePrompt: newNegativePrompt })
-
-      toast({
-        title: "Negative Prompt Updated",
-        description: `Scene ${sceneSequence} negative prompt has been updated successfully.`,
-      })
-
-      // Refetch project to get updated data
-      await refetch()
-    } catch (error) {
-      console.error('Error updating scene negative prompt:', error)
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update scene negative prompt",
-        variant: "destructive",
-      })
-      throw error
     }
   }
 
@@ -630,15 +595,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
                 onAudioMuteChange={project?.audioBackingTrackUrl ? handleAudioMuteChange : undefined}
               />
             </div>
-
-            {/* Scene Detail Panel - Only show when a scene is selected */}
-            {selectedScene && (
-              <SceneDetailPanel
-                scene={selectedScene}
-                onUpdatePrompt={handleUpdateScenePrompt}
-                onUpdateNegativePrompt={handleUpdateSceneNegativePrompt}
-              />
-            )}
           </div>
         </div>
       </div>
