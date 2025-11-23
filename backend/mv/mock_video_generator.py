@@ -222,19 +222,26 @@ def generate_mock_video(
             async def upload_job_to_cloud():
                 storage = get_storage_backend()
                 urls = {}
-                
+
+                # Import cleanup function
+                from services.s3_storage import delete_local_file_after_upload
+
                 # Upload video
                 urls["video"] = await storage.upload_file(
                     str(video_path),
                     f"mv/jobs/{video_id}/video.mp4"
                 )
-                
+                # Delete local video file after successful upload
+                delete_local_file_after_upload(str(video_path))
+
                 # Upload metadata
                 urls["metadata"] = await storage.upload_file(
                     str(metadata_path),
                     f"mv/jobs/{video_id}/metadata.json"
                 )
-                
+                # Delete local metadata file after successful upload
+                delete_local_file_after_upload(str(metadata_path))
+
                 # Upload reference image if exists
                 ref_image_path = job_dir / "reference_image.jpg"
                 if ref_image_path.exists():
@@ -242,7 +249,25 @@ def generate_mock_video(
                         str(ref_image_path),
                         f"mv/jobs/{video_id}/reference_image.jpg"
                     )
-                
+                    # Delete local reference image after successful upload
+                    delete_local_file_after_upload(str(ref_image_path))
+
+                # Delete the empty job directory after all files are uploaded and deleted
+                try:
+                    import shutil
+                    if job_dir.exists():
+                        shutil.rmtree(str(job_dir))
+                        logger.info(
+                            "mock_job_directory_deleted_after_upload",
+                            job_dir=str(job_dir)
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "failed_to_delete_mock_job_directory",
+                        job_dir=str(job_dir),
+                        error=str(e)
+                    )
+
                 return urls
             
             # Run async upload - handle both sync and async contexts
