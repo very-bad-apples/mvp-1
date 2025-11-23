@@ -40,7 +40,7 @@ export function AssetGallery({
     if (characterReferenceImageId) {
       const imageUrl = characterReferenceImageId.startsWith('http')
         ? characterReferenceImageId
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/mv/get_character_reference/${characterReferenceImageId}`
+        : `/api/mv/get_character_reference/${characterReferenceImageId}`
 
       assetList.push({
         id: `character-${characterReferenceImageId}`,

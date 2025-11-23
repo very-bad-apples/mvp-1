@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+// Extend timeout for long-running video stitching operations (5 minutes)
+export const maxDuration = 300
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 // Use server-side API key (not exposed to client)

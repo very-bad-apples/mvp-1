@@ -19,8 +19,6 @@ import { createProject, getDirectorConfigs, generateCharacterReference, uploadCh
 
 // Use relative paths to proxy routes (API key handled server-side)
 const API_BASE = '/api/mv'
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 type Mode = 'ad-creative' | 'music-video'
 
@@ -274,9 +272,7 @@ export default function CreatePage() {
       } else if (audioSource === 'youtube' && downloadedAudioId) {
         // Fetch YouTube audio file from backend and convert to File
         try {
-          const audioResponse = await fetch(`${API_URL}/api/audio/get/${downloadedAudioId}`, {
-            headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-          })
+          const audioResponse = await fetch(`/api/audio/get/${downloadedAudioId}`)
 
           if (!audioResponse.ok) {
             throw new Error(`Failed to fetch audio file: ${audioResponse.statusText}`)
@@ -405,9 +401,7 @@ export default function CreatePage() {
         } else {
           // Otherwise, fetch the image from the backend
           try {
-            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
-              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-            })
+            const response = await fetch(`/api/mv/get_character_reference/${image.id}?redirect=false`)
 
             if (!response.ok) {
               throw new Error(`Failed to fetch image ${image.id}`)
@@ -886,11 +880,10 @@ export default function CreatePage() {
 
                               setIsConvertingAudio(true)
                               try {
-                                const response = await fetch(`${API_URL}/api/audio/convert-youtube`, {
+                                const response = await fetch(`/api/audio/convert-youtube`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
-                                    'X-API-Key': API_KEY,
                                   },
                                   body: JSON.stringify({ url: youtubeUrl }),
                                 })

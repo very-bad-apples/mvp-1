@@ -258,13 +258,6 @@ function logRetryAttempt(
 }
 
 /**
- * Get API key from environment
- */
-function getAPIKey(): string | undefined {
-  return process.env.NEXT_PUBLIC_API_KEY
-}
-
-/**
  * Base fetch wrapper with error handling
  */
 async function apiFetch<T>(
@@ -277,16 +270,10 @@ async function apiFetch<T>(
 
   for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
     try {
-      // Build headers with API key for backend requests
+      // Build headers - API key is now handled server-side by Next.js proxy routes
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string> || {}),
-      }
-
-      // Add API key header if available and URL is for backend (not Next.js routes)
-      const apiKey = getAPIKey()
-      if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
-        headers['X-API-Key'] = apiKey
       }
 
       const response = await fetch(url, {
@@ -405,18 +392,45 @@ async function apiFetch<T>(
 }
 
 /**
- * Get API URL from environment
+ * API Route Paths (relative URLs to Next.js proxy routes)
  */
-function getAPIUrl(): string {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (!apiUrl) {
-    throw new ConfigurationError(
-      'API URL not configured',
-      'NEXT_PUBLIC_API_URL environment variable is not set'
-    )
-  }
-  return apiUrl
-}
+const API_ROUTES = {
+  // Project routes
+  PROJECTS: '/api/mv/projects',
+  PROJECT_BY_ID: (id: string) => `/api/mv/projects/${id}`,
+  PROJECT_SCENES: (id: string, sequence: number) => `/api/mv/projects/${id}/scenes/${sequence}`,
+  PROJECT_COMPOSE: (id: string) => `/api/mv/projects/${id}/compose`,
+  PROJECT_GENERATE: (id: string) => `/api/mv/projects/${id}/generate`,
+
+  // Generation routes
+  CREATE_SCENES: '/api/mv/create_scenes',
+  GENERATE_CHARACTER_REF: '/api/mv/generate_character_reference',
+  UPLOAD_CHARACTER_REF: '/api/mv/upload_character_reference',
+  GENERATE_VIDEO: '/api/mv/generate_video',
+  LIPSYNC: '/api/mv/lipsync',
+  STITCH_VIDEOS: '/api/mv/stitch-videos',
+
+  // Retrieval routes
+  GET_CHARACTER_REF: (imageId: string) => `/api/mv/get_character_reference/${imageId}`,
+  GET_VIDEO: (videoId: string) => `/api/mv/get_video/${videoId}`,
+  GET_VIDEO_INFO: (videoId: string) => `/api/mv/get_video/${videoId}/info`,
+
+  // Config routes
+  CONFIG_FLAVORS: '/api/mv/get_config_flavors',
+  DIRECTOR_CONFIGS: '/api/mv/get_director_configs',
+
+  // Audio routes
+  AUDIO_DOWNLOAD: '/api/audio/download',
+  AUDIO_GET: (audioId: string) => `/api/audio/get/${audioId}`,
+  AUDIO_INFO: (audioId: string) => `/api/audio/info/${audioId}`,
+  AUDIO_CONVERT_YOUTUBE: '/api/audio/convert-youtube',
+
+  // Jobs routes
+  JOB_BY_ID: (jobId: string) => `/api/jobs/${jobId}`,
+
+  // Health check
+  HEALTH: '/api/health',
+} as const
 
 /**
  * API Client Functions
@@ -434,7 +448,7 @@ function getAPIUrl(): string {
 export async function createProject(
   data: CreateProjectRequest
 ): Promise<CreateProjectResponse> {
-  const url = `${getAPIUrl()}/api/mv/projects`
+  const url = API_ROUTES.PROJECTS
 
   // Build FormData for multipart/form-data request
   const formData = new FormData()
@@ -473,12 +487,8 @@ export async function createProject(
     formData.append('audio', data.audio)
   }
 
-  // Get API key
-  const apiKey = getAPIKey()
+  // API key handled by proxy route
   const headers: Record<string, string> = {}
-  if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
-    headers['X-API-Key'] = apiKey
-  }
 
   // Use fetch directly (not apiFetch) because FormData sets its own Content-Type with boundary
   const response = await fetch(url, {
@@ -521,7 +531,7 @@ export async function createProject(
 export async function getProject(
   projectId: string
 ): Promise<GetProjectResponse> {
-  const url = `${getAPIUrl()}/api/mv/projects/${projectId}`
+  const url = API_ROUTES.PROJECT_BY_ID(projectId)
   return apiFetch<GetProjectResponse>(url, {
     method: 'GET',
   })
@@ -537,7 +547,7 @@ export async function updateProject(
   projectId: string,
   data: UpdateProjectRequest
 ): Promise<UpdateProjectResponse> {
-  const url = `${getAPIUrl()}/api/mv/projects/${projectId}`
+  const url = API_ROUTES.PROJECT_BY_ID(projectId)
   return apiFetch<UpdateProjectResponse>(url, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -556,7 +566,7 @@ export async function updateScene(
   sequence: number,
   data: { prompt?: string; negativePrompt?: string }
 ): Promise<any> {
-  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}`
+  const url = API_ROUTES.PROJECT_SCENES(projectId, sequence)
   return apiFetch<any>(url, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -575,7 +585,7 @@ export async function updateScene(
 export async function generateScenes(
   data: CreateScenesRequest
 ): Promise<CreateScenesResponse> {
-  const url = `${getAPIUrl()}/api/mv/create_scenes`
+  const url = API_ROUTES.CREATE_SCENES
   return apiFetch<CreateScenesResponse>(
     url,
     {
@@ -596,7 +606,7 @@ export async function generateScenes(
 export async function generateCharacterReference(
   data: GenerateCharacterReferenceRequest
 ): Promise<GenerateCharacterReferenceResponse> {
-  const url = `${getAPIUrl()}/api/mv/generate_character_reference`
+  const url = API_ROUTES.GENERATE_CHARACTER_REF
   return apiFetch<GenerateCharacterReferenceResponse>(
     url,
     {
@@ -617,19 +627,16 @@ export async function generateCharacterReference(
 export async function uploadCharacterReference(
   file: File
 ): Promise<UploadCharacterReferenceResponse> {
-  const url = `${getAPIUrl()}/api/mv/upload_character_reference`
-  
+  const url = API_ROUTES.UPLOAD_CHARACTER_REF
+
   // Create FormData for multipart/form-data request
   const formData = new FormData()
   formData.append('file', file)
-  
-  // Build headers with API key (don't set Content-Type - browser will set it with boundary)
+
+  // Don't set Content-Type - browser will set it with boundary for FormData
+  // API key handled by proxy route
   const headers: Record<string, string> = {}
-  const apiKey = getAPIKey()
-  if (apiKey) {
-    headers['X-API-Key'] = apiKey
-  }
-  
+
   // Use fetch directly for file uploads (FormData sets its own Content-Type with boundary)
   const response = await fetch(url, {
     method: 'POST',
@@ -658,7 +665,7 @@ export async function uploadCharacterReference(
 export async function generateVideo(
   data: GenerateVideoRequest
 ): Promise<GenerateVideoResponse> {
-  const url = `${getAPIUrl()}/api/mv/generate_video`
+  const url = API_ROUTES.GENERATE_VIDEO
   return apiFetch<GenerateVideoResponse>(
     url,
     {
@@ -679,7 +686,7 @@ export async function generateVideo(
 export async function generateLipSync(
   data: LipsyncRequest
 ): Promise<LipsyncResponse> {
-  const url = `${getAPIUrl()}/api/mv/lipsync`
+  const url = API_ROUTES.LIPSYNC
   return apiFetch<LipsyncResponse>(
     url,
     {
@@ -702,7 +709,7 @@ export async function generateLipSync(
  * @returns Response object (use response.blob() to get image data)
  */
 export async function getCharacterReference(imageId: string): Promise<Response> {
-  const url = `${getAPIUrl()}/api/mv/get_character_reference/${imageId}`
+  const url = API_ROUTES.GET_CHARACTER_REF(imageId)
   return apiFetch<Response>(url, {
     method: 'GET',
   })
@@ -714,7 +721,7 @@ export async function getCharacterReference(imageId: string): Promise<Response> 
  * @returns Response object (use response.blob() to get video data)
  */
 export async function getVideo(videoId: string): Promise<Response> {
-  const url = `${getAPIUrl()}/api/mv/get_video/${videoId}`
+  const url = API_ROUTES.GET_VIDEO(videoId)
   return apiFetch<Response>(url, {
     method: 'GET',
   })
@@ -726,7 +733,7 @@ export async function getVideo(videoId: string): Promise<Response> {
  * @returns Video metadata
  */
 export async function getVideoInfo(videoId: string): Promise<VideoInfoResponse> {
-  const url = `${getAPIUrl()}/api/mv/get_video/${videoId}/info`
+  const url = API_ROUTES.GET_VIDEO_INFO(videoId)
   return apiFetch<VideoInfoResponse>(url, {
     method: 'GET',
   })
@@ -742,7 +749,7 @@ export async function getVideoInfo(videoId: string): Promise<VideoInfoResponse> 
  * @returns Full URL to image
  */
 export function getCharacterReferenceUrl(imageId: string): string {
-  return `${getAPIUrl()}/api/mv/get_character_reference/${imageId}`
+  return API_ROUTES.GET_CHARACTER_REF(imageId)
 }
 
 /**
@@ -751,7 +758,7 @@ export function getCharacterReferenceUrl(imageId: string): string {
  * @returns Full URL to video
  */
 export function getVideoUrl(videoId: string): string {
-  return `${getAPIUrl()}/api/mv/get_video/${videoId}`
+  return API_ROUTES.GET_VIDEO(videoId)
 }
 
 /**
@@ -759,7 +766,7 @@ export function getVideoUrl(videoId: string): string {
  * @returns Available config flavors
  */
 export async function getConfigFlavors(): Promise<{ flavors: string[] }> {
-  const url = `${getAPIUrl()}/api/mv/get_config_flavors`
+  const url = API_ROUTES.CONFIG_FLAVORS
   return apiFetch<{ flavors: string[] }>(url, {
     method: 'GET',
   })
@@ -770,7 +777,7 @@ export async function getConfigFlavors(): Promise<{ flavors: string[] }> {
  * @returns List of available director config names
  */
 export async function getDirectorConfigs(): Promise<{ configs: string[] }> {
-  const url = `${getAPIUrl()}/api/mv/get_director_configs`
+  const url = API_ROUTES.DIRECTOR_CONFIGS
   return apiFetch<{ configs: string[] }>(url, {
     method: 'GET',
   })
@@ -786,7 +793,7 @@ export async function composeVideo(
   projectId: string,
   data: ComposeRequest = {}
 ): Promise<ComposeResponse> {
-  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/compose`
+  const url = API_ROUTES.PROJECT_COMPOSE(projectId)
   return apiFetch<ComposeResponse>(
     url,
     {
@@ -805,7 +812,7 @@ export async function composeVideo(
  */
 export async function healthCheck(): Promise<boolean> {
   try {
-    const url = `${getAPIUrl()}/health`
+    const url = API_ROUTES.HEALTH
     const response = await fetch(url, { method: 'GET' })
     return response.ok
   } catch {
