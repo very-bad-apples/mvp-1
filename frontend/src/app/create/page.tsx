@@ -24,6 +24,31 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
 
 type Mode = 'ad-creative' | 'music-video'
 
+type AudioModelParameter = {
+  name: string
+  type: string
+  required: boolean
+  description: string
+  control?: 'text' | 'textarea' | 'number' | 'select' | 'boolean'
+  options?: { label: string; value: string }[]
+  min?: number
+  max?: number
+  step?: number
+  placeholder?: string
+}
+
+type AudioModelMetadata = {
+  key: string
+  model_id: string
+  display_name: string
+  provider: string
+  description: string
+  docs_url: string
+  max_duration_seconds: number
+  parameters: AudioModelParameter[]
+  default_params: Record<string, unknown>
+}
+
 export default function CreatePage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -38,7 +63,14 @@ export default function CreatePage() {
   const [convertedAudioFile, setConvertedAudioFile] = useState<File | null>(null)
   const [isConvertingAudio, setIsConvertingAudio] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState<string>('')
-  const [audioSource, setAudioSource] = useState<'upload' | 'youtube'>('upload')
+  const [audioSource, setAudioSource] = useState<'upload' | 'youtube' | 'ai-music'>('upload')
+  const [aiMusicPrompt, setAiMusicPrompt] = useState<string>('')
+  const [aiMusicLyrics, setAiMusicLyrics] = useState<string>('')
+  const [showAdvancedAudioOptions, setShowAdvancedAudioOptions] = useState(false)
+  const [aiMusicSampleRate, setAiMusicSampleRate] = useState<number>(44100)
+  const [aiMusicBitrate, setAiMusicBitrate] = useState<number>(256000)
+  const [isGeneratingAiMusic, setIsGeneratingAiMusic] = useState(false)
+  const [generatedAiMusicFile, setGeneratedAiMusicFile] = useState<File | null>(null)
   const [imageSource, setImageSource] = useState<'upload' | 'generate'>('generate')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
@@ -77,6 +109,7 @@ export default function CreatePage() {
 
     fetchDirectorConfigs()
   }, [])
+
 
   // Cleanup blob URLs on unmount to prevent memory leaks
   useEffect(() => {
@@ -190,6 +223,14 @@ export default function CreatePage() {
       })
       return
     }
+    if (audioSource === 'ai-music' && !generatedAiMusicFile) {
+      toast({
+        title: "Error",
+        description: "Please generate AI music first",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsSubmitting(true)
 
@@ -254,6 +295,9 @@ export default function CreatePage() {
           setIsSubmitting(false)
           return
         }
+      } else if (audioSource === 'ai-music' && generatedAiMusicFile) {
+        // Use AI-generated music file
+        audioFile = generatedAiMusicFile
       }
 
       // Call the createProject API
@@ -296,6 +340,7 @@ export default function CreatePage() {
       setIsSubmitting(false)
     }
   }
+
 
   const handleQuickJob = () => {
     // Get character reference image ID if character image is selected
@@ -756,18 +801,24 @@ export default function CreatePage() {
                   <Tabs
                     value={audioSource}
                     onValueChange={(value) => {
-                      setAudioSource(value as 'upload' | 'youtube')
-                      // Clear the other source when switching
+                      setAudioSource(value as 'upload' | 'youtube' | 'ai-music')
+                      // Clear the other sources when switching
                       if (value === 'upload') {
                         setYoutubeUrl('')
                         setConvertedAudioFile(null)
-                      } else {
+                        setGeneratedAiMusicFile(null)
+                      } else if (value === 'youtube') {
                         setUploadedAudio(null)
+                        setGeneratedAiMusicFile(null)
+                      } else if (value === 'ai-music') {
+                        setUploadedAudio(null)
+                        setYoutubeUrl('')
+                        setConvertedAudioFile(null)
                       }
                     }}
                     className="w-full"
                   >
-                    <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-900/50">
+                    <TabsList className="grid w-full grid-cols-3 h-10 bg-gray-900/50">
                       <TabsTrigger
                         value="upload"
                         className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
@@ -779,6 +830,12 @@ export default function CreatePage() {
                         className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                       >
                         YouTube URL
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="ai-music"
+                        className="text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      >
+                        AI Music
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -906,6 +963,251 @@ export default function CreatePage() {
                       {!convertedAudioFile && !isConvertingAudio && (
                         <p className="text-xs text-red-400">
                           Click &quot;Convert&quot; to download audio from YouTube
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI Music Generation */}
+                  {audioSource === 'ai-music' && (
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="ai-music-prompt" className="text-white flex items-center gap-1">
+                            Music Prompt
+                            <span className="text-red-400">*</span>
+                          </Label>
+                          <Textarea
+                            id="ai-music-prompt"
+                            placeholder="Energetic electro-pop track with soaring synths and pulsing bass..."
+                            value={aiMusicPrompt}
+                            onChange={(e) => setAiMusicPrompt(e.target.value)}
+                            className="bg-gray-800 border-gray-700 text-white placeholder-gray-500 mt-2 min-h-[100px]"
+                            disabled={isGeneratingAiMusic}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">
+                            Describe the music you want to generate (10-300 characters)
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="ai-music-lyrics" className="text-white flex items-center gap-1">
+                            Lyrics
+                            <span className="text-xs text-gray-500 ml-1">(Optional - leave blank for instrumental)</span>
+                          </Label>
+                          <Textarea
+                            id="ai-music-lyrics"
+                            placeholder="[Verse]&#10;Dancing under starlight&#10;[Chorus]&#10;Feel the rhythm tonight..."
+                            value={aiMusicLyrics}
+                            onChange={(e) => setAiMusicLyrics(e.target.value)}
+                            className="bg-gray-800 border-gray-700 text-white placeholder-gray-500 mt-2 min-h-[120px]"
+                            disabled={isGeneratingAiMusic}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">
+                            Use tags like [Verse], [Chorus], [Bridge], [Outro] (10-600 characters, or leave empty for instrumental)
+                          </p>
+                        </div>
+
+                        {/* Advanced Options */}
+                        <div className="border border-gray-700 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setShowAdvancedAudioOptions(!showAdvancedAudioOptions)}
+                            className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-800/30 transition-colors"
+                          >
+                            <span className="text-sm font-medium text-white">Advanced Audio Options</span>
+                            <span className="text-gray-400">{showAdvancedAudioOptions ? '−' : '+'}</span>
+                          </button>
+                          
+                          {showAdvancedAudioOptions && (
+                            <div className="p-4 pt-0 space-y-4 border-t border-gray-700">
+                              <div>
+                                <Label htmlFor="ai-music-sample-rate" className="text-white text-sm flex items-center gap-2">
+                                  Sample Rate
+                                  <span className="text-xs text-gray-500 font-normal">
+                                    (Higher = better quality)
+                                  </span>
+                                </Label>
+                                <Select
+                                  value={String(aiMusicSampleRate)}
+                                  onValueChange={(value) => setAiMusicSampleRate(Number(value))}
+                                  disabled={isGeneratingAiMusic}
+                                >
+                                  <SelectTrigger id="ai-music-sample-rate" className="bg-gray-800 border-gray-700 text-white mt-2">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                                    <SelectItem value="16000">16 kHz (Phone quality)</SelectItem>
+                                    <SelectItem value="24000">24 kHz (Acceptable)</SelectItem>
+                                    <SelectItem value="32000">32 kHz (Good)</SelectItem>
+                                    <SelectItem value="44100">44.1 kHz (CD quality - Recommended)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label htmlFor="ai-music-bitrate" className="text-white text-sm flex items-center gap-2">
+                                  Bitrate
+                                  <span className="text-xs text-gray-500 font-normal">
+                                    (Higher = better sound)
+                                  </span>
+                                </Label>
+                                <Select
+                                  value={String(aiMusicBitrate)}
+                                  onValueChange={(value) => setAiMusicBitrate(Number(value))}
+                                  disabled={isGeneratingAiMusic}
+                                >
+                                  <SelectTrigger id="ai-music-bitrate" className="bg-gray-800 border-gray-700 text-white mt-2">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-gray-800 border-gray-700 text-white">
+                                    <SelectItem value="32000">32 kbps (Very compressed)</SelectItem>
+                                    <SelectItem value="64000">64 kbps (Low quality)</SelectItem>
+                                    <SelectItem value="128000">128 kbps (Acceptable)</SelectItem>
+                                    <SelectItem value="256000">256 kbps (High quality - Recommended)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          onClick={async () => {
+                            if (!aiMusicPrompt.trim()) {
+                              toast({
+                                title: "Error",
+                                description: "Please enter a music prompt",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            if (aiMusicPrompt.trim().length < 10) {
+                              toast({
+                                title: "Error",
+                                description: "Prompt must be at least 10 characters",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            if (aiMusicLyrics.trim() && aiMusicLyrics.trim().length < 10) {
+                              toast({
+                                title: "Error",
+                                description: "Lyrics must be at least 10 characters or left empty",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            setIsGeneratingAiMusic(true)
+                            try {
+                              // Build parameters object - only include lyrics if provided
+                              const parameters: Record<string, any> = {
+                                prompt: aiMusicPrompt,
+                                sample_rate: aiMusicSampleRate,
+                                bitrate: aiMusicBitrate,
+                                audio_format: 'mp3',
+                              }
+                              
+                              // Only add lyrics if user provided them (for instrumental, omit this field)
+                              if (aiMusicLyrics.trim()) {
+                                parameters.lyrics = aiMusicLyrics
+                              }
+
+                              const response = await fetch(`${API_URL}/api/audio/models/run`, {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+                                },
+                                body: JSON.stringify({
+                                  model_key: 'minimax_music_1_5',
+                                  parameters,
+                                }),
+                              })
+
+                              if (!response.ok) {
+                                const errorData = await response.json().catch(() => ({}))
+                                throw new Error(errorData.detail?.message || errorData.message || 'Failed to generate music')
+                              }
+
+                              const data = await response.json()
+                              const audioUrl = data.outputs?.[0]
+
+                              if (!audioUrl) {
+                                throw new Error('No audio generated')
+                              }
+
+                              // Download the audio file
+                              const audioResponse = await fetch(audioUrl)
+                              const audioBlob = await audioResponse.blob()
+                              const audioFile = new File([audioBlob], 'ai-generated-music.mp3', { type: 'audio/mpeg' })
+                              setGeneratedAiMusicFile(audioFile)
+
+                              toast({
+                                title: "Success",
+                                description: "AI music generated successfully!",
+                              })
+                            } catch (error) {
+                              console.error('AI music generation failed:', error)
+                              toast({
+                                title: "Generation Failed",
+                                description: error instanceof Error ? error.message : "Unable to generate AI music",
+                                variant: "destructive",
+                              })
+                            } finally {
+                              setIsGeneratingAiMusic(false)
+                            }
+                          }}
+                          disabled={isGeneratingAiMusic || !aiMusicPrompt.trim()}
+                          className="w-full bg-purple-600 hover:bg-purple-700"
+                        >
+                          {isGeneratingAiMusic ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating AI Music (this may take 1-2 minutes)...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Generate AI Music
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Show generated AI music file */}
+                      {generatedAiMusicFile && (
+                        <div className="border border-gray-600 rounded-lg p-4 bg-gray-800/30">
+                          <div className="flex items-center gap-4">
+                            <div className="rounded-lg bg-purple-500/10 p-3 flex-shrink-0">
+                              <CheckCircle2 className="h-6 w-6 text-purple-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white">{generatedAiMusicFile.name}</p>
+                              <p className="text-xs text-gray-400">
+                                {(generatedAiMusicFile.size / (1024 * 1024)).toFixed(2)} MB • AI Generated
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Audio Preview */}
+                          <div className="mt-4">
+                            <audio
+                              controls
+                              src={URL.createObjectURL(generatedAiMusicFile)}
+                              className="w-full h-10"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {!generatedAiMusicFile && !isGeneratingAiMusic && (
+                        <p className="text-xs text-gray-400">
+                          Fill in the prompt and click &quot;Generate AI Music&quot; to create your track
                         </p>
                       )}
                     </div>
