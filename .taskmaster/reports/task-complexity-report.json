@@ -1,213 +1,165 @@
 {
 	"meta": {
-		"generatedAt": "2025-11-14T18:58:28.818Z",
-		"tasksAnalyzed": 25,
-		"totalTasks": 25,
-		"analysisCount": 25,
-		"thresholdScore": 5,
+		"generatedAt": "2025-11-23T03:32:44.987Z",
+		"tasksAnalyzed": 19,
+		"totalTasks": 57,
+		"analysisCount": 19,
+		"thresholdScore": 6,
 		"projectName": "Taskmaster",
-		"usedResearch": true
+		"usedResearch": false
 	},
 	"complexityAnalysis": [
 		{
-			"taskId": 1,
-			"taskTitle": "Initialize Next.js Application",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down the initialization of a Next.js application into subtasks focusing on TypeScript setup, Tailwind CSS integration, and environment variable configuration.",
-			"reasoning": "The task involves setting up a new Next.js project with specific configurations like TypeScript and Tailwind CSS. While Next.js provides tools to simplify this, configuring standalone builds and environment variables adds complexity."
-		},
-		{
-			"taskId": 2,
-			"taskTitle": "Create Landing Page",
+			"taskId": 39,
+			"taskTitle": "Update TypeScript Types for Video Trimming Fields",
 			"complexityScore": 4,
-			"recommendedSubtasks": 2,
-			"expansionPrompt": "Divide the landing page creation into subtasks for layout design and responsive testing across devices.",
-			"reasoning": "Creating a landing page with basic navigation and layout using Tailwind CSS is straightforward, but ensuring responsiveness across devices requires additional effort."
+			"recommendedSubtasks": 0,
+			"expansionPrompt": "No expansion needed.",
+			"reasoning": "This task involves updating TypeScript interfaces to align with backend schema changes. It requires understanding the existing schema and ensuring consistency across the codebase. The complexity is moderate due to the need for careful type checking and integration testing, but it doesn't require breaking down into subtasks."
 		},
 		{
-			"taskId": 6,
-			"taskTitle": "Set Up shadcn/ui Components",
-			"complexityScore": 6,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Outline the setup of shadcn/ui components by focusing on installation, configuration, and customization using Kibo UI MCP.",
-			"reasoning": "Installing and configuring multiple UI components involves understanding their integration and customization, which can be complex depending on the application's requirements."
-		},
-		{
-			"taskId": 7,
-			"taskTitle": "Initialize FastAPI Application",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Detail the FastAPI initialization process into subtasks for middleware setup, environment management, and logging configuration.",
-			"reasoning": "FastAPI setup with middleware and logging involves multiple configurations that need to be correctly implemented to ensure a robust backend."
-		},
-		{
-			"taskId": 8,
-			"taskTitle": "Develop Video Generation Endpoint",
+			"taskId": 44,
+			"taskTitle": "Create VideoTrimmer Component with Timeline Scrubber UI",
 			"complexityScore": 7,
-			"recommendedSubtasks": 4,
-			"expansionPrompt": "Break down the video generation endpoint development into subtasks for input validation, job ID generation, and Redis queuing.",
-			"reasoning": "Handling multipart form data, job queuing, and returning estimated completion times involves complex logic and integration with Redis."
-		},
-		{
-			"taskId": 9,
-			"taskTitle": "Implement Job Status Endpoint",
-			"complexityScore": 6,
 			"recommendedSubtasks": 3,
-			"expansionPrompt": "Divide the job status endpoint implementation into subtasks for Redis integration, error handling, and response formatting.",
-			"reasoning": "Fetching job status from Redis and handling errors requires careful implementation to ensure accurate and reliable responses."
+			"expansionPrompt": "Break down the task into subtasks for implementing the timeline scrubber, integrating with the video player, and ensuring responsiveness.",
+			"reasoning": "Developing a custom UI component with real-time updates and integration with existing logic adds complexity. The task involves UI design, state management, and ensuring responsiveness, which justifies breaking it into smaller parts."
 		},
 		{
-			"taskId": 10,
-			"taskTitle": "Set Up WebSocket for Progress Updates",
+			"taskId": 45,
+			"taskTitle": "Implement trimScene API Client Function",
+			"complexityScore": 5,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Consider subtasks for API request construction and error handling implementation.",
+			"reasoning": "This task involves API integration and updating the video player logic. The complexity arises from handling API requests and ensuring robust error handling, which can be split into subtasks for clarity."
+		},
+		{
+			"taskId": 46,
+			"taskTitle": "Implement regenerateScene API Client Function",
+			"complexityScore": 5,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Create subtasks for API request implementation and retry mechanism development.",
+			"reasoning": "Similar to the trimScene function, this task involves constructing API requests and handling errors. The retry mechanism adds an additional layer of complexity, warranting subtasks."
+		},
+		{
+			"taskId": 47,
+			"taskTitle": "Create Unified SceneEditModal Component with Tabbed Interface",
 			"complexityScore": 8,
 			"recommendedSubtasks": 4,
-			"expansionPrompt": "Outline the WebSocket setup into subtasks for connection management, Redis subscription, and event streaming.",
-			"reasoning": "Implementing WebSocket for real-time updates involves managing persistent connections and integrating with Redis pub/sub, which is technically challenging."
+			"expansionPrompt": "Divide the task into subtasks for each tab implementation and design research.",
+			"reasoning": "This task is complex due to the need for a comprehensive UI with multiple tabs, requiring design research and integration with various components. Breaking it into subtasks for each tab and design considerations is advisable."
 		},
 		{
-			"taskId": 11,
-			"taskTitle": "Develop File Upload Handling Service",
+			"taskId": 49,
+			"taskTitle": "Add 'Edit Scene' Button to ScenesPanel Scene Cards",
+			"complexityScore": 4,
+			"recommendedSubtasks": 0,
+			"expansionPrompt": "No expansion needed.",
+			"reasoning": "This task involves UI updates and integration with an existing modal. It's straightforward but requires careful state management to ensure data consistency."
+		},
+		{
+			"taskId": 50,
+			"taskTitle": "Move Regeneration Actions to SceneEditModal",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Create subtasks for UI updates and API integration for regeneration actions.",
+			"reasoning": "The task involves significant UI changes and integration with API calls, requiring careful coordination between components. Subtasks can help manage the complexity of UI updates and API interactions."
+		},
+		{
+			"taskId": 52,
+			"taskTitle": "Implement Modal Regeneration Progress Tracking",
 			"complexityScore": 7,
-			"recommendedSubtasks": 4,
-			"expansionPrompt": "Break down the file upload handling service into subtasks for format validation, thumbnail generation, and storage management.",
-			"reasoning": "Handling file uploads with validation and thumbnail generation involves multiple steps and requires robust error handling."
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Consider subtasks for UI design, real-time updates, and error handling implementation.",
+			"reasoning": "This task requires implementing real-time progress tracking and handling asynchronous operations, which involves UI design and robust error handling. Subtasks can help manage these aspects effectively."
 		},
 		{
-			"taskId": 12,
-			"taskTitle": "Create Scene Template System",
+			"taskId": 53,
+			"taskTitle": "Remove SceneDetailPanel Component from Edit Page",
+			"complexityScore": 3,
+			"recommendedSubtasks": 0,
+			"expansionPrompt": "No expansion needed.",
+			"reasoning": "This task is straightforward, involving the removal of a component and related code cleanup. It requires careful testing to ensure no residual dependencies, but doesn't need further breakdown."
+		},
+		{
+			"taskId": 54,
+			"taskTitle": "Implement Error Handling and User Feedback in SceneEditModal",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Break down into subtasks for error boundary implementation and user feedback design.",
+			"reasoning": "The task involves implementing error handling and user feedback mechanisms, which can be complex due to the need for robust error management and user interface considerations. Subtasks can help focus on these areas."
+		},
+		{
+			"taskId": 55,
+			"taskTitle": "Test and Optimize SceneEditModal Performance",
+			"complexityScore": 8,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Divide into subtasks for performance testing, FFmpeg optimization, and edge case validation.",
+			"reasoning": "This task is complex due to the need for comprehensive performance testing and optimization across various scenarios. Subtasks can help manage different aspects like FFmpeg optimization and edge case handling."
+		},
+		{
+			"taskId": 56,
+			"taskTitle": "Create SceneEditModal Component with shadcn Dialog",
+			"complexityScore": 7,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Consider subtasks for component structure, styling, and async operation handling.",
+			"reasoning": "Developing a modal with specific styling and functionality requirements is complex, involving UI design, state management, and async operation handling. Subtasks can help manage these elements effectively."
+		},
+		{
+			"taskId": 57,
+			"taskTitle": "Build Video Preview Section for SceneEditModal",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Create subtasks for video player integration and trimming functionality.",
+			"reasoning": "This task involves integrating a video player with trimming functionality, requiring careful UI design and API interaction. Subtasks can help manage these aspects."
+		},
+		{
+			"taskId": 58,
+			"taskTitle": "Implement Prompt Editing Section in SceneEditModal",
 			"complexityScore": 5,
 			"recommendedSubtasks": 2,
-			"expansionPrompt": "Detail the scene template system creation into subtasks for template definition and accessibility verification.",
-			"reasoning": "Defining and managing scene templates involves understanding the requirements for video generation and ensuring templates are accessible."
+			"expansionPrompt": "Consider subtasks for UI design and state management implementation.",
+			"reasoning": "The task involves UI design and state management for prompt editing, which can be complex due to the need for responsive and accessible design. Subtasks can help focus on these areas."
 		},
 		{
-			"taskId": 18,
-			"taskTitle": "Build Asset Manager",
+			"taskId": 59,
+			"taskTitle": "Implement Actions Section in SceneEditModal",
 			"complexityScore": 6,
 			"recommendedSubtasks": 3,
-			"expansionPrompt": "Divide the asset manager development into subtasks for file operations, cleanup, and retry logic implementation.",
-			"reasoning": "Managing file operations and ensuring cleanup with retry logic involves handling various scenarios and ensuring data integrity."
+			"expansionPrompt": "Break down into subtasks for button functionality, loading states, and accessibility.",
+			"reasoning": "This task involves implementing multiple action buttons with specific functionalities and loading states, requiring careful UI design and integration. Subtasks can help manage these elements."
 		},
 		{
-			"taskId": 3,
-			"taskTitle": "Implement Product Upload Form",
-			"complexityScore": 5,
+			"taskId": 60,
+			"taskTitle": "Implement Elegant Progress Tracking in SceneEditModal",
+			"complexityScore": 7,
 			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on implement product upload form.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
+			"expansionPrompt": "Consider subtasks for UI design, integration with API methods, and error handling.",
+			"reasoning": "The task requires implementing a sophisticated progress tracking system with real-time updates and error handling, which is complex due to the need for seamless integration and user-friendly design. Subtasks can help manage these aspects."
 		},
 		{
-			"taskId": 4,
-			"taskTitle": "Develop Job Status Page",
-			"complexityScore": 5,
+			"taskId": 61,
+			"taskTitle": "Implement Save & Regenerate Workflow in SceneEditModal",
+			"complexityScore": 7,
 			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on develop job status page.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
+			"expansionPrompt": "Divide into subtasks for state management, API integration, and user interaction design.",
+			"reasoning": "This task involves a complex workflow for saving and regenerating videos, requiring state management, API integration, and user interaction design. Subtasks can help manage these components effectively."
 		},
 		{
-			"taskId": 5,
-			"taskTitle": "Create Custom Video Player Component",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on create custom video player component.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
+			"taskId": 62,
+			"taskTitle": "Implement Lip-Sync Feature in SceneEditModal",
+			"complexityScore": 6,
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Create subtasks for API integration and progress indication implementation.",
+			"reasoning": "The task involves integrating a lip-sync feature with API calls and progress indication, requiring careful UI design and error handling. Subtasks can help manage these aspects."
 		},
 		{
-			"taskId": 13,
-			"taskTitle": "Build Script Generator with Claude Integration",
+			"taskId": 63,
+			"taskTitle": "Add Scene Download Feature to SceneEditModal",
 			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on build script generator with claude integration.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 14,
-			"taskTitle": "Develop Voiceover Generator with ElevenLabs",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on develop voiceover generator with elevenlabs.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 15,
-			"taskTitle": "Build Video Scene Generator with Replicate/Kling",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on build video scene generator with replicate/kling.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 16,
-			"taskTitle": "Create CTA Image Generator with Replicate/FLUX",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on create cta image generator with replicate/flux.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 17,
-			"taskTitle": "Develop Video Composer with FFmpeg/MoviePy",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on develop video composer with ffmpeg/moviepy.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 19,
-			"taskTitle": "Create Pipeline Orchestrator",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on create pipeline orchestrator.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 20,
-			"taskTitle": "Configure Redis for Job Queue System",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on configure redis for job queue system.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 21,
-			"taskTitle": "Develop Queue Worker",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on develop queue worker.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 22,
-			"taskTitle": "Design Job Database Schema",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on design job database schema.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 23,
-			"taskTitle": "Set Up Development Environment Configuration",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on set up development environment configuration.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 24,
-			"taskTitle": "Create Docker Setup",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on create docker setup.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
-		},
-		{
-			"taskId": 25,
-			"taskTitle": "Implement Error Handling System",
-			"complexityScore": 5,
-			"recommendedSubtasks": 3,
-			"expansionPrompt": "Break down this task with a focus on implement error handling system.",
-			"reasoning": "Automatically added due to missing analysis in AI response."
+			"recommendedSubtasks": 2,
+			"expansionPrompt": "Consider subtasks for API client function implementation and error handling.",
+			"reasoning": "This task involves implementing a download feature with API integration and error handling, requiring careful management of API calls and user feedback. Subtasks can help manage these elements."
 		}
 	]
 }
