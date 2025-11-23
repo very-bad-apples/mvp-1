@@ -22,7 +22,7 @@ import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircl
 import { ProjectScene } from '@/types/project'
 import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
-import { trimScene, downloadSceneVideo, generateLipSync, updateScene } from '@/lib/api/client'
+import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo } from '@/lib/api/client'
 import { formatVideoTime, formatDuration } from '@/lib/utils/time'
 import { getSceneVideoUrl } from '@/lib/utils/video'
 import { useSceneToast } from '@/hooks/useSceneToast'
@@ -77,6 +77,7 @@ export function SceneEditModal({
 
   // Save prompts state
   const [isSavingPrompts, setIsSavingPrompts] = useState(false)
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
 
   // Track if prompts have been modified
   const promptsModified =
@@ -283,7 +284,7 @@ export function SceneEditModal({
   }
 
   /**
-   * Save edited prompts
+   * Save edited prompts and trigger video regeneration
    */
   const handleSavePrompts = async () => {
     if (!promptsModified) return
@@ -292,12 +293,28 @@ export function SceneEditModal({
     setIsOperationInProgress(true)
 
     try {
+      // Step 1: Update prompts in database
       await updateScene(projectId, scene.sequence, {
         prompt: editedPrompt,
         negativePrompt: editedNegativePrompt,
       })
 
       sceneToast.showSuccess(scene, 'Prompt Update')
+
+      // Step 2: Trigger video regeneration with updated prompts
+      setIsGeneratingVideo(true)
+      sceneToast.showProgress(scene, 'Video Regeneration')
+
+      try {
+        await generateSceneVideo(projectId, scene.sequence, 'replicate')
+        sceneToast.showSuccess(scene, 'Video Regeneration')
+      } catch (videoError) {
+        console.error('Failed to regenerate video:', videoError)
+        sceneToast.showError(scene, 'Video Regeneration', videoError)
+        // Don't fail the whole operation - prompts were saved successfully
+      } finally {
+        setIsGeneratingVideo(false)
+      }
 
       // Call the callback to trigger a refresh in parent component
       if (onSceneUpdate) {
@@ -519,7 +536,7 @@ export function SceneEditModal({
                   aria-describedby="scene-prompt-help"
                 />
                 <p id="scene-prompt-help" className="text-xs text-muted-foreground">
-                  Changes will trigger video regeneration when saved
+                  Saving will update the prompt and automatically regenerate the video
                 </p>
               </div>
 
@@ -546,7 +563,7 @@ export function SceneEditModal({
                   aria-describedby="negative-prompt-help"
                 />
                 <p id="negative-prompt-help" className="text-xs text-muted-foreground">
-                  Changes will trigger video regeneration when saved
+                  Saving will update the negative prompt and automatically regenerate the video
                 </p>
               </div>
 
@@ -557,12 +574,12 @@ export function SceneEditModal({
                 )}
                 <Button
                   onClick={handleSavePrompts}
-                  disabled={!promptsModified || isSavingPrompts || isOperationInProgress}
+                  disabled={!promptsModified || isSavingPrompts || isGeneratingVideo || isOperationInProgress}
                   size="sm"
                   className="bg-cyan-600 hover:bg-cyan-700"
                 >
-                  {isSavingPrompts && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isSavingPrompts ? 'Saving...' : 'Save Prompts'}
+                  {(isSavingPrompts || isGeneratingVideo) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSavingPrompts ? 'Saving...' : isGeneratingVideo ? 'Regenerating Video...' : 'Save Prompts'}
                 </Button>
               </div>
             </div>
