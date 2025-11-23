@@ -39,7 +39,7 @@ export function ScenesPanel({
 
   const getSceneStatus = (scene: ProjectScene) => {
     if (scene.errorMessage) return 'error'
-    if (scene.videoClipUrl) return 'completed'
+    if (scene.originalVideoClipUrl || scene.videoClipUrl) return 'completed'
     if (scene.status === 'processing') return 'processing'
     return 'pending'
   }

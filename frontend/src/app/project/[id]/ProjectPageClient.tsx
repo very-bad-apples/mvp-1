@@ -176,7 +176,7 @@ function SceneCard({
   onRegenerateVideo?: (sceneId: number) => void
   onRegenerateLipsync?: (sceneId: number) => void
 }) {
-  const hasVideo = scene.videoClipUrl && scene.status === 'completed'
+  const hasVideo = (scene.originalVideoClipUrl || scene.videoClipUrl) && scene.status === 'completed'
   const thumbnail = '/placeholder.svg'
 
   const sceneStatusConfig = {
@@ -196,9 +196,9 @@ function SceneCard({
       aria-label={`Scene ${scene.sequence}: ${scene.prompt}`}
     >
       <div className="relative aspect-video overflow-hidden bg-gray-900/50">
-        {hasVideo && scene.videoClipUrl ? (
+        {hasVideo && (scene.originalVideoClipUrl || scene.videoClipUrl) ? (
           <video
-            src={scene.videoClipUrl}
+            src={scene.originalVideoClipUrl ?? scene.videoClipUrl}
             className="object-cover w-full h-full"
             muted
             loop
@@ -547,7 +547,7 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
   // Determine what to show based on status
   const showPhaseTracker = project.status === 'processing'
   const showScenes = project.scenes && project.scenes.length > 0
-  const showAssets = project.scenes && project.scenes.some(s => s.videoClipUrl || s.status === 'completed')
+  const showAssets = project.scenes && project.scenes.some(s => s.originalVideoClipUrl || s.videoClipUrl || s.status === 'completed')
   const showFinalVideo = project.status === 'completed' || project.finalOutputUrl
 
   return (

@@ -74,7 +74,7 @@ export function VideoPreview({
 
   // Get scenes with valid video URLs, sorted by sequence
   const validScenes = project.scenes
-    .filter(scene => scene.videoClipUrl)
+    .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
     .sort((a, b) => a.sequence - b.sequence)
 
   // Calculate cumulative scene start times for seeking
@@ -132,8 +132,8 @@ export function VideoPreview({
     if (!video) return
 
     // MODE 1: If in scene preview mode, show only that scene's video
-    if (isScenePreviewMode && selectedScene && selectedScene.videoClipUrl) {
-      const videoUrl = selectedScene.lipSyncedVideoClipUrl || selectedScene.videoClipUrl
+    if (isScenePreviewMode && selectedScene && (selectedScene.originalVideoClipUrl || selectedScene.videoClipUrl)) {
+      const videoUrl = selectedScene.lipSyncedVideoClipUrl || selectedScene.originalVideoClipUrl || selectedScene.videoClipUrl
 
       const handleLoadedMetadata = () => {
         setIsVideoLoaded(true)
@@ -215,7 +215,8 @@ export function VideoPreview({
     if (validScenes.length === 0) return
 
     const currentScene = validScenes[currentSceneIndex]
-    if (!currentScene?.videoClipUrl) return
+    const currentVideoUrl = currentScene?.originalVideoClipUrl ?? currentScene?.videoClipUrl
+    if (!currentVideoUrl) return
 
     const handleLoadedMetadata = () => {
       setIsVideoLoaded(true)
@@ -242,8 +243,8 @@ export function VideoPreview({
     video.addEventListener('error', handleError)
 
     // Only reload video when the source URL actually changes
-    if (video.src !== currentScene.videoClipUrl) {
-      video.src = currentScene.videoClipUrl
+    if (video.src !== currentVideoUrl) {
+      video.src = currentVideoUrl
       video.load()
     }
 

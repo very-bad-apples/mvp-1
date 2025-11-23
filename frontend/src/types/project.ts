@@ -39,8 +39,11 @@ export interface ProjectScene {
   /** Audio clip URL (presigned S3 URL) */
   audioClipUrl?: string | null
 
-  /** Generated video clip URL (presigned S3 URL) */
-  videoClipUrl?: string | null
+  /** Original video clip URL before trimming (presigned S3 URL) - PRIMARY VIDEO FIELD */
+  originalVideoClipUrl?: string | null
+
+  /** Working video clip URL after trimming (presigned S3 URL) */
+  workingVideoClipUrl?: string | null
 
   /** Whether this scene needs lip sync */
   needsLipSync?: boolean
@@ -48,11 +51,11 @@ export interface ProjectScene {
   /** Lip-synced video clip URL (presigned S3 URL) */
   lipSyncedVideoClipUrl?: string | null
 
-  /** Original video clip URL before trimming (presigned S3 URL) */
-  originalVideoClipUrl?: string
-
-  /** Working video clip URL after trimming (presigned S3 URL) */
-  workingVideoClipUrl?: string
+  /** 
+   * @deprecated Use originalVideoClipUrl instead. This field is maintained for backward compatibility.
+   * Backend provides this as an alias for workingVideoClipUrl, but frontend should use originalVideoClipUrl.
+   */
+  videoClipUrl?: string | null
 
   /** Trim points for video clip (in and out points in seconds) */
   trimPoints?: { in: number; out: number }

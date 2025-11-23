@@ -6,11 +6,12 @@ import { ProjectScene } from '@/types/project'
  * Priority (when preferOriginal is false):
  * 1. workingVideoClipUrl (trimmed version)
  * 2. lipSyncedVideoClipUrl (lip-synced version)
- * 3. videoClipUrl (original)
+ * 3. originalVideoClipUrl (original unmodified clip)
+ * 4. videoClipUrl (deprecated fallback)
  *
  * Priority (when preferOriginal is true):
- * 1. videoClipUrl (original)
- * 2. originalVideoClipUrl (backup original)
+ * 1. originalVideoClipUrl (primary original field)
+ * 2. videoClipUrl (deprecated fallback)
  *
  * @param scene - The project scene
  * @param preferOriginal - Whether to prefer the original video over processed versions
@@ -21,12 +22,13 @@ export function getSceneVideoUrl(
   preferOriginal: boolean = false
 ): string | undefined {
   if (preferOriginal) {
-    return scene.videoClipUrl ?? scene.originalVideoClipUrl ?? undefined
+    return scene.originalVideoClipUrl ?? scene.videoClipUrl ?? undefined
   }
 
   return (
     scene.workingVideoClipUrl ??
     scene.lipSyncedVideoClipUrl ??
+    scene.originalVideoClipUrl ??
     scene.videoClipUrl ??
     undefined
   )
@@ -40,10 +42,10 @@ export function getSceneVideoUrl(
  */
 export function hasSceneVideo(scene: ProjectScene): boolean {
   return !!(
+    scene.originalVideoClipUrl ||
     scene.workingVideoClipUrl ||
     scene.lipSyncedVideoClipUrl ||
-    scene.videoClipUrl ||
-    scene.originalVideoClipUrl
+    scene.videoClipUrl
   )
 }
 
@@ -57,12 +59,12 @@ export function getAllSceneVideoUrls(scene: ProjectScene): {
   working?: string
   lipSynced?: string
   original?: string
-  originalBackup?: string
+  deprecated?: string
 } {
   return {
     working: scene.workingVideoClipUrl ?? undefined,
     lipSynced: scene.lipSyncedVideoClipUrl ?? undefined,
-    original: scene.videoClipUrl ?? undefined,
-    originalBackup: scene.originalVideoClipUrl ?? undefined,
+    original: scene.originalVideoClipUrl ?? undefined,
+    deprecated: scene.videoClipUrl ?? undefined,
   }
 }

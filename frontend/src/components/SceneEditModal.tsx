@@ -153,7 +153,8 @@ export function SceneEditModal({
    * Generates lip-synced video from scene's video and audio clips
    */
   const handleGenerateLipSync = async () => {
-    if (!scene.videoClipUrl || !scene.audioClipUrl) {
+    const videoUrl = scene.originalVideoClipUrl ?? scene.videoClipUrl
+    if (!videoUrl || !scene.audioClipUrl) {
       sceneToast.showWarning(
         'Missing Required Media',
         'Both video and audio clips are required for lip-sync generation.'
@@ -169,7 +170,7 @@ export function SceneEditModal({
     try {
       // Call the lip-sync API
       await generateLipSync({
-        video_url: scene.videoClipUrl,
+        video_url: videoUrl,
         audio_url: scene.audioClipUrl,
       })
 
@@ -656,7 +657,7 @@ export function SceneEditModal({
                             sceneToast.showError(scene, 'Download', error)
                           }
                         }}
-                        disabled={!scene.workingVideoClipUrl && !scene.lipSyncedVideoClipUrl && !scene.videoClipUrl}
+                        disabled={!scene.workingVideoClipUrl && !scene.lipSyncedVideoClipUrl && !scene.originalVideoClipUrl && !scene.videoClipUrl}
                         variant="outline"
                         size="default"
                         className="min-w-[180px]"
@@ -666,7 +667,7 @@ export function SceneEditModal({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {!scene.workingVideoClipUrl && !scene.lipSyncedVideoClipUrl && !scene.videoClipUrl ? (
+                      {!scene.workingVideoClipUrl && !scene.lipSyncedVideoClipUrl && !scene.originalVideoClipUrl && !scene.videoClipUrl ? (
                         <p>No video available for this scene</p>
                       ) : (
                         <p>Download scene video to your device</p>

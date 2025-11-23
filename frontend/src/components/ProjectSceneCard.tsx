@@ -266,7 +266,7 @@ export default function ProjectSceneCard({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => onRegenerate('video')}
-                  disabled={!scene.videoClipUrl}
+                  disabled={!scene.originalVideoClipUrl && !scene.videoClipUrl}
                   className="text-white hover:bg-slate-700 focus:bg-slate-700"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -371,19 +371,19 @@ export default function ProjectSceneCard({
               Video
             </div>
             <div className="relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700">
-              {!scene.videoClipUrl && (scene.status === 'pending' || scene.status === 'generating-image') && (
+              {!(scene.originalVideoClipUrl || scene.videoClipUrl) && (scene.status === 'pending' || scene.status === 'generating-image') && (
                 <Skeleton className="w-full h-full" />
               )}
-              {!scene.videoClipUrl && (scene.status === 'generating-video' || scene.status === 'generating-lipsync') && (
+              {!(scene.originalVideoClipUrl || scene.videoClipUrl) && (scene.status === 'generating-video' || scene.status === 'generating-lipsync') && (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                   <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
                 </div>
               )}
-              {scene.videoClipUrl && (
+              {(scene.originalVideoClipUrl || scene.videoClipUrl) && (
                 <div className="relative w-full h-full group">
                   <video
                     ref={videoRef}
-                    src={scene.videoClipUrl}
+                    src={scene.originalVideoClipUrl ?? scene.videoClipUrl}
                     className="w-full h-full object-cover"
                     loop
                     muted
