@@ -284,9 +284,10 @@ async function apiFetch<T>(
         ...(options.headers as Record<string, string> || {}),
       }
 
-      // Add API key header if available and URL is for backend (not Next.js routes)
+      // Add API key header only for direct backend requests (absolute URLs)
+      // For relative URLs, the Next.js proxy route will add the API key server-side
       const apiKey = getAPIKey()
-      if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
+      if (apiKey && url.startsWith('http')) {
         headers['X-API-Key'] = apiKey
       }
 
@@ -409,6 +410,12 @@ async function apiFetch<T>(
  * Get API URL from environment
  */
 function getAPIUrl(): string {
+  // If running in the browser, use relative URLs to hit Next.js proxy routes (avoids CORS)
+  if (typeof window !== 'undefined') {
+    return ''
+  }
+
+  // If running server-side, use the full backend URL
   const apiUrl = process.env.NEXT_PUBLIC_API_URL
   if (!apiUrl) {
     throw new ConfigurationError(
@@ -474,10 +481,11 @@ export async function createProject(
     formData.append('audio', data.audio)
   }
 
-  // Get API key
+  // Get API key - only add for direct backend requests (absolute URLs)
+  // For relative URLs, the Next.js proxy route will add the API key server-side
   const apiKey = getAPIKey()
   const headers: Record<string, string> = {}
-  if (apiKey && (url.startsWith('http') || url.startsWith('/api/mv'))) {
+  if (apiKey && url.startsWith('http')) {
     headers['X-API-Key'] = apiKey
   }
 
@@ -755,9 +763,10 @@ export async function uploadCharacterReference(
   formData.append('file', file)
   
   // Build headers with API key (don't set Content-Type - browser will set it with boundary)
+  // Only add API key for direct backend requests (absolute URLs)
   const headers: Record<string, string> = {}
   const apiKey = getAPIKey()
-  if (apiKey) {
+  if (apiKey && url.startsWith('http')) {
     headers['X-API-Key'] = apiKey
   }
   

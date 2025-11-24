@@ -350,19 +350,12 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         description: 'Your project generation has been queued.',
       })
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY || ''
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      if (API_KEY) {
-        headers['X-API-Key'] = API_KEY
-      }
-
-      const response = await fetch(`${API_URL}/api/mv/projects/${projectId}/generate`, {
+      // Use relative URL to go through Next.js proxy (avoids CORS)
+      const response = await fetch(`/api/mv/projects/${projectId}/generate`, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
 
       if (!response.ok) {
