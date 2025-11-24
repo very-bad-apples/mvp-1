@@ -5,7 +5,7 @@ AI-powered video generation pipeline for creating short-form social media conten
 ## Overview
 
 This system generates marketing videos using AI-powered script generation, video scene creation, voiceover synthesis, and automated composition.
-
+ 
 **Key Features:**
 - Script-first pipeline architecture (LLM → parallel asset generation → video assembly)
 - Template-based video archetypes (Problem/Solution, POV Reaction, Testimonial, etc.)
