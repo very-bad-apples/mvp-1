@@ -103,7 +103,7 @@ export function SceneEditModal({
     setLipSyncStatus('idle')
     // Reset original video duration
     setOriginalVideoDuration(0)
-  }, [scene.sequence, scene.duration, open]) // Re-sync when modal opens
+  }, [scene.sequence, scene.duration, scene.originalVideoClipUrl, scene.videoClipUrl, open]) // Re-sync when modal opens or video URLs change
 
   /**
    * Handle video metadata loaded - sets up trimmer with original video duration

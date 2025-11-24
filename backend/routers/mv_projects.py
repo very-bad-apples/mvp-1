@@ -901,7 +901,8 @@ async def get_project(project_id: str):
                 trim_points = json.loads(scene_item.trimPoints)
 
             scenes.append(SceneResponse(
-                sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
+                sequence=scene_item.sequence,  # Immutable SK identifier
+                displaySequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,  # Mutable display order
                 status=scene_item.status,
                 prompt=scene_item.prompt,
                 negativePrompt=scene_item.negativePrompt,
@@ -1307,7 +1308,8 @@ async def reorder_scenes(
                 trim_points = json.loads(scene.trimPoints)
 
             scene_responses.append(SceneResponse(
-                sequence=scene.displaySequence,
+                sequence=scene.sequence,  # Immutable SK identifier
+                displaySequence=scene.displaySequence if scene.displaySequence is not None else scene.sequence,  # Mutable display order
                 status=scene.status,
                 prompt=scene.prompt,
                 negativePrompt=scene.negativePrompt,
@@ -1476,7 +1478,8 @@ async def update_scene(
             trim_points = json.loads(scene_item.trimPoints)
 
         return SceneResponse(
-            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
+            sequence=scene_item.sequence,  # Immutable SK identifier
+            displaySequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,  # Mutable display order
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,
@@ -1848,7 +1851,8 @@ async def add_scene(
             trim_points = json.loads(scene_item.trimPoints)
 
         scene_response = SceneResponse(
-            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
+            sequence=scene_item.sequence,  # Immutable SK identifier
+            displaySequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,  # Mutable display order
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,
@@ -1992,7 +1996,7 @@ async def delete_scene(
                 }
             )
 
-        # Query all scenes to count total
+        # Query all scenes to count total (needed for validation)
         scenes = list(MVProjectItem.query(
             pk,
             MVProjectItem.SK.startswith("SCENE#")
@@ -2014,20 +2018,14 @@ async def delete_scene(
                 }
             )
 
-        # Find scene by displaySequence (or sequence as fallback)
-        # We can't use SK directly because after deletions, SKs don't match display order
-        scene_item = None
-        for scene in scenes:
-            # Match by displaySequence first (what user sees), then fallback to sequence
-            if scene.displaySequence == sequence:
-                scene_item = scene
-                break
-            elif scene.displaySequence is None and scene.sequence == sequence:
-                # Fallback for scenes without displaySequence set
-                scene_item = scene
-                break
+        # Retrieve scene using immutable sequence (SK identifier)
+        # This matches the pattern used by UPDATE, TRIM, and GENERATE endpoints
+        # The sequence parameter maps directly to the DynamoDB Sort Key (SCENE#{sequence:03d})
+        sk = f"SCENE#{sequence:03d}"
         
-        if scene_item is None:
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+        except DoesNotExist:
             logger.warning(
                 "scene_not_found_for_delete",
                 project_id=project_id,
@@ -2039,12 +2037,29 @@ async def delete_scene(
                 detail={
                     "error": "NotFound",
                     "message": f"Scene {sequence} not found in project {project_id}",
-                    "details": f"The specified scene does not exist. Available scenes: {[s.displaySequence if s.displaySequence is not None else s.sequence for s in scenes]}"
+                    "details": f"The specified scene does not exist. Available scenes: {[s.sequence for s in scenes]}"
                 }
             )
 
-        # Store deleted sequence for response (use displaySequence for user-facing response)
-        deleted_sequence = scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence
+        # Verify it's actually a scene item
+        if scene_item.entityType != "scene":
+            logger.error(
+                "invalid_item_type_for_delete",
+                project_id=project_id,
+                sequence=sequence,
+                entity_type=scene_item.entityType
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "InternalError",
+                    "message": "Invalid scene item type",
+                    "details": f"Expected 'scene', got '{scene_item.entityType}'"
+                }
+            )
+
+        # Use immutable sequence for response (consistent with other endpoints)
+        deleted_sequence = scene_item.sequence
 
         # Delete the scene item
         try:
@@ -2378,7 +2393,8 @@ async def trim_scene_video(
             trim_points = json.loads(scene_item.trimPoints)
 
         return SceneResponse(
-            sequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,
+            sequence=scene_item.sequence,  # Immutable SK identifier
+            displaySequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,  # Mutable display order
             status=scene_item.status,
             prompt=scene_item.prompt,
             negativePrompt=scene_item.negativePrompt,
