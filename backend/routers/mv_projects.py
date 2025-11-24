@@ -882,13 +882,22 @@ async def get_project(project_id: str):
             if scene_item.audioClipS3Key:
                 audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
 
-            # Video clip URLs (NEW)
+            # Video clip URLs - reuse URL when keys match (common after initial generation)
             original_video_url = None
+            working_video_url = None
+
             if scene_item.originalVideoClipS3Key:
                 original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
-
-            working_video_url = None
-            if scene_item.workingVideoClipS3Key:
+                
+                # Reuse original URL when working key matches (before trimming)
+                if scene_item.workingVideoClipS3Key:
+                    if scene_item.workingVideoClipS3Key == scene_item.originalVideoClipS3Key:
+                        working_video_url = original_video_url  # Reuse same URL
+                    else:
+                        # Different key (after trimming) - generate separate URL
+                        working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
+            elif scene_item.workingVideoClipS3Key:
+                # Edge case: only working key exists (shouldn't happen in normal flow, but handle defensively)
                 working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
 
             lipsynced_url = None

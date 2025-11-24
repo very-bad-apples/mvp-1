@@ -253,7 +253,7 @@ export async function startFullGeneration(
 
     // Phase 2: Generate all character reference images (parallel)
     opts.onProgress('images', 0, project.scenes.length, 'Starting image generation...')
-    await updateProject(projectId, { status: 'processing' })
+    // Status already set to 'processing' in Phase 1 - no need to update again
 
     if (project.characterDescription && !project.characterReferenceImageId) {
       const imageRequest: GenerateCharacterReferenceRequest = {
@@ -280,7 +280,7 @@ export async function startFullGeneration(
 
     // Phase 3: Generate all videos (parallel - backend handles DB updates atomically)
     opts.onProgress('videos', 0, project.scenes.length, 'Starting video generation...')
-    await updateProject(projectId, { status: 'processing' })
+    // Status already set to 'processing' in Phase 1 - no need to update again
 
     // Generate all videos in parallel - backend updates each scene atomically in DynamoDB
     const videoPromises = project.scenes.map((scene, index) =>
@@ -320,7 +320,7 @@ export async function startFullGeneration(
 
     // Phase 4: Generate all lip-syncs (parallel)
     opts.onProgress('lipsync', 0, project.scenes.length, 'Starting lip-sync generation...')
-    await updateProject(projectId, { status: 'processing' })
+    // Status already set to 'processing' in Phase 1 - no need to update again
 
     const lipsyncPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
@@ -413,16 +413,17 @@ export async function startFullGeneration(
 }
 
 /**
- * Helper function to update project and refetch
+ * Helper function to update project and return updated data
+ * Note: updateProject already returns the full updated project (UpdateProjectResponse = GetProjectResponse)
  */
 async function updateAndRefetch(
   projectId: string,
   updates: Partial<Project>
 ): Promise<Project> {
-  await updateProject(projectId, updates)
-  const response = await getProject(projectId)
+  // updateProject already returns the full updated project - no need for separate GET request
+  const response = await updateProject(projectId, updates)
   if (!response.projectId) {
-    throw new Error('Failed to refetch project after update')
+    throw new Error('Failed to update project')
   }
   return response
 }
