@@ -49,11 +49,11 @@ export default function EditPage({ params }: { params: { id: string } }) {
   }, [project?.scenes])
 
   // Check if all VIDEOS are complete (for export functionality)
+  // Only check originalVideoClipUrl (primary video field) to match generation logic
   const allVideosComplete = useMemo(() => {
     if (!project?.scenes || project.scenes.length === 0) return false
-    return project.scenes.every(scene => 
-      (scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined) ||
-      (scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+    return project.scenes.every(scene =>
+      scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined
     )
   }, [project?.scenes])
 
@@ -229,11 +229,12 @@ export default function EditPage({ params }: { params: { id: string } }) {
       }
 
       // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
-      const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl && !scene.videoClipUrl)
+      // ONLY generate for scenes that are missing the originalVideoClipUrl (primary video field)
+      const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl)
       if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
         sceneGenerationTriggered.current = true
 
-        console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without videos, triggering generation`)
+        console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without originalVideoClipUrl, triggering generation`)
 
         toast({
           title: "Generating Missing Videos",
