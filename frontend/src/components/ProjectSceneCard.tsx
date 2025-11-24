@@ -383,7 +383,7 @@ export default function ProjectSceneCard({
                 <div className="relative w-full h-full group">
                   <video
                     ref={videoRef}
-                    src={scene.originalVideoClipUrl ?? scene.videoClipUrl ?? undefined}
+                    src={(scene.originalVideoClipUrl ?? scene.videoClipUrl) ?? undefined}
                     className="w-full h-full object-cover"
                     loop
                     muted
