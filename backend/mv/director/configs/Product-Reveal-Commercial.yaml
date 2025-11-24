@@ -1,0 +1,103 @@
+
+# Product Reveal Commercial Director Configuration
+# Signature Style: Hands-only product reveals, NO HUMANS, digging discovery, shrine presentation, dramatic final reveal with many fingers pointing
+
+camera:
+  shotType: medium_shot  # Medium shots for digging scene, close-ups for shrine and final reveal, dynamic framing
+  movement: dynamic  # Constant movement, tracking hands digging, smooth pans for shrine reveal, energetic final scene
+  lens: standard  # Standard lens for digging scene, macro for product details in shrine and final reveal
+  angle: low_angle  # Low angles for dramatic digging, eye-level for shrine, dynamic angles for final reveal
+
+lighting:
+  type: dramatic  # Bold, high-contrast lighting for digging scene, mystical glow for shrine, dramatic spotlight for final reveal
+  direction: front  # Front lighting for digging, ethereal glow from all directions for shrine, spotlight for final scene
+
+style:
+  visualStyle: commercial  # Polished, product-focused commercial aesthetic, high-energy action with mystical elements
+  mood: energetic  # Bold, confident, adventurous, discovery-focused, powerful, mystical, action-packed
+  colorGrading: vibrant  # Rich, saturated colors, earthy tones for digging, golden glow for shrine, vibrant for final reveal
+
+motion:
+  intensity: 0.95  # Maximum dynamic movement, fast-paced hand actions, constant motion, product appears during action
+  guidanceScale: 10  # Strong adherence to hands-only commercial style with maximum movement
+  cfgScale: 8  # Balanced guidance for polished commercial look
+
+audio:
+  music:
+    style: electronic  # Energetic, bold, modern commercial music
+    mood: energetic  # Upbeat, confident, adventurous
+    intensity: prominent  # Music drives the energy, syncs with action beats
+  ending: whistle  # Old Spice-style whistle at the end for signature commercial finish
+
+quality:
+  negativePrompts:
+    - person
+    - human
+    - face
+    - body
+    - head
+    - people
+    - person's face
+    - full body
+    - talking head
+    - dialogue
+    - speech
+    - voice
+    - character
+    - actor
+    - blurry
+    - low quality
+    - static shot
+    - slow motion
+    - wide shot
+    - text overlay
+    - logo visible
+    - product label text
+    - slow pacing
+    - minimal movement
+    - stationary camera
+    - soft focus
+    - desaturated colors
+    - muted tones
+    - dark lighting
+    - grainy footage
+    - film grain
+    - vintage aesthetic
+    - retro look
+  safetyLevel: block_medium_and_above
+
+transitions:
+  type: quick_cut  # Fast-paced editing, quick cuts between hand actions and product reveals
+
+# Additional Product Reveal Commercial Characteristics:
+# - HANDS ONLY - NO HUMANS, NO FACES, NO BODIES - just hands performing actions (makes it funny and unique)
+# - Scene 1: Multiple hands digging in ground/dirt, product pops up from the earth dynamically, energetic discovery moment
+# - Scene 2: Product displayed in a shrine/altar setting with mystical shine and glow, ethereal lighting, sacred presentation, hands may be arranging or presenting it
+# - Scene 3: One hand holding product centered in frame, then at least 10 fingers from multiple hands appear and point at the product dramatically
+# - CONSTANT MOVEMENT - Hands digging with energy, product popping up dynamically, shrine presentation with mystical atmosphere
+# - Product prominently featured in each scene - popping up from ground, glowing in shrine, held and pointed at in final scene
+# - Shallow depth of field to isolate hands and product from background
+# - Fast-paced, energetic editing rhythm with constant motion
+# - Bold, confident camera movements following the action
+# - High production value, polished commercial aesthetic with mystical elements
+# - Product is the hero - always in sharp focus, well-lit, prominently displayed
+# - Multiple hands work together - digging, presenting, pointing
+# - Low-angle shots for dramatic digging scene
+# - Eye-level or slightly elevated for shrine presentation
+# - Dynamic angles for final reveal with many fingers pointing
+# - Rich, vibrant color grading: earthy tones for digging, golden mystical glow for shrine, vibrant for final reveal
+# - Quick cuts maintain energy and focus attention on product
+# - Macro lens captures product details in shrine and final reveal
+# - Dramatic lighting: practical digging light, ethereal shrine glow, spotlight for final scene
+# - Dynamic camera movements add energy and excitement
+# - Influences: Old Spice commercials, discovery narratives, mystical product reveals, hands-only comedy
+# - Focus on: digging discovery → shrine presentation → dramatic final reveal with many fingers
+# - Each scene follows: action (hands digging) → presentation (shrine) → reveal (holding with many fingers pointing) structure
+# - Product should feel like a sacred discovery, mystical artifact, then hero product
+# - Bold, confident, adventurous brand personality with comedic hands-only twist
+# - High-energy, fast-paced commercial pacing with constant motion
+# - Product-focused cinematography (product is always the star)
+# - NO HUMANS VISIBLE - only hands, objects, and product (makes it funny and memorable)
+# - Maximum movement and dynamism throughout every scene
+# - Old Spice-style whistle at the end for signature commercial finish
+# - Final scene: One hand holds product, then at least 10 fingers from multiple hands point at it, creating maximum dramatic emphasis
