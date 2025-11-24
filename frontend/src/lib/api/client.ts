@@ -776,7 +776,7 @@ export async function uploadCharacterReference(
     headers,
     body: formData,
   })
-  
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
     throw new APIError(
@@ -786,7 +786,7 @@ export async function uploadCharacterReference(
       errorData.details
     )
   }
-  
+
   return response.json()
 }
 

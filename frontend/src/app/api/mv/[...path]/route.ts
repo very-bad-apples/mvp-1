@@ -3,8 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 // Disable caching for API routes
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-// Extended timeout for long-running operations (5 minutes)
-export const maxDuration = 300
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 // Use server-side API key (not exposed to client)
