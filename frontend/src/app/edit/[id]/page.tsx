@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Video, ChevronLeft, Loader2, Download } from 'lucide-react'
 import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { ScenesPanel } from '@/components/ScenesPanel'
+import { Logo } from '@/components/Logo'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { generateScenes, composeVideo } from '@/lib/api/client'
@@ -142,14 +143,15 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
   }, [project, isGeneratingScenes])
 
-  // Auto-trigger scene generation and video generation
+  // Auto-trigger scene generation ONLY (for new projects with no scenes)
+  // Video generation is now manual via the "Generate Videos" button
   useEffect(() => {
     const triggerGeneration = async () => {
       if (!project || loading || sceneGenerationTriggered.current) {
         return
       }
 
-      // Case 1: Project has no scenes - generate scenes first, then videos
+      // Only auto-trigger for projects with no scenes - generate scenes first
       if (project.scenes.length === 0 && !isGeneratingScenes) {
         sceneGenerationTriggered.current = true
         setIsGeneratingScenes(true)
@@ -178,7 +180,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
           toast({
             title: "Scenes Generated!",
-            description: "Scene descriptions have been created.",
+            description: "Scene descriptions have been created. Click 'Generate Videos' to start video generation.",
           })
 
           // Refresh project data to get the new scenes
@@ -187,33 +189,6 @@ export default function EditPage({ params }: { params: { id: string } }) {
           // Show overlay now that we have scenes
           setShowOverlay(true)
           setIsGeneratingScenes(false)
-
-          // Start video generation in the BACKGROUND
-          toast({
-            title: "Starting Video Generation",
-            description: "Videos will generate in the background.",
-          })
-
-          startFullGeneration(params.id, {
-            onProgress: (phase, sceneIndex, total, message) => {
-              console.log(`[Generation] ${phase}: ${sceneIndex}/${total}`, message)
-            },
-            onError: (phase, sceneIndex, error) => {
-              console.error(`[Generation Error] ${phase}:`, error)
-              toast({
-                title: "Generation Error",
-                description: `Failed during ${phase} phase: ${error.message}`,
-                variant: "destructive",
-              })
-            },
-          }).catch((err) => {
-            console.error('Background generation error:', err)
-            toast({
-              title: "Video Generation Failed",
-              description: err instanceof Error ? err.message : "Failed to generate videos",
-              variant: "destructive",
-            })
-          })
 
         } catch (err) {
           console.error('Scene generation error:', err)
@@ -227,46 +202,60 @@ export default function EditPage({ params }: { params: { id: string } }) {
         }
         return
       }
-
-      // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
-      // ONLY generate for scenes that are missing the originalVideoClipUrl (primary video field)
-      const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl)
-      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
-        sceneGenerationTriggered.current = true
-
-        console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without originalVideoClipUrl, triggering generation`)
-
-        toast({
-          title: "Generating Missing Videos",
-          description: `Starting video generation for ${scenesWithoutVideos.length} scenes...`,
-        })
-
-        // Start video generation in the BACKGROUND (non-blocking)
-        startFullGeneration(params.id, {
-          onProgress: (phase, sceneIndex, total, message) => {
-            console.log(`[Generation] ${phase}: ${sceneIndex}/${total}`, message)
-          },
-          onError: (phase, sceneIndex, error) => {
-            console.error(`[Generation Error] ${phase}:`, error)
-            toast({
-              title: "Generation Error",
-              description: `Failed during ${phase} phase: ${error.message}`,
-              variant: "destructive",
-            })
-          },
-        }).catch((err) => {
-          console.error('Background generation error:', err)
-          toast({
-            title: "Video Generation Failed",
-            description: err instanceof Error ? err.message : "Failed to generate videos",
-            variant: "destructive",
-          })
-        })
-      }
     }
 
     triggerGeneration()
   }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
+
+  // Calculate number of scenes missing videos
+  const scenesWithoutVideos = useMemo(() => {
+    if (!project?.scenes) return []
+    return project.scenes.filter(scene => !scene.originalVideoClipUrl)
+  }, [project?.scenes])
+
+  // Handle manual video generation
+  const handleGenerateVideos = async () => {
+    if (scenesWithoutVideos.length === 0) {
+      toast({
+        title: "All Videos Complete",
+        description: "All scenes already have videos generated.",
+      })
+      return
+    }
+
+    toast({
+      title: "Generating Videos",
+      description: `Starting video generation for ${scenesWithoutVideos.length} scene${scenesWithoutVideos.length > 1 ? 's' : ''}...`,
+    })
+
+    try {
+      await startFullGeneration(params.id, {
+        onProgress: (phase, sceneIndex, total, message) => {
+          console.log(`[Generation] ${phase}: ${sceneIndex}/${total}`, message)
+        },
+        onError: (phase, sceneIndex, error) => {
+          console.error(`[Generation Error] ${phase}:`, error)
+          toast({
+            title: "Generation Error",
+            description: `Failed during ${phase} phase: ${error.message}`,
+            variant: "destructive",
+          })
+        },
+      })
+
+      toast({
+        title: "Video Generation Started",
+        description: "Videos are being generated in the background.",
+      })
+    } catch (err) {
+      console.error('Video generation error:', err)
+      toast({
+        title: "Video Generation Failed",
+        description: err instanceof Error ? err.message : "Failed to start video generation",
+        variant: "destructive",
+      })
+    }
+  }
 
   // Poll for composition completion
   useEffect(() => {
@@ -526,9 +515,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
       <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <Video className="h-8 w-8 text-blue-500" />
-              <span className="text-xl font-bold text-white">AI Video Generator</span>
+            <Link href="/" className="flex items-center gap-3">
+              <Logo size="sm" className="text-blue-500" />
+              <span className="text-2xl font-bold text-white">Bad Apple</span>
             </Link>
             <div className="flex items-center gap-4">
               <Button
@@ -537,8 +526,28 @@ export default function EditPage({ params }: { params: { id: string } }) {
                 onClick={() => window.location.href = '/create'}
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
-                Back to Result
+                Create New
               </Button>
+              {scenesWithoutVideos.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="border-blue-500 text-blue-400 hover:bg-blue-500/10"
+                  onClick={handleGenerateVideos}
+                  disabled={isPolling}
+                >
+                  {isPolling ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating ({scenesWithoutVideos.length})
+                    </>
+                  ) : (
+                    <>
+                      <Video className="mr-2 h-4 w-4" />
+                      Generate Videos ({scenesWithoutVideos.length})
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleExportVideo}

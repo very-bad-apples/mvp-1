@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import { createProject, getDirectorConfigs, generateCharacterReference, uploadCharacterReference } from '@/lib/api/client'
+import { Logo } from '@/components/Logo'
 
 // Use relative paths to proxy routes (API key handled server-side)
 const API_BASE = '/api/mv'
@@ -459,9 +460,9 @@ export default function CreatePage() {
       {/* Left Sidebar - Steps Navigation */}
       <aside className="w-80 border-r border-gray-800 bg-gray-900/50 p-6 flex flex-col">
         <div className="mb-8">
-          <Link href="/" className="flex items-center gap-2 mb-6">
-            <Video className="h-6 w-6 text-blue-500" />
-            <span className="text-lg font-bold text-white">AI Video Generator</span>
+          <Link href="/" className="flex items-center gap-3 mb-6">
+            <Logo size="sm" className="text-blue-500" />
+            <span className="text-xl font-bold text-white">Bad Apple</span>
           </Link>
 
           {/* Progress */}
@@ -577,7 +578,7 @@ export default function CreatePage() {
                         >
                           <div className="flex flex-col items-center gap-2">
                             <Music className="w-6 h-6" />
-                            <div>
+                            <div className="text-center">
                               <div className="font-medium">Music Video</div>
                               <div className="text-xs text-gray-400">Create cinematic music videos</div>
                             </div>
@@ -587,9 +588,9 @@ export default function CreatePage() {
                           value="ad-creative"
                           className="data-[state=active]:bg-gray-700 text-gray-300 data-[state=active]:text-white py-4"
                         >
-                          <div className="flex-col items-center gap-2">
+                          <div className="flex flex-col items-center gap-2">
                             <Sparkles className="w-6 h-6" />
-                            <div>
+                            <div className="text-center">
                               <div className="font-medium">Ad Creative</div>
                               <div className="text-xs text-gray-400">Generate product advertisements</div>
                             </div>

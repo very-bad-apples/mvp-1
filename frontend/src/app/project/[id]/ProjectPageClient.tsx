@@ -22,6 +22,7 @@ import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { ProjectStatus, ProjectScene } from '@/types/project'
 import { AssetGallery } from '@/components/AssetGallery'
 import FinalVideoPlayer from '@/components/FinalVideoPlayer'
+import { Logo } from '@/components/Logo'
 
 const statusConfig: Record<ProjectStatus, { color: string; label: string }> = {
   'pending': { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', label: 'Pending' },
@@ -560,9 +561,9 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-blue-400">
-                <Video className="w-8 h-8" aria-hidden="true" />
-                <h1 className="text-xl font-bold text-white">AI Video Generator</h1>
+              <div className="flex items-center gap-3 text-blue-400">
+                <Logo size="sm" className="text-blue-500" />
+                <h1 className="text-2xl font-bold text-white">Bad Apple</h1>
               </div>
             </div>
             <nav className="flex items-center gap-3" aria-label="Project navigation">

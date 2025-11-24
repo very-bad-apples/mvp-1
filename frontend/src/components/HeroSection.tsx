@@ -23,16 +23,17 @@ export function HeroSection() {
 
             {/* Headline */}
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-balance">
-              <span className="text-white">Transform products into </span>
+              <span className="text-white">Create </span>
               <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                stunning video ads
+                video ads & music videos
               </span>
+              <span className="text-white"> with AI</span>
             </h1>
 
             {/* Subheadline */}
             <p className="text-lg sm:text-xl text-gray-300 leading-relaxed text-pretty max-w-2xl mx-auto lg:mx-0">
-              Turn static product images into professional, engaging video advertisements in seconds.
-              No editing skills required—just upload, generate, and publish.
+              Generate professional video advertisements and music videos from your images and audio.
+              AI-powered scene generation, voiceovers, and seamless composition—no editing skills required.
             </p>
 
             {/* CTA Buttons */}
@@ -58,12 +59,12 @@ export function HeroSection() {
 
             {/* Social proof */}
             <div className="pt-8">
-              <p className="text-sm text-gray-400 mb-4">Trusted by leading brands</p>
-              <div className="flex flex-wrap gap-8 items-center justify-center lg:justify-start opacity-60">
-                <div className="text-lg font-semibold text-white">Shopify</div>
-                <div className="text-lg font-semibold text-white">Amazon</div>
-                <div className="text-lg font-semibold text-white">Etsy</div>
-                <div className="text-lg font-semibold text-white">WooCommerce</div>
+              <p className="text-sm text-gray-400 mb-4">Perfect for</p>
+              <div className="flex flex-wrap gap-6 items-center justify-center lg:justify-start opacity-80">
+                <div className="text-base font-medium text-white">🎵 Musicians</div>
+                <div className="text-base font-medium text-white">📱 Content Creators</div>
+                <div className="text-base font-medium text-white">🛍️ E-commerce</div>
+                <div className="text-base font-medium text-white">📢 Marketers</div>
               </div>
             </div>
           </div>
@@ -89,13 +90,13 @@ export function HeroSection() {
 
             {/* Floating stats cards */}
             <div className="absolute -bottom-6 -left-6 bg-gray-800 border border-gray-700 rounded-xl px-6 py-4 shadow-xl hidden lg:block">
-              <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">10K+</div>
-              <div className="text-sm text-gray-400">Videos Generated</div>
+              <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">AI-Powered</div>
+              <div className="text-sm text-gray-400">Scene Generation</div>
             </div>
 
             <div className="absolute -top-6 -right-6 bg-gray-800 border border-gray-700 rounded-xl px-6 py-4 shadow-xl hidden lg:block">
-              <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">30 sec</div>
-              <div className="text-sm text-gray-400">Average Time</div>
+              <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Minutes</div>
+              <div className="text-sm text-gray-400">Not Hours</div>
             </div>
           </div>
         </div>

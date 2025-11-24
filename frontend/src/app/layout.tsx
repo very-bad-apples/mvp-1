@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AI Video Generator",
+  title: "Bad Apple",
   description: "Generate creative videos with AI",
   icons: {
     icon: '/favicon.svg',
