@@ -18,8 +18,19 @@ export type ProjectStatus =
  * Note: Field names match backend SceneResponse for consistency
  */
 export interface ProjectScene {
-  /** Scene sequence number */
+  /**
+   * Immutable scene sequence number - maps to DynamoDB Sort Key (SCENE#{sequence:03d})
+   * Use this for all database operations (regenerate, update, trim, delete)
+   * Never changes after scene creation
+   */
   sequence: number
+
+  /**
+   * Mutable display sequence number - controls UI ordering
+   * Updated when scenes are reordered via drag-and-drop
+   * Use this for sorting and display only
+   */
+  displaySequence: number
 
   /** Scene prompt */
   prompt: string

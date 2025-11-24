@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -44,7 +44,7 @@ interface SortableSceneCardProps {
   getStatusBadge: (status: string) => JSX.Element
 }
 
-function SortableSceneCard({
+const SortableSceneCard = memo(function SortableSceneCard({
   scene,
   isSelected,
   status,
@@ -170,7 +170,20 @@ function SortableSceneCard({
       </CardContent>
     </Card>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if these specific props change
+  return (
+    prevProps.scene.sequence === nextProps.scene.sequence &&
+    prevProps.scene.status === nextProps.scene.status &&
+    prevProps.scene.originalVideoClipUrl === nextProps.scene.originalVideoClipUrl &&
+    prevProps.scene.videoClipUrl === nextProps.scene.videoClipUrl &&
+    prevProps.scene.prompt === nextProps.scene.prompt &&
+    prevProps.scene.errorMessage === nextProps.scene.errorMessage &&
+    prevProps.scene.duration === nextProps.scene.duration &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.status === nextProps.status
+  )
+})
 
 interface ScenesPanelProps {
   project: Project
@@ -200,16 +213,19 @@ export function ScenesPanel({
   const [isReordering, setIsReordering] = useState(false)
 
   // Initialize local scenes from project
-  // Filter out scenes with invalid sequences and sort
-  const sortedScenes = [...project.scenes]
-    .filter(scene => {
-      const isValid = scene.sequence != null && scene.sequence >= 1 && Number.isInteger(scene.sequence)
-      if (!isValid) {
-        console.warn('Scene with invalid sequence detected:', scene)
-      }
-      return isValid
-    })
-    .sort((a, b) => a.sequence - b.sequence)
+  // Filter out scenes with invalid sequences and sort by displaySequence for UI ordering
+  // Memoize to avoid unnecessary recalculations on every render
+  const sortedScenes = useMemo(() => {
+    return [...project.scenes]
+      .filter(scene => {
+        const isValid = scene.sequence != null && scene.sequence >= 1 && Number.isInteger(scene.sequence)
+        if (!isValid) {
+          console.warn('Scene with invalid sequence detected:', scene)
+        }
+        return isValid
+      })
+      .sort((a, b) => a.displaySequence - b.displaySequence)  // Sort by displaySequence for UI
+  }, [project.scenes])
 
   // Use local scenes if reordering, otherwise use sorted project scenes
   const displayScenes = isReordering ? localScenes : sortedScenes
@@ -235,6 +251,12 @@ export function ScenesPanel({
     // Refresh the project data when a scene is updated
     onProjectUpdate()
   }
+
+  // Get the fresh scene data from the project when it updates
+  // This ensures the modal always shows the latest scene data including newly generated videos
+  const freshSceneForEdit = selectedSceneForEdit
+    ? project.scenes.find(s => s.sequence === selectedSceneForEdit.sequence) || selectedSceneForEdit
+    : null
 
   const handleDeleteClick = (scene: ProjectScene) => {
     setSceneToDelete(scene)
@@ -311,8 +333,9 @@ export function ScenesPanel({
     setIsReordering(true)
     setActiveId(null)
 
-    // Calculate the new scene order (array of sequence numbers in new display order)
-    const sceneOrder = newScenes.map((s) => s.sequence)
+    // Calculate the new scene order (array of displaySequence values in new display order)
+    // The backend reorder API expects displaySequence values, not immutable sequence values
+    const sceneOrder = newScenes.map((s) => s.displaySequence)
 
     // Debug logging
     console.log('Reordering scenes:')
@@ -402,14 +425,14 @@ export function ScenesPanel({
     setActiveId(null)
   }
 
-  const getSceneStatus = (scene: ProjectScene) => {
+  const getSceneStatus = useCallback((scene: ProjectScene) => {
     if (scene.errorMessage) return 'error'
     if (scene.originalVideoClipUrl || scene.videoClipUrl) return 'completed'
     if (scene.status === 'processing') return 'processing'
     return 'pending'
-  }
+  }, [])
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case 'completed':
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Complete</Badge>
@@ -420,7 +443,7 @@ export function ScenesPanel({
       default:
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">Pending</Badge>
     }
-  }
+  }, [])
 
   return (
     <div className="h-full bg-gray-900 border-r border-gray-700 flex flex-col">
@@ -504,11 +527,11 @@ export function ScenesPanel({
       </div>
 
       {/* Scene Edit Modal */}
-      {selectedSceneForEdit && (
+      {freshSceneForEdit && (
         <SceneEditModal
           open={editModalOpen}
           onOpenChange={setEditModalOpen}
-          scene={selectedSceneForEdit}
+          scene={freshSceneForEdit}
           projectId={project.projectId}
           onSceneUpdate={handleSceneUpdate}
         />
