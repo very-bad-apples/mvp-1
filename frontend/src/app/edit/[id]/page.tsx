@@ -63,7 +63,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     // Get scenes with videos, sorted by sequence
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
+      .filter(scene => scene.originalVideoClipUrl)
       .sort((a, b) => a.sequence - b.sequence)
 
     if (scenesWithVideos.length === 0) return
@@ -115,7 +115,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
     // Get all scenes with videos, sorted by sequence
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
+      .filter(scene => scene.originalVideoClipUrl)
       .sort((a, b) => a.sequence - b.sequence)
 
     // Find the clicked scene in the sorted list
@@ -230,8 +230,12 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
       // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
       // ONLY generate for scenes that are missing the originalVideoClipUrl (primary video field)
+      // Also check if project is already processing or if any scenes are processing to avoid duplicate triggers
       const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl)
-      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
+      const hasProcessingScenes = project.scenes.some(scene => scene.status === 'processing')
+      const isProjectProcessing = project.status === 'processing' || project.status === 'composing'
+      
+      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes && !hasProcessingScenes && !isProjectProcessing) {
         sceneGenerationTriggered.current = true
 
         console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without originalVideoClipUrl, triggering generation`)
