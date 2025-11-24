@@ -2434,6 +2434,348 @@ async def trim_scene_video(
 
 
 @router.post(
+    "/projects/{project_id}/scenes/{sequence}/upload_video",
+    response_model=SceneResponse,
+    summary="Upload Scene Video",
+    description="""
+Upload a video file for a scene.
+
+This endpoint:
+1. Validates the video file (type and size)
+2. Uploads the video to S3 at `mv/projects/{project_id}/scenes/{sequence:03d}/video.mp4`
+3. Extracts video duration
+4. Updates scene with originalVideoClipS3Key and duration
+5. Clears workingVideoClipS3Key and trimPoints (since this is a new original)
+6. Updates scene status to "completed"
+
+**File Requirements:**
+- Must be a valid video file (MP4, MOV, AVI, etc.)
+- Maximum size: 100MB
+
+**Note:** This replaces any existing video for the scene.
+"""
+)
+async def upload_scene_video(
+    project_id: str,
+    sequence: int,
+    file: UploadFile = File(..., description="Video file to upload")
+):
+    """
+    Upload a video file for a scene.
+
+    Args:
+        project_id: Project UUID
+        sequence: Scene sequence number (1-based)
+        file: Video file to upload
+
+    Returns:
+        Updated SceneResponse
+
+    Raises:
+        404: Project or scene not found
+        400: Invalid file type or size
+        500: Upload or update failed
+    """
+    import tempfile
+    import os
+    from pathlib import Path
+    from mv.video_trimmer import get_video_duration
+    from services.s3_storage import generate_scene_s3_key, delete_local_file_after_upload
+    
+    try:
+        logger.info(
+            "upload_scene_video_request",
+            project_id=project_id,
+            sequence=sequence,
+            filename=file.filename,
+            content_type=file.content_type
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Validate sequence
+        if sequence < 1:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid sequence number",
+                    "details": "Sequence must be >= 1"
+                }
+            )
+
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('video/'):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid file type",
+                    "details": "File must be a video (MP4, MOV, AVI, etc.)"
+                }
+            )
+
+        # Validate file size (100MB max)
+        MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "File too large",
+                    "details": f"Maximum file size is {MAX_FILE_SIZE / (1024*1024):.0f}MB"
+                }
+            )
+
+        # Retrieve and validate scene exists
+        pk = f"PROJECT#{project_id}"
+        sk = f"SCENE#{sequence:03d}"
+
+        try:
+            scene_item = MVProjectItem.get(pk, sk)
+        except DoesNotExist:
+            logger.warning("scene_not_found_for_upload", project_id=project_id, sequence=sequence)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Scene {sequence} not found in project {project_id}",
+                    "details": "The specified scene does not exist"
+                }
+            )
+
+        # Verify it's actually a scene item
+        if scene_item.entityType != "scene":
+            logger.error(
+                "invalid_item_type_for_upload",
+                project_id=project_id,
+                sequence=sequence,
+                entity_type=scene_item.entityType
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "InternalError",
+                    "message": "Invalid scene item type",
+                    "details": f"Expected 'scene', got '{scene_item.entityType}'"
+                }
+            )
+
+        # Save to temporary file
+        temp_dir = tempfile.mkdtemp()
+        temp_file_path = os.path.join(temp_dir, f"upload_{sequence:03d}.mp4")
+        
+        with open(temp_file_path, "wb") as f:
+            f.write(file_content)
+
+        logger.info(
+            "video_file_saved_to_temp",
+            project_id=project_id,
+            sequence=sequence,
+            temp_path=temp_file_path,
+            file_size=len(file_content)
+        )
+
+        # Extract video duration
+        try:
+            video_duration = get_video_duration(temp_file_path)
+            logger.info(
+                "video_duration_extracted",
+                project_id=project_id,
+                sequence=sequence,
+                duration=video_duration
+            )
+        except Exception as e:
+            logger.error(
+                "failed_to_extract_video_duration",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(e),
+                exc_info=True
+            )
+            # Clean up temp file
+            try:
+                os.remove(temp_file_path)
+            except:
+                pass
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid video file",
+                    "details": f"Unable to read video duration: {str(e)}"
+                }
+            )
+
+        # Upload to S3
+        s3_service = get_s3_storage_service()
+        s3_key = generate_scene_s3_key(
+            project_id=project_id,
+            sequence=sequence,
+            asset_type="video"
+        )
+
+        try:
+            s3_service.upload_file_from_path(
+                file_path=temp_file_path,
+                s3_key=s3_key,
+                content_type="video/mp4"
+            )
+
+            logger.info(
+                "scene_video_uploaded_to_s3",
+                project_id=project_id,
+                sequence=sequence,
+                s3_key=s3_key,
+                duration=video_duration
+            )
+
+            # Delete local file after successful upload
+            delete_local_file_after_upload(temp_file_path)
+
+        except Exception as e:
+            logger.error(
+                "failed_to_upload_scene_video_to_s3",
+                project_id=project_id,
+                sequence=sequence,
+                s3_key=s3_key,
+                error=str(e),
+                exc_info=True
+            )
+            # Clean up temp file
+            try:
+                os.remove(temp_file_path)
+            except:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "StorageError",
+                    "message": "Failed to upload video to storage",
+                    "details": str(e)
+                }
+            )
+
+        # Update scene record
+        try:
+            # Update video clip fields
+            scene_item.originalVideoClipS3Key = s3_key
+            scene_item.duration = video_duration
+            scene_item.status = "completed"
+            
+            # Clear working clip and trim points since this is a new original
+            scene_item.workingVideoClipS3Key = None
+            scene_item.trimPoints = None
+            
+            # Clear any error messages
+            scene_item.errorMessage = None
+            
+            scene_item.updatedAt = datetime.now(timezone.utc)
+            scene_item.save()
+
+            logger.info(
+                "scene_updated_with_uploaded_video",
+                project_id=project_id,
+                sequence=sequence,
+                s3_key=s3_key,
+                duration=video_duration
+            )
+
+        except Exception as e:
+            logger.error(
+                "failed_to_update_scene_after_upload",
+                project_id=project_id,
+                sequence=sequence,
+                error=str(e),
+                exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "DatabaseError",
+                    "message": "Failed to update scene with uploaded video",
+                    "details": str(e)
+                }
+            )
+
+        # Generate presigned URLs for response
+        reference_urls = []
+        if scene_item.referenceImageS3Keys:
+            for key in scene_item.referenceImageS3Keys:
+                reference_urls.append(s3_service.generate_presigned_url(key))
+
+        audio_url = None
+        if scene_item.audioClipS3Key:
+            audio_url = s3_service.generate_presigned_url(scene_item.audioClipS3Key)
+
+        original_video_url = s3_service.generate_presigned_url(scene_item.originalVideoClipS3Key)
+
+        working_video_url = None
+        if scene_item.workingVideoClipS3Key:
+            working_video_url = s3_service.generate_presigned_url(scene_item.workingVideoClipS3Key)
+
+        lipsynced_url = None
+        if scene_item.lipSyncedVideoClipS3Key:
+            lipsynced_url = s3_service.generate_presigned_url(scene_item.lipSyncedVideoClipS3Key)
+
+        trim_points = None
+        if scene_item.trimPoints:
+            trim_points = json.loads(scene_item.trimPoints)
+
+        return SceneResponse(
+            sequence=scene_item.sequence,  # Immutable SK identifier
+            displaySequence=scene_item.displaySequence if scene_item.displaySequence is not None else scene_item.sequence,  # Mutable display order
+            status=scene_item.status,
+            prompt=scene_item.prompt,
+            negativePrompt=scene_item.negativePrompt,
+            duration=scene_item.duration,
+            referenceImageUrls=reference_urls,
+            audioClipUrl=audio_url,
+            originalVideoClipUrl=original_video_url,
+            workingVideoClipUrl=working_video_url,
+            videoClipUrl=working_video_url,  # Backward compatibility
+            trimPoints=trim_points,
+            needsLipSync=scene_item.needsLipSync or False,
+            lipSyncedVideoClipUrl=lipsynced_url,
+            retryCount=scene_item.retryCount or 0,
+            errorMessage=scene_item.errorMessage,
+            createdAt=scene_item.createdAt,
+            updatedAt=scene_item.updatedAt
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "upload_scene_video_error",
+            project_id=project_id,
+            sequence=sequence,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to upload scene video",
+                "details": str(e)
+            }
+        )
+
+
+@router.post(
     "/projects/{project_id}/generate",
     response_model=ProjectResponse,
     summary="Start Project Generation",
