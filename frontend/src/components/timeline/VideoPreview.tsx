@@ -6,6 +6,7 @@ import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Gauge, 
 import { Project, ProjectScene } from '@/types/project'
 import { Badge } from '@/components/ui/badge'
 import { useEffect, useRef, useState } from 'react'
+import { getVideoStableId } from '@/lib/utils/video'
 
 interface VideoPreviewProps {
   jobId: string
@@ -52,6 +53,9 @@ export function VideoPreview({
   const lastSeekTimeRef = useRef<number>(0)
   const isSeekingRef = useRef(false)
   const speedIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // Track the last stable video ID to prevent reloads when only presigned URL changes
+  const lastVideoStableIdRef = useRef<string | null>(null)
+  const lastSceneIndexRef = useRef<number>(-1)
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -72,10 +76,10 @@ export function VideoPreview({
     }
   }
 
-  // Get scenes with valid video URLs, sorted by sequence
+  // Get scenes with valid video URLs, sorted by displaySequence for correct playback order
   const validScenes = project.scenes
     .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
-    .sort((a, b) => a.sequence - b.sequence)
+    .sort((a, b) => a.displaySequence - b.displaySequence)
 
   // Calculate cumulative scene start times for seeking
   const sceneTimings = validScenes.map((scene, index) => {
@@ -134,6 +138,7 @@ export function VideoPreview({
     // MODE 1: If in scene preview mode, show only that scene's video
     if (isScenePreviewMode && selectedScene && (selectedScene.originalVideoClipUrl || selectedScene.videoClipUrl)) {
       const videoUrl = selectedScene.lipSyncedVideoClipUrl || selectedScene.originalVideoClipUrl || selectedScene.videoClipUrl
+      const videoStableId = getVideoStableId(videoUrl)
 
       const handleLoadedMetadata = () => {
         setIsVideoLoaded(true)
@@ -159,10 +164,17 @@ export function VideoPreview({
       video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('error', handleError)
 
-      // Only reload if URL actually changed
-      if (videoUrl && video.src !== videoUrl) {
+      // Only reload if the S3 key path changed (not just presigned URL)
+      if (videoUrl && videoStableId && videoStableId !== lastVideoStableIdRef.current) {
+        lastVideoStableIdRef.current = videoStableId
         video.src = videoUrl
         video.load()
+      } else if (videoUrl && !videoStableId) {
+        // Fallback: if we can't extract stable ID, use URL comparison (less efficient but safe)
+        if (video.src !== videoUrl) {
+          video.src = videoUrl
+          video.load()
+        }
       }
 
       return () => {
@@ -174,6 +186,8 @@ export function VideoPreview({
 
     // MODE 2: If showing final video and it's available, load that instead
     if (showFinalVideo && project.finalOutputUrl) {
+      const videoStableId = getVideoStableId(project.finalOutputUrl)
+
       const handleLoadedMetadata = () => {
         setIsVideoLoaded(true)
         setVideoError(null)
@@ -198,10 +212,17 @@ export function VideoPreview({
       video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('error', handleError)
 
-      // Only reload if URL actually changed
-      if (video.src !== project.finalOutputUrl) {
+      // Only reload if the S3 key path changed (not just presigned URL)
+      if (videoStableId && videoStableId !== lastVideoStableIdRef.current) {
+        lastVideoStableIdRef.current = videoStableId
         video.src = project.finalOutputUrl
         video.load()
+      } else if (!videoStableId) {
+        // Fallback: if we can't extract stable ID, use URL comparison (less efficient but safe)
+        if (video.src !== project.finalOutputUrl) {
+          video.src = project.finalOutputUrl
+          video.load()
+        }
       }
 
       return () => {
@@ -217,6 +238,8 @@ export function VideoPreview({
     const currentScene = validScenes[currentSceneIndex]
     const currentVideoUrl = currentScene?.originalVideoClipUrl ?? currentScene?.videoClipUrl
     if (!currentVideoUrl) return
+
+    const videoStableId = getVideoStableId(currentVideoUrl)
 
     const handleLoadedMetadata = () => {
       setIsVideoLoaded(true)
@@ -242,10 +265,21 @@ export function VideoPreview({
     video.addEventListener('loadeddata', handleLoadedData)
     video.addEventListener('error', handleError)
 
-    // Only reload video when the source URL actually changes
-    if (video.src !== currentVideoUrl) {
+    // Only reload video when the S3 key path changed (not just presigned URL)
+    // Also reload if scene index changed (different scene)
+    const sceneChanged = currentSceneIndex !== lastSceneIndexRef.current
+    if (videoStableId && (videoStableId !== lastVideoStableIdRef.current || sceneChanged)) {
+      lastVideoStableIdRef.current = videoStableId
+      lastSceneIndexRef.current = currentSceneIndex
       video.src = currentVideoUrl
       video.load()
+    } else if (!videoStableId) {
+      // Fallback: if we can't extract stable ID, use URL comparison (less efficient but safe)
+      if (video.src !== currentVideoUrl || sceneChanged) {
+        lastSceneIndexRef.current = currentSceneIndex
+        video.src = currentVideoUrl
+        video.load()
+      }
     }
 
     return () => {
