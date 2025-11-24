@@ -89,7 +89,7 @@ prompt_template: |
   {{
     "scenes": [
       {{
-        "description": "metadata:\n  prompt_name: \"[Scene name]\"\n  base_style: \"[style]\"\n  aspect_ratio: \"16:9\"\n  setting_description: \"[setting]\"\n  camera_setup: \"[camera]\"\n  key_elements:\n    - \"[element 1]\"\n    - \"[product]\"\n  action_sequences:\n    - \"[action 1]\"\n  negative_prompts: [\"[exclude 1]\"]\n\ntimeline:\n  sequence: 1\n  timestamp: \"00:00-00:02\"\n  action: \"[detailed action]\"\n  audio: \"[audio description]\"",
+        "description": "metadata:\n  prompt_name: \"[Scene name]\"\n  base_style: \"[style]\"\n  aspect_ratio: \"16:9\"\n  setting_description: \"[setting]\"\n  camera_setup: \"[camera]\"\n  key_elements:\n    - \"[element 1]\"\n    - \"[product]\"\n  action_sequences:\n    - \"[action 1]\"\n  \ntimeline:\n  sequence: 1\n  timestamp: \"00:00-00:02\"\n  action: \"[detailed action]\"\n  audio: \"[audio description]\"",
         "negative_description": "[Elements to exclude]"
       }}
     ]
