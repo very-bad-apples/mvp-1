@@ -18,11 +18,11 @@ import {
 } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle, Scissors } from 'lucide-react'
+import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle, Scissors, Upload } from 'lucide-react'
 import { ProjectScene } from '@/types/project'
 import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
-import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo } from '@/lib/api/client'
+import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo, uploadSceneVideo } from '@/lib/api/client'
 import { formatVideoTime, formatDuration } from '@/lib/utils/time'
 import { getSceneVideoUrl } from '@/lib/utils/video'
 import { useSceneToast } from '@/hooks/useSceneToast'
@@ -78,6 +78,10 @@ export function SceneEditModal({
   // Save prompts state
   const [isSavingPrompts, setIsSavingPrompts] = useState(false)
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
+
+  // Upload video state
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Track if prompts have been modified
   const promptsModified =
@@ -348,6 +352,59 @@ export function SceneEditModal({
     }
   }
 
+  /**
+   * Handle video file upload
+   */
+  const handleUploadVideo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('video/')) {
+      sceneToast.showWarning(
+        'Invalid File Type',
+        'Please select a video file (MP4, MOV, AVI, etc.)'
+      )
+      return
+    }
+
+    // Validate file size (100MB max)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+    if (file.size > MAX_FILE_SIZE) {
+      sceneToast.showWarning(
+        'File Too Large',
+        `Maximum file size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+      )
+      return
+    }
+
+    setIsOperationInProgress(true)
+    setIsUploadingVideo(true)
+
+    sceneToast.showProgress(scene, 'Video Upload')
+
+    try {
+      const updatedScene = await uploadSceneVideo(projectId, scene.sequence, file)
+      
+      sceneToast.showSuccess(scene, 'Video Upload')
+
+      // Call the callback to trigger a refresh in parent component
+      if (onSceneUpdate) {
+        onSceneUpdate(updatedScene)
+      }
+    } catch (error) {
+      console.error('Video upload failed:', error)
+      sceneToast.showError(scene, 'Video Upload', error)
+    } finally {
+      setIsUploadingVideo(false)
+      setIsOperationInProgress(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* Custom DialogContent with max-w-4xl and max-h-[90vh] */}
@@ -607,6 +664,51 @@ export function SceneEditModal({
             </h3>
             <div className="border border-border rounded-lg p-6 bg-muted/20">
               <div className="flex flex-wrap gap-3">
+                {/* Upload Video Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="video/*"
+                          onChange={handleUploadVideo}
+                          disabled={isUploadingVideo || isOperationInProgress}
+                          className="hidden"
+                          id={`upload-video-${scene.sequence}`}
+                        />
+                        <Button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingVideo || isOperationInProgress}
+                          variant="outline"
+                          size="default"
+                          className="min-w-[180px]"
+                        >
+                          {isUploadingVideo ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Upload Video
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isUploadingVideo ? (
+                        <p>Uploading video... Please wait</p>
+                      ) : (
+                        <p>Upload a video file to replace the scene video (MP4, MOV, AVI, max 100MB)</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 {/* Generate Lip-Sync Button */}
                 <TooltipProvider>
                   <Tooltip>
