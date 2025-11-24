@@ -852,22 +852,10 @@ async def get_project(project_id: str):
             MVProjectItem.SK.startswith("SCENE#")
         )
 
-        # Migration: Populate displaySequence for existing scenes that don't have it
+        # Convert query result to list and sort
+        # Use displaySequence if available, otherwise fallback to sequence
         scene_items_list = list(scene_items)
-        for scene_item in scene_items_list:
-            if scene_item.displaySequence is None:
-                scene_item.displaySequence = scene_item.sequence
-                scene_item.updatedAt = datetime.now(timezone.utc)
-                scene_item.save()
-                logger.info(
-                    "migrated_scene_display_sequence",
-                    project_id=project_id,
-                    sequence=scene_item.sequence,
-                    display_sequence=scene_item.displaySequence
-                )
-
-        # Sort scene items by displaySequence (fallback to sequence for compatibility)
-        scene_items_list.sort(key=lambda s: s.displaySequence if s.displaySequence is not None else (s.sequence or 0))
+        scene_items_list.sort(key=lambda s: s.displaySequence or s.sequence or 0)
 
         s3_service = get_s3_storage_service()
 

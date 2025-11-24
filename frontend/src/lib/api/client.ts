@@ -290,10 +290,22 @@ async function apiFetch<T>(
         headers['X-API-Key'] = apiKey
       }
 
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      })
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+      let response: Response
+      try {
+        response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+      } catch (error) {
+        clearTimeout(timeoutId)
+        throw error
+      }
 
       // Handle non-OK responses
       if (!response.ok) {

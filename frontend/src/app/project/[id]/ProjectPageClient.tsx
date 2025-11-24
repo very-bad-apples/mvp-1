@@ -567,6 +567,11 @@ export function ProjectPageClient({ projectId }: { projectId: string }) {
               </div>
             </div>
             <nav className="flex items-center gap-3" aria-label="Project navigation">
+              {loading && project && (
+                <Badge variant="secondary" className="text-xs">
+                  Updating...
+                </Badge>
+              )}
               {isPolling && (
                 <span
                   className="text-xs text-gray-400 flex items-center gap-2"
