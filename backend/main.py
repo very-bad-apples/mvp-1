@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.models import SecurityScheme
 from fastapi.security import APIKeyHeader
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import time
 
@@ -236,6 +237,41 @@ async def log_requests(request: Request, call_next):
             process_time=f"{process_time:.3f}s"
         )
         raise
+
+
+# Validation error handler
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with detailed logging"""
+    print("=" * 80)
+    print("VALIDATION ERROR HANDLER TRIGGERED!")
+    print("=" * 80)
+
+    logger.error(
+        "validation_error",
+        path=request.url.path,
+        method=request.method,
+        errors=exc.errors(),
+        error_count=len(exc.errors())
+    )
+
+    # Print to console for visibility
+    print(f"Validation errors: {exc.errors()}")
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "ValidationError",
+            "message": "Request validation failed",
+            "details": exc.errors()
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 
 # Global error handler

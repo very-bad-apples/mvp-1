@@ -33,8 +33,8 @@ logger = structlog.get_logger()
 
 class Scene(BaseModel):
     """Single scene description for video generation."""
-    description: str = Field(..., description="Scene description for video generation")
-    negative_description: str = Field(..., description="Elements to exclude from the scene")
+    description: str = Field(..., max_length=5000, description="Scene description for video generation")
+    negative_description: str = Field(..., max_length=1000, description="Elements to exclude from the scene")
 
 
 class SceneResponse(BaseModel):
