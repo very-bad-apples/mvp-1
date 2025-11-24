@@ -9,6 +9,7 @@
 export type ProjectStatus =
   | 'pending'
   | 'processing'
+  | 'composing'
   | 'completed'
   | 'failed'
 

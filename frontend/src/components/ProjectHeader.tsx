@@ -61,6 +61,10 @@ const statusConfig: Record<
     label: 'Processing',
     className: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   },
+  composing: {
+    label: 'Composing',
+    className: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+  },
   completed: {
     label: 'Completed',
     className: 'bg-green-500/10 text-green-400 border-green-500/20',
