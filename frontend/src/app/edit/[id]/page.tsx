@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Video, ChevronLeft, Loader2, Download } from 'lucide-react'
 import { VideoPreview } from '@/components/timeline/VideoPreview'
 import { ScenesPanel } from '@/components/ScenesPanel'
+import { Logo } from '@/components/Logo'
 import { useProjectPolling } from '@/hooks/useProjectPolling'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { generateScenes, composeVideo } from '@/lib/api/client'
@@ -526,9 +527,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
       <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <Video className="h-8 w-8 text-blue-500" />
-              <span className="text-xl font-bold text-white">AI Video Generator</span>
+            <Link href="/" className="flex items-center gap-3">
+              <Logo size="sm" className="text-blue-500" />
+              <span className="text-2xl font-bold text-white">Bad Apple</span>
             </Link>
             <div className="flex items-center gap-4">
               <Button
@@ -537,7 +538,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
                 onClick={() => window.location.href = '/create'}
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
-                Back to Result
+                Create New
               </Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import VideoPlayer from "@/components/VideoPlayer"
+import { Logo } from "@/components/Logo"
 
 // Types
 interface Stage {
@@ -233,9 +234,9 @@ export default function JobStatusPage() {
         <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-3">
                 <Video className="h-8 w-8 text-blue-500" />
-                <span className="text-xl font-bold text-white">AI Video Generator</span>
+                <span className="text-xl font-bold text-white">Bad Apple</span>
               </Link>
               <Link href="/">
                 <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800">
@@ -275,9 +276,9 @@ export default function JobStatusPage() {
         <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-3">
                 <Video className="h-8 w-8 text-blue-500" />
-                <span className="text-xl font-bold text-white">AI Video Generator</span>
+                <span className="text-xl font-bold text-white">Bad Apple</span>
               </Link>
               <Link href="/">
                 <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800">
@@ -324,9 +325,9 @@ export default function JobStatusPage() {
       <nav className="border-b border-gray-700/50 backdrop-blur-sm bg-gray-900/50 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <Video className="h-8 w-8 text-blue-500" />
-              <span className="text-xl font-bold text-white">AI Video Generator</span>
+            <Link href="/" className="flex items-center gap-3">
+              <Logo size="sm" className="text-blue-500" />
+              <span className="text-2xl font-bold text-white">Bad Apple</span>
             </Link>
             <Link href="/">
               <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800">

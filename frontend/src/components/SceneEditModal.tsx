@@ -546,7 +546,7 @@ export function SceneEditModal({
                   value={editedPrompt}
                   onChange={(e) => setEditedPrompt(e.target.value)}
                   placeholder="Enter scene description, visual details, camera angles, lighting, mood..."
-                  className="min-h-[120px] resize-none"
+                  className="min-h-[120px] resize-y"
                   maxLength={5000}
                   aria-describedby="scene-prompt-help"
                 />
@@ -573,7 +573,7 @@ export function SceneEditModal({
                   value={editedNegativePrompt}
                   onChange={(e) => setEditedNegativePrompt(e.target.value)}
                   placeholder="Enter elements to avoid in the scene (e.g., blur, distortion, low quality)..."
-                  className="min-h-[100px] resize-none"
+                  className="min-h-[100px] resize-y"
                   maxLength={1000}
                   aria-describedby="negative-prompt-help"
                 />
