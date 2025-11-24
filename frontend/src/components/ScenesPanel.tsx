@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Edit, Video, AlertCircle, Plus, Trash2, GripVertical } from 'lucide-react'
 import type { Project, ProjectScene } from '@/types/project'
 import { useSceneToast } from '@/hooks/useSceneToast'
-import { getSceneVideoUrl } from '@/lib/utils/video'
+import { getSceneVideoUrl, getVideoStableId } from '@/lib/utils/video'
 import { SceneEditModal } from '@/components/SceneEditModal'
 import { AddSceneModal } from '@/components/AddSceneModal'
 import { DeleteSceneDialog } from '@/components/DeleteSceneDialog'
@@ -34,6 +34,82 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+interface VideoThumbnailProps {
+  scene: ProjectScene
+  status: string
+}
+
+/**
+ * VideoThumbnail component that prevents unnecessary video reloads
+ * when presigned URLs change but S3 keys stay the same.
+ */
+const VideoThumbnail = memo(function VideoThumbnail({ scene, status }: VideoThumbnailProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const lastStableIdRef = useRef<string | null>(null)
+  const videoUrl = getSceneVideoUrl(scene)
+  const stableId = getVideoStableId(videoUrl)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !videoUrl) return
+
+    // Only update video src if the S3 key path changed (not just presigned URL)
+    if (stableId && stableId !== lastStableIdRef.current) {
+      lastStableIdRef.current = stableId
+      video.src = videoUrl
+      video.load()
+    } else if (!stableId && video.src !== videoUrl) {
+      // Fallback: if we can't extract stable ID, use URL comparison
+      video.src = videoUrl
+      video.load()
+    }
+  }, [videoUrl, stableId])
+
+  if (!videoUrl) {
+    if (status === 'processing') {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      )
+    }
+    if (status === 'error') {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+        </div>
+      )
+    }
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Video className="h-8 w-8 text-gray-600" />
+      </div>
+    )
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      className="w-full h-full object-cover pointer-events-none"
+      muted
+      preload="metadata"
+      playsInline
+    />
+  )
+}, (prevProps, nextProps) => {
+  // Only re-render if scene sequence or video URL stable ID changed
+  const prevUrl = getSceneVideoUrl(prevProps.scene)
+  const nextUrl = getSceneVideoUrl(nextProps.scene)
+  const prevStableId = getVideoStableId(prevUrl)
+  const nextStableId = getVideoStableId(nextUrl)
+  
+  return (
+    prevProps.scene.sequence === nextProps.scene.sequence &&
+    prevProps.status === nextProps.status &&
+    prevStableId === nextStableId
+  )
+})
+
 interface SortableSceneCardProps {
   scene: ProjectScene
   isSelected: boolean
@@ -44,7 +120,7 @@ interface SortableSceneCardProps {
   getStatusBadge: (status: string) => JSX.Element
 }
 
-function SortableSceneCard({
+const SortableSceneCard = memo(function SortableSceneCard({
   scene,
   isSelected,
   status,
@@ -113,27 +189,7 @@ function SortableSceneCard({
 
         {/* Video Thumbnail */}
         <div className="relative aspect-video bg-gray-900 rounded-md overflow-hidden mb-2">
-          {getSceneVideoUrl(scene) ? (
-            <video
-              src={getSceneVideoUrl(scene)}
-              className="w-full h-full object-cover pointer-events-none"
-              muted
-              preload="metadata"
-              playsInline
-            />
-          ) : status === 'processing' ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-            </div>
-          ) : status === 'error' ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <AlertCircle className="h-8 w-8 text-red-500" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Video className="h-8 w-8 text-gray-600" />
-            </div>
-          )}
+          <VideoThumbnail scene={scene} status={status} />
         </div>
 
         {/* Scene Prompt */}
@@ -170,7 +226,20 @@ function SortableSceneCard({
       </CardContent>
     </Card>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if these specific props change
+  return (
+    prevProps.scene.sequence === nextProps.scene.sequence &&
+    prevProps.scene.status === nextProps.scene.status &&
+    prevProps.scene.originalVideoClipUrl === nextProps.scene.originalVideoClipUrl &&
+    prevProps.scene.videoClipUrl === nextProps.scene.videoClipUrl &&
+    prevProps.scene.prompt === nextProps.scene.prompt &&
+    prevProps.scene.errorMessage === nextProps.scene.errorMessage &&
+    prevProps.scene.duration === nextProps.scene.duration &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.status === nextProps.status
+  )
+})
 
 interface ScenesPanelProps {
   project: Project
@@ -200,16 +269,19 @@ export function ScenesPanel({
   const [isReordering, setIsReordering] = useState(false)
 
   // Initialize local scenes from project
-  // Filter out scenes with invalid sequences and sort
-  const sortedScenes = [...project.scenes]
-    .filter(scene => {
-      const isValid = scene.sequence != null && scene.sequence >= 1 && Number.isInteger(scene.sequence)
-      if (!isValid) {
-        console.warn('Scene with invalid sequence detected:', scene)
-      }
-      return isValid
-    })
-    .sort((a, b) => a.sequence - b.sequence)
+  // Filter out scenes with invalid sequences and sort by displaySequence for UI ordering
+  // Memoize to avoid unnecessary recalculations on every render
+  const sortedScenes = useMemo(() => {
+    return [...project.scenes]
+      .filter(scene => {
+        const isValid = scene.sequence != null && scene.sequence >= 1 && Number.isInteger(scene.sequence)
+        if (!isValid) {
+          console.warn('Scene with invalid sequence detected:', scene)
+        }
+        return isValid
+      })
+      .sort((a, b) => a.displaySequence - b.displaySequence)  // Sort by displaySequence for UI
+  }, [project.scenes])
 
   // Use local scenes if reordering, otherwise use sorted project scenes
   const displayScenes = isReordering ? localScenes : sortedScenes
@@ -235,6 +307,12 @@ export function ScenesPanel({
     // Refresh the project data when a scene is updated
     onProjectUpdate()
   }
+
+  // Get the fresh scene data from the project when it updates
+  // This ensures the modal always shows the latest scene data including newly generated videos
+  const freshSceneForEdit = selectedSceneForEdit
+    ? project.scenes.find(s => s.sequence === selectedSceneForEdit.sequence) || selectedSceneForEdit
+    : null
 
   const handleDeleteClick = (scene: ProjectScene) => {
     setSceneToDelete(scene)
@@ -311,13 +389,15 @@ export function ScenesPanel({
     setIsReordering(true)
     setActiveId(null)
 
-    // Calculate the new scene order (array of sequence numbers in new display order)
-    const sceneOrder = newScenes.map((s) => s.sequence)
+    // Calculate the new scene order (array of current displaySequence values in new display order)
+    // The backend expects the CURRENT displaySequence values (scene identifiers) in the desired new order
+    // After the reorder, the backend will assign new displaySequence values 1, 2, 3, etc. based on this order
+    const sceneOrder = newScenes.map((s) => s.displaySequence)
 
     // Debug logging
     console.log('Reordering scenes:')
-    console.log('  displayScenes:', displayScenes.map(s => ({ seq: s.sequence, status: s.status })))
-    console.log('  newScenes:', newScenes.map(s => ({ seq: s.sequence, status: s.status })))
+    console.log('  displayScenes:', displayScenes.map(s => ({ seq: s.sequence, displaySeq: s.displaySequence })))
+    console.log('  newScenes:', newScenes.map(s => ({ seq: s.sequence, displaySeq: s.displaySequence })))
     console.log('  sceneOrder to send:', sceneOrder)
 
     // Validate sceneOrder before sending
@@ -402,14 +482,14 @@ export function ScenesPanel({
     setActiveId(null)
   }
 
-  const getSceneStatus = (scene: ProjectScene) => {
+  const getSceneStatus = useCallback((scene: ProjectScene) => {
     if (scene.errorMessage) return 'error'
     if (scene.originalVideoClipUrl || scene.videoClipUrl) return 'completed'
     if (scene.status === 'processing') return 'processing'
     return 'pending'
-  }
+  }, [])
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case 'completed':
         return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Complete</Badge>
@@ -420,7 +500,7 @@ export function ScenesPanel({
       default:
         return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">Pending</Badge>
     }
-  }
+  }, [])
 
   return (
     <div className="h-full bg-gray-900 border-r border-gray-700 flex flex-col">
@@ -504,11 +584,11 @@ export function ScenesPanel({
       </div>
 
       {/* Scene Edit Modal */}
-      {selectedSceneForEdit && (
+      {freshSceneForEdit && (
         <SceneEditModal
           open={editModalOpen}
           onOpenChange={setEditModalOpen}
-          scene={selectedSceneForEdit}
+          scene={freshSceneForEdit}
           projectId={project.projectId}
           onSceneUpdate={handleSceneUpdate}
         />

@@ -10,11 +10,20 @@ from datetime import datetime
 class SceneResponse(BaseModel):
     """
     Response model for individual scene.
-    
+
     Note: All *Url fields contain presigned S3 URLs, NOT S3 object keys.
     These URLs are generated on-demand from S3 keys stored in the database.
+
+    Important: sequence vs displaySequence
+    - sequence: Immutable identifier that maps to DynamoDB Sort Key (SCENE#{sequence:03d})
+                Used for all database mutations (update, delete, regenerate, trim)
+                Never changes after scene creation
+    - displaySequence: Mutable display order in UI
+                       Updated when scenes are reordered
+                       Used for sorting and display only
     """
-    sequence: int
+    sequence: int  # Immutable SK identifier - use for database operations
+    displaySequence: int  # Mutable display order - use for UI sorting
     status: str
     prompt: str
     negativePrompt: Optional[str] = None

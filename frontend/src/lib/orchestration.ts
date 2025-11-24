@@ -253,7 +253,7 @@ export async function startFullGeneration(
 
     // Phase 2: Generate all character reference images (parallel)
     opts.onProgress('images', 0, project.scenes.length, 'Starting image generation...')
-    await updateProject(projectId, { status: 'processing' })
+    // Status already set to 'processing' in Phase 1 - no need to update again
 
     if (project.characterDescription && !project.characterReferenceImageId) {
       const imageRequest: GenerateCharacterReferenceRequest = {
@@ -279,39 +279,49 @@ export async function startFullGeneration(
     opts.onProgress('images', 1, 1, 'Character reference generated')
 
     // Phase 3: Generate all videos (parallel - backend handles DB updates atomically)
-    opts.onProgress('videos', 0, project.scenes.length, 'Starting video generation...')
-    await updateProject(projectId, { status: 'processing' })
-
-    // Generate all videos in parallel - backend updates each scene atomically in DynamoDB
-    const videoPromises = project.scenes.map((scene, index) =>
-      retryWithBackoff(
-        async () => {
-          opts.onProgress('videos', index + 1, project.scenes.length, `Generating video ${index + 1}/${project.scenes.length}`)
-
-          // Reference images are stored in the scene in DynamoDB
-          // The backend will read them from there when generating the video
-          const videoRequest: GenerateVideoRequest = {
-            prompt: scene.prompt,
-            negative_prompt: scene.negativePrompt || undefined,
-            project_id: projectId,
-            sequence: scene.sequence,
-          }
-
-          const videoResponse = await generateVideo(videoRequest)
-
-          // Backend automatically updates the scene in DynamoDB with the video URL
-          // No need to manually update - backend handles atomic updates per scene
-
-          return videoResponse
-        },
-        `Generate video for scene ${index + 1}`,
-        opts,
-        'videos',
-        index
-      )
+    // Only generate videos for scenes that don't already have videos
+    const scenesNeedingVideos = project.scenes.filter(
+      scene => !scene.originalVideoClipUrl
     )
+    
+    if (scenesNeedingVideos.length === 0) {
+      opts.onProgress('videos', project.scenes.length, project.scenes.length, 'All scenes already have videos')
+    } else {
+      opts.onProgress('videos', 0, scenesNeedingVideos.length, `Starting video generation for ${scenesNeedingVideos.length} scenes...`)
+      // Status already set to 'processing' in Phase 1 - no need to update again
 
-    await Promise.all(videoPromises)
+      // Generate videos only for scenes that don't have videos yet
+      // Backend updates each scene atomically in DynamoDB
+      const videoPromises = scenesNeedingVideos.map((scene, index) =>
+        retryWithBackoff(
+          async () => {
+            opts.onProgress('videos', index + 1, scenesNeedingVideos.length, `Generating video for scene ${scene.sequence}`)
+
+            // Reference images are stored in the scene in DynamoDB
+            // The backend will read them from there when generating the video
+            const videoRequest: GenerateVideoRequest = {
+              prompt: scene.prompt,
+              negative_prompt: scene.negativePrompt || undefined,
+              project_id: projectId,
+              sequence: scene.sequence,
+            }
+
+            const videoResponse = await generateVideo(videoRequest)
+
+            // Backend automatically updates the scene in DynamoDB with the video URL
+            // No need to manually update - backend handles atomic updates per scene
+
+            return videoResponse
+          },
+          `Generate video for scene ${scene.sequence}`,
+          opts,
+          'videos',
+          scene.sequence
+        )
+      )
+
+      await Promise.all(videoPromises)
+    }
 
     // Refetch project to get all updated scenes with video URLs
     project = await getProject(projectId)
@@ -320,14 +330,14 @@ export async function startFullGeneration(
 
     // Phase 4: Generate all lip-syncs (parallel)
     opts.onProgress('lipsync', 0, project.scenes.length, 'Starting lip-sync generation...')
-    await updateProject(projectId, { status: 'processing' })
+    // Status already set to 'processing' in Phase 1 - no need to update again
 
     const lipsyncPromises = project.scenes.map((scene, index) =>
       retryWithBackoff(
         async () => {
           opts.onProgress('lipsync', index + 1, project.scenes.length, `Generating lip-sync ${index + 1}/${project.scenes.length}`)
 
-          if (!scene.originalVideoClipUrl && !scene.videoClipUrl) {
+          if (!scene.originalVideoClipUrl) {
             console.warn(`Scene ${index + 1} missing video, skipping lip-sync`)
             return null
           }
@@ -380,13 +390,12 @@ export async function startFullGeneration(
       throw new Error('Failed to fetch final project state')
     }
 
-    // Check if all scenes have videos (using originalVideoClipUrl with fallback to videoClipUrl)
+    // Check if all scenes have videos (using originalVideoClipUrl)
     const allScenesComplete = finalProject.scenes.every(scene => 
-      (scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined) ||
-      (scene.videoClipUrl !== null && scene.videoClipUrl !== undefined)
+      scene.originalVideoClipUrl !== null && scene.originalVideoClipUrl !== undefined
     )
     const completedCount = finalProject.scenes.filter(scene => 
-      scene.originalVideoClipUrl || scene.videoClipUrl
+      scene.originalVideoClipUrl
     ).length
 
     if (allScenesComplete) {
@@ -413,16 +422,17 @@ export async function startFullGeneration(
 }
 
 /**
- * Helper function to update project and refetch
+ * Helper function to update project and return updated data
+ * Note: updateProject already returns the full updated project (UpdateProjectResponse = GetProjectResponse)
  */
 async function updateAndRefetch(
   projectId: string,
   updates: Partial<Project>
 ): Promise<Project> {
-  await updateProject(projectId, updates)
-  const response = await getProject(projectId)
+  // updateProject already returns the full updated project - no need for separate GET request
+  const response = await updateProject(projectId, updates)
   if (!response.projectId) {
-    throw new Error('Failed to refetch project after update')
+    throw new Error('Failed to update project')
   }
   return response
 }
@@ -746,7 +756,7 @@ export async function regenerateLipSync(
 
     const scene = project.scenes[sceneIndex]
 
-    if (!scene.originalVideoClipUrl && !scene.videoClipUrl) {
+    if (!scene.originalVideoClipUrl) {
       throw new Error(`Scene ${sceneIndex + 1} missing video for lip-sync`)
     }
 

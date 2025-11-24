@@ -12,6 +12,7 @@ import { generateScenes, composeVideo } from '@/lib/api/client'
 import { useToast } from '@/hooks/useToast'
 import { SceneGenerationOverlay } from '@/components/SceneGenerationOverlay'
 import { startFullGeneration } from '@/lib/orchestration'
+import { getVideoStableId } from '@/lib/utils/video'
 
 export default function EditPage({ params }: { params: { id: string } }) {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
@@ -27,6 +28,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
   const overlayDismissed = useRef(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const lastAutoSelectedSceneRef = useRef<string | null>(null)
+  const lastAudioStableIdRef = useRef<string | null>(null)
   const { toast } = useToast()
 
   // Fetch project data using the API client hook
@@ -61,10 +63,10 @@ export default function EditPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (!project?.scenes) return
 
-    // Get scenes with videos, sorted by sequence
+    // Get scenes with videos, sorted by displaySequence for correct playback order
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
-      .sort((a, b) => a.sequence - b.sequence)
+      .filter(scene => scene.originalVideoClipUrl)
+      .sort((a, b) => a.displaySequence - b.displaySequence)
 
     if (scenesWithVideos.length === 0) return
 
@@ -113,10 +115,10 @@ export default function EditPage({ params }: { params: { id: string } }) {
     // Parse scene sequence from ID
     const sequence = parseInt(sceneId.replace('scene-', ''))
 
-    // Get all scenes with videos, sorted by sequence
+    // Get all scenes with videos, sorted by displaySequence for correct playback order
     const scenesWithVideos = project.scenes
-      .filter(scene => scene.originalVideoClipUrl || scene.videoClipUrl)
-      .sort((a, b) => a.sequence - b.sequence)
+      .filter(scene => scene.originalVideoClipUrl)
+      .sort((a, b) => a.displaySequence - b.displaySequence)
 
     // Find the clicked scene in the sorted list
     const sceneIndex = scenesWithVideos.findIndex(scene => scene.sequence === sequence)
@@ -230,8 +232,12 @@ export default function EditPage({ params }: { params: { id: string } }) {
 
       // Case 2: Project has scenes but some/all are missing videos - trigger video generation only
       // ONLY generate for scenes that are missing the originalVideoClipUrl (primary video field)
+      // Also check if project is already processing or if any scenes are processing to avoid duplicate triggers
       const scenesWithoutVideos = project.scenes.filter(scene => !scene.originalVideoClipUrl)
-      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes) {
+      const hasProcessingScenes = project.scenes.some(scene => scene.status === 'processing')
+      const isProjectProcessing = project.status === 'processing' || project.status === 'composing'
+      
+      if (scenesWithoutVideos.length > 0 && !isGeneratingScenes && !hasProcessingScenes && !isProjectProcessing) {
         sceneGenerationTriggered.current = true
 
         console.log(`[Editor] Detected ${scenesWithoutVideos.length} scenes without originalVideoClipUrl, triggering generation`)
@@ -266,7 +272,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
 
     triggerGeneration()
-  }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
+    // Note: refetch and toast are stable function references (useCallback/module-level)
+    // They don't need to be in dependencies - effect should only re-run on data changes
+  }, [project, loading, isGeneratingScenes, params.id])
 
   // Poll for composition completion
   useEffect(() => {
@@ -308,14 +316,21 @@ export default function EditPage({ params }: { params: { id: string } }) {
     const audio = audioRef.current
     if (!audio || !project?.audioBackingTrackUrl) return
 
+    const audioStableId = getVideoStableId(project.audioBackingTrackUrl)
+
     const handleError = () => {
       console.warn('Failed to load audio backing track:', project.audioBackingTrackUrl)
     }
 
     audio.addEventListener('error', handleError)
 
-    // Only update src if it changed
-    if (audio.src !== project.audioBackingTrackUrl) {
+    // Only update src if the S3 key path changed (not just presigned URL)
+    if (audioStableId && audioStableId !== lastAudioStableIdRef.current) {
+      lastAudioStableIdRef.current = audioStableId
+      audio.src = project.audioBackingTrackUrl
+      audio.load()
+    } else if (!audioStableId && audio.src !== project.audioBackingTrackUrl) {
+      // Fallback: if we can't extract stable ID, use URL comparison (less efficient but safe)
       audio.src = project.audioBackingTrackUrl
       audio.load()
     }

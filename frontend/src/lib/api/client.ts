@@ -703,6 +703,66 @@ export async function trimScene(
 }
 
 /**
+ * Upload a video file for a scene
+ * @param projectId Project identifier
+ * @param sequence Scene sequence number
+ * @param file Video file to upload
+ * @returns Updated scene response
+ */
+export async function uploadSceneVideo(
+  projectId: string,
+  sequence: number,
+  file: File
+): Promise<ProjectScene> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}/upload_video`
+  console.log(`[API] Uploading video for scene ${sequence} in project ${projectId}`, {
+    filename: file.name,
+    size: file.size,
+    type: file.type,
+  })
+
+  // Create FormData for multipart/form-data request
+  const formData = new FormData()
+  formData.append('file', file)
+
+  // Build headers with API key (don't set Content-Type - browser will set it with boundary)
+  const headers: Record<string, string> = {}
+  const apiKey = getAPIKey()
+  if (apiKey) {
+    headers['X-API-Key'] = apiKey
+  }
+
+  try {
+    // Use fetch directly for file uploads (FormData sets its own Content-Type with boundary)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Upload failed' }))
+      throw new APIError(
+        errorData.message || 'Failed to upload scene video',
+        response.status,
+        errorData.error,
+        errorData.details
+      )
+    }
+
+    const data = await response.json()
+    console.log(`[API] Scene ${sequence} video uploaded successfully`, {
+      response: data,
+    })
+
+    return data
+  } catch (error) {
+    console.error(`[API] Failed to upload video for scene ${sequence}:`, error)
+    throw error
+  }
+}
+
+/**
  * Generation Functions
  */
 

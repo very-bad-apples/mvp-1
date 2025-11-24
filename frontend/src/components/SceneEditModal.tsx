@@ -18,11 +18,11 @@ import {
 } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle, Scissors } from 'lucide-react'
+import { X, Play, Pause, Video, Loader2, Download, Mic, CheckCircle2, AlertCircle, Scissors, Upload } from 'lucide-react'
 import { ProjectScene } from '@/types/project'
 import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
-import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo } from '@/lib/api/client'
+import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo, uploadSceneVideo } from '@/lib/api/client'
 import { formatVideoTime, formatDuration } from '@/lib/utils/time'
 import { getSceneVideoUrl } from '@/lib/utils/video'
 import { useSceneToast } from '@/hooks/useSceneToast'
@@ -79,6 +79,10 @@ export function SceneEditModal({
   const [isSavingPrompts, setIsSavingPrompts] = useState(false)
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false)
 
+  // Upload video state
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Track if prompts have been modified
   const promptsModified =
     editedPrompt !== (scene.prompt || '') ||
@@ -103,7 +107,7 @@ export function SceneEditModal({
     setLipSyncStatus('idle')
     // Reset original video duration
     setOriginalVideoDuration(0)
-  }, [scene.sequence, scene.duration, open]) // Re-sync when modal opens
+  }, [scene.sequence, scene.duration, scene.originalVideoClipUrl, scene.videoClipUrl, open]) // Re-sync when modal opens or video URLs change
 
   /**
    * Handle video metadata loaded - sets up trimmer with original video duration
@@ -218,35 +222,78 @@ export function SceneEditModal({
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause()
+        setIsPlaying(false)
       } else {
-        videoRef.current.play()
+        // Before playing, ensure video is within trim boundaries
+        const video = videoRef.current
+        if (trimPoints && videoDuration > 0) {
+          if (video.currentTime < trimPoints.in || video.currentTime > trimPoints.out) {
+            video.currentTime = trimPoints.in
+          }
+        }
+        video.play().catch(err => console.error('Error playing video:', err))
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
     }
   }
 
   /**
-   * Enforce trim boundaries during playback
+   * Enforce trim boundaries during playback with auto-loop
    * Uses local trimPoints state to respect real-time edits, not just saved values
    */
   useEffect(() => {
     const video = videoRef.current
     if (!video || !trimPoints || videoDuration === 0) return
 
+    let isRepositioning = false
+
     const handleTimeUpdate = () => {
-      if (video.currentTime < trimPoints.in) {
+      if (isRepositioning) return // Skip while repositioning
+
+      const currentTime = video.currentTime
+
+      // If significantly before in-point (with tolerance for floating point), jump to in-point
+      // Use 0.1s tolerance to avoid unnecessary repositioning due to floating point precision
+      if (currentTime < trimPoints.in - 0.1) {
+        const wasPlaying = !video.paused
+        isRepositioning = true
+
+        const handleSeeked = () => {
+          isRepositioning = false
+          if (wasPlaying) {
+            video.play().catch(err => console.error('Error resuming playback after reposition:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
         video.currentTime = trimPoints.in
-      } else if (video.currentTime > trimPoints.out) {
+      }
+      // If at or past out-point, loop back to in-point
+      // Use a threshold to detect when we've reached the out point
+      else if (currentTime >= trimPoints.out - 0.1) {
+        const wasPlaying = !video.paused
+        isRepositioning = true
+
+        const handleSeeked = () => {
+          isRepositioning = false
+          if (wasPlaying) {
+            video.play().catch(err => console.error('Error resuming playback after loop:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
         video.currentTime = trimPoints.in
-        video.pause()
-        setIsPlaying(false)
       }
     }
 
     const handleSeeking = () => {
-      if (video.currentTime < trimPoints.in) {
+      // When user manually seeks, enforce boundaries with tolerance
+      const seekTime = video.currentTime
+      if (seekTime < trimPoints.in - 0.1) {
         video.currentTime = trimPoints.in
-      } else if (video.currentTime > trimPoints.out) {
+      } else if (seekTime > trimPoints.out + 0.1) {
         video.currentTime = trimPoints.out
       }
     }
@@ -273,6 +320,36 @@ export function SceneEditModal({
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
     }
   }, [trimPoints, videoDuration])
+
+  /**
+   * When trim points change (e.g., user drags markers), reposition video if needed
+   * This ensures the video stays within the valid trimmed range and maintains playback state
+   */
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !trimPoints || videoDuration === 0) return
+
+    // Only reposition if video is ready and outside the trim range
+    if (video.readyState >= 2) {
+      const currentTime = video.currentTime
+
+      if (currentTime < trimPoints.in || currentTime > trimPoints.out) {
+        // Video is outside trim range, move to in-point
+        const shouldResume = isPlaying
+
+        // Set up one-time listener for when seek completes
+        const handleSeeked = () => {
+          if (shouldResume) {
+            video.play().catch(err => console.error('Error resuming playback after trim adjustment:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
+        video.currentTime = trimPoints.in
+      }
+    }
+  }, [trimPoints.in, trimPoints.out, videoDuration, isPlaying])
 
   /**
    * Apply trim points by calling the API
@@ -316,20 +393,23 @@ export function SceneEditModal({
 
       sceneToast.showSuccess(scene, 'Prompt Update')
 
-      // Step 2: Trigger video regeneration with updated prompts
+      // Step 2: Trigger video regeneration with updated prompts (fire and forget - runs in background)
       setIsGeneratingVideo(true)
       sceneToast.showProgress(scene, 'Video Regeneration')
 
-      try {
-        await generateSceneVideo(projectId, scene.sequence, 'replicate')
-        sceneToast.showSuccess(scene, 'Video Regeneration')
-      } catch (videoError) {
-        console.error('Failed to regenerate video:', videoError)
-        sceneToast.showError(scene, 'Video Regeneration', videoError)
-        // Don't fail the whole operation - prompts were saved successfully
-      } finally {
-        setIsGeneratingVideo(false)
-      }
+      // Start video regeneration but don't wait for it to complete
+      // The polling system will update the UI when the video is ready
+      generateSceneVideo(projectId, scene.sequence, 'replicate')
+        .then(() => {
+          sceneToast.showSuccess(scene, 'Video Regeneration')
+        })
+        .catch((videoError) => {
+          console.error('Failed to regenerate video:', videoError)
+          sceneToast.showError(scene, 'Video Regeneration', videoError)
+        })
+        .finally(() => {
+          setIsGeneratingVideo(false)
+        })
 
       // Call the callback to trigger a refresh in parent component
       if (onSceneUpdate) {
@@ -345,6 +425,59 @@ export function SceneEditModal({
     } finally {
       setIsSavingPrompts(false)
       setIsOperationInProgress(false)
+    }
+  }
+
+  /**
+   * Handle video file upload
+   */
+  const handleUploadVideo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('video/')) {
+      sceneToast.showWarning(
+        'Invalid File Type',
+        'Please select a video file (MP4, MOV, AVI, etc.)'
+      )
+      return
+    }
+
+    // Validate file size (100MB max)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+    if (file.size > MAX_FILE_SIZE) {
+      sceneToast.showWarning(
+        'File Too Large',
+        `Maximum file size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+      )
+      return
+    }
+
+    setIsOperationInProgress(true)
+    setIsUploadingVideo(true)
+
+    sceneToast.showProgress(scene, 'Video Upload')
+
+    try {
+      const updatedScene = await uploadSceneVideo(projectId, scene.sequence, file)
+      
+      sceneToast.showSuccess(scene, 'Video Upload')
+
+      // Call the callback to trigger a refresh in parent component
+      if (onSceneUpdate) {
+        onSceneUpdate(updatedScene)
+      }
+    } catch (error) {
+      console.error('Video upload failed:', error)
+      sceneToast.showError(scene, 'Video Upload', error)
+    } finally {
+      setIsUploadingVideo(false)
+      setIsOperationInProgress(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -607,6 +740,51 @@ export function SceneEditModal({
             </h3>
             <div className="border border-border rounded-lg p-6 bg-muted/20">
               <div className="flex flex-wrap gap-3">
+                {/* Upload Video Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="video/*"
+                          onChange={handleUploadVideo}
+                          disabled={isUploadingVideo || isOperationInProgress}
+                          className="hidden"
+                          id={`upload-video-${scene.sequence}`}
+                        />
+                        <Button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingVideo || isOperationInProgress}
+                          variant="outline"
+                          size="default"
+                          className="min-w-[180px]"
+                        >
+                          {isUploadingVideo ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Upload Video
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isUploadingVideo ? (
+                        <p>Uploading video... Please wait</p>
+                      ) : (
+                        <p>Upload a video file to replace the scene video (MP4, MOV, AVI, max 100MB)</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 {/* Generate Lip-Sync Button */}
                 <TooltipProvider>
                   <Tooltip>
