@@ -1,6 +1,40 @@
 import { ProjectScene } from '@/types/project'
 
 /**
+ * Extract the S3 key path from a presigned URL.
+ * This is used to identify if the underlying video file has changed,
+ * even when presigned URLs are regenerated with new signatures/expires.
+ *
+ * @param url - Presigned URL (e.g., "https://bucket.s3.amazonaws.com/path/to/video.mp4?AWSAccessKeyId=...")
+ * @returns S3 key path (e.g., "path/to/video.mp4") or the original URL if parsing fails
+ */
+export function extractS3KeyFromUrl(url: string | undefined | null): string | null {
+  if (!url) return null
+  
+  try {
+    const urlObj = new URL(url)
+    // Remove leading slash from pathname
+    const path = urlObj.pathname.startsWith('/') ? urlObj.pathname.slice(1) : urlObj.pathname
+    return path || null
+  } catch {
+    // If URL parsing fails, return null (will cause video to reload, which is safe)
+    return null
+  }
+}
+
+/**
+ * Get a stable identifier for a video URL based on its S3 key path.
+ * This allows us to detect when the actual video file changes vs when
+ * just the presigned URL is regenerated.
+ *
+ * @param url - Video URL
+ * @returns Stable identifier based on S3 key path
+ */
+export function getVideoStableId(url: string | undefined | null): string | null {
+  return extractS3KeyFromUrl(url)
+}
+
+/**
  * Get the preferred video URL for a scene based on availability and preferences.
  *
  * Priority (when preferOriginal is false):

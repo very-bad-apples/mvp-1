@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, memo, useCallback, useMemo } from 'react'
+import { useState, memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Edit, Video, AlertCircle, Plus, Trash2, GripVertical } from 'lucide-react'
 import type { Project, ProjectScene } from '@/types/project'
 import { useSceneToast } from '@/hooks/useSceneToast'
-import { getSceneVideoUrl } from '@/lib/utils/video'
+import { getSceneVideoUrl, getVideoStableId } from '@/lib/utils/video'
 import { SceneEditModal } from '@/components/SceneEditModal'
 import { AddSceneModal } from '@/components/AddSceneModal'
 import { DeleteSceneDialog } from '@/components/DeleteSceneDialog'
@@ -33,6 +33,82 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+
+interface VideoThumbnailProps {
+  scene: ProjectScene
+  status: string
+}
+
+/**
+ * VideoThumbnail component that prevents unnecessary video reloads
+ * when presigned URLs change but S3 keys stay the same.
+ */
+const VideoThumbnail = memo(function VideoThumbnail({ scene, status }: VideoThumbnailProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const lastStableIdRef = useRef<string | null>(null)
+  const videoUrl = getSceneVideoUrl(scene)
+  const stableId = getVideoStableId(videoUrl)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !videoUrl) return
+
+    // Only update video src if the S3 key path changed (not just presigned URL)
+    if (stableId && stableId !== lastStableIdRef.current) {
+      lastStableIdRef.current = stableId
+      video.src = videoUrl
+      video.load()
+    } else if (!stableId && video.src !== videoUrl) {
+      // Fallback: if we can't extract stable ID, use URL comparison
+      video.src = videoUrl
+      video.load()
+    }
+  }, [videoUrl, stableId])
+
+  if (!videoUrl) {
+    if (status === 'processing') {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      )
+    }
+    if (status === 'error') {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+        </div>
+      )
+    }
+    return (
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Video className="h-8 w-8 text-gray-600" />
+      </div>
+    )
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      className="w-full h-full object-cover pointer-events-none"
+      muted
+      preload="metadata"
+      playsInline
+    />
+  )
+}, (prevProps, nextProps) => {
+  // Only re-render if scene sequence or video URL stable ID changed
+  const prevUrl = getSceneVideoUrl(prevProps.scene)
+  const nextUrl = getSceneVideoUrl(nextProps.scene)
+  const prevStableId = getVideoStableId(prevUrl)
+  const nextStableId = getVideoStableId(nextUrl)
+  
+  return (
+    prevProps.scene.sequence === nextProps.scene.sequence &&
+    prevProps.status === nextProps.status &&
+    prevStableId === nextStableId
+  )
+})
 
 interface SortableSceneCardProps {
   scene: ProjectScene
@@ -113,27 +189,7 @@ const SortableSceneCard = memo(function SortableSceneCard({
 
         {/* Video Thumbnail */}
         <div className="relative aspect-video bg-gray-900 rounded-md overflow-hidden mb-2">
-          {getSceneVideoUrl(scene) ? (
-            <video
-              src={getSceneVideoUrl(scene)}
-              className="w-full h-full object-cover pointer-events-none"
-              muted
-              preload="metadata"
-              playsInline
-            />
-          ) : status === 'processing' ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-            </div>
-          ) : status === 'error' ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <AlertCircle className="h-8 w-8 text-red-500" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Video className="h-8 w-8 text-gray-600" />
-            </div>
-          )}
+          <VideoThumbnail scene={scene} status={status} />
         </div>
 
         {/* Scene Prompt */}
@@ -333,14 +389,15 @@ export function ScenesPanel({
     setIsReordering(true)
     setActiveId(null)
 
-    // Calculate the new scene order (array of displaySequence values in new display order)
-    // The backend reorder API expects displaySequence values, not immutable sequence values
+    // Calculate the new scene order (array of current displaySequence values in new display order)
+    // The backend expects the CURRENT displaySequence values (scene identifiers) in the desired new order
+    // After the reorder, the backend will assign new displaySequence values 1, 2, 3, etc. based on this order
     const sceneOrder = newScenes.map((s) => s.displaySequence)
 
     // Debug logging
     console.log('Reordering scenes:')
-    console.log('  displayScenes:', displayScenes.map(s => ({ seq: s.sequence, status: s.status })))
-    console.log('  newScenes:', newScenes.map(s => ({ seq: s.sequence, status: s.status })))
+    console.log('  displayScenes:', displayScenes.map(s => ({ seq: s.sequence, displaySeq: s.displaySequence })))
+    console.log('  newScenes:', newScenes.map(s => ({ seq: s.sequence, displaySeq: s.displaySequence })))
     console.log('  sceneOrder to send:', sceneOrder)
 
     // Validate sceneOrder before sending
