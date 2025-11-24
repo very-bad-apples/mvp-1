@@ -222,35 +222,78 @@ export function SceneEditModal({
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause()
+        setIsPlaying(false)
       } else {
-        videoRef.current.play()
+        // Before playing, ensure video is within trim boundaries
+        const video = videoRef.current
+        if (trimPoints && videoDuration > 0) {
+          if (video.currentTime < trimPoints.in || video.currentTime > trimPoints.out) {
+            video.currentTime = trimPoints.in
+          }
+        }
+        video.play().catch(err => console.error('Error playing video:', err))
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
     }
   }
 
   /**
-   * Enforce trim boundaries during playback
+   * Enforce trim boundaries during playback with auto-loop
    * Uses local trimPoints state to respect real-time edits, not just saved values
    */
   useEffect(() => {
     const video = videoRef.current
     if (!video || !trimPoints || videoDuration === 0) return
 
+    let isRepositioning = false
+
     const handleTimeUpdate = () => {
-      if (video.currentTime < trimPoints.in) {
+      if (isRepositioning) return // Skip while repositioning
+
+      const currentTime = video.currentTime
+
+      // If significantly before in-point (with tolerance for floating point), jump to in-point
+      // Use 0.1s tolerance to avoid unnecessary repositioning due to floating point precision
+      if (currentTime < trimPoints.in - 0.1) {
+        const wasPlaying = !video.paused
+        isRepositioning = true
+
+        const handleSeeked = () => {
+          isRepositioning = false
+          if (wasPlaying) {
+            video.play().catch(err => console.error('Error resuming playback after reposition:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
         video.currentTime = trimPoints.in
-      } else if (video.currentTime > trimPoints.out) {
+      }
+      // If at or past out-point, loop back to in-point
+      // Use a threshold to detect when we've reached the out point
+      else if (currentTime >= trimPoints.out - 0.1) {
+        const wasPlaying = !video.paused
+        isRepositioning = true
+
+        const handleSeeked = () => {
+          isRepositioning = false
+          if (wasPlaying) {
+            video.play().catch(err => console.error('Error resuming playback after loop:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
         video.currentTime = trimPoints.in
-        video.pause()
-        setIsPlaying(false)
       }
     }
 
     const handleSeeking = () => {
-      if (video.currentTime < trimPoints.in) {
+      // When user manually seeks, enforce boundaries with tolerance
+      const seekTime = video.currentTime
+      if (seekTime < trimPoints.in - 0.1) {
         video.currentTime = trimPoints.in
-      } else if (video.currentTime > trimPoints.out) {
+      } else if (seekTime > trimPoints.out + 0.1) {
         video.currentTime = trimPoints.out
       }
     }
@@ -277,6 +320,36 @@ export function SceneEditModal({
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
     }
   }, [trimPoints, videoDuration])
+
+  /**
+   * When trim points change (e.g., user drags markers), reposition video if needed
+   * This ensures the video stays within the valid trimmed range and maintains playback state
+   */
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !trimPoints || videoDuration === 0) return
+
+    // Only reposition if video is ready and outside the trim range
+    if (video.readyState >= 2) {
+      const currentTime = video.currentTime
+
+      if (currentTime < trimPoints.in || currentTime > trimPoints.out) {
+        // Video is outside trim range, move to in-point
+        const shouldResume = isPlaying
+
+        // Set up one-time listener for when seek completes
+        const handleSeeked = () => {
+          if (shouldResume) {
+            video.play().catch(err => console.error('Error resuming playback after trim adjustment:', err))
+          }
+          video.removeEventListener('seeked', handleSeeked)
+        }
+
+        video.addEventListener('seeked', handleSeeked)
+        video.currentTime = trimPoints.in
+      }
+    }
+  }, [trimPoints.in, trimPoints.out, videoDuration, isPlaying])
 
   /**
    * Apply trim points by calling the API
