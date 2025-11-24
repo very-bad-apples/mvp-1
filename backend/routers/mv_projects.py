@@ -871,12 +871,30 @@ async def get_project(project_id: str):
 
         s3_service = get_s3_storage_service()
 
+        # Generate project-level image URLs FIRST (before scene loop) for reuse optimization
+        # Scenes can reference either character image (music-video) or product image (ad-creative)
+        character_url = None
+        if project_item.characterImageS3Key:
+            character_url = s3_service.generate_presigned_url(project_item.characterImageS3Key)
+        
+        product_url = None
+        if project_item.productImageS3Key:
+            product_url = s3_service.generate_presigned_url(project_item.productImageS3Key)
+
         for scene_item in scene_items_list:
             # Generate presigned URLs for scene assets
             reference_urls = []
             if scene_item.referenceImageS3Keys:
                 for key in scene_item.referenceImageS3Keys:
-                    reference_urls.append(s3_service.generate_presigned_url(key))
+                    # Reuse project URL if scene uses same reference (common case)
+                    # Check both character (music-video) and product (ad-creative) images
+                    if key == project_item.characterImageS3Key and character_url:
+                        reference_urls.append(character_url)  # Reuse character URL
+                    elif key == project_item.productImageS3Key and product_url:
+                        reference_urls.append(product_url)  # Reuse product URL
+                    else:
+                        # Generate new URL for scene-specific references
+                        reference_urls.append(s3_service.generate_presigned_url(key))
 
             audio_url = None
             if scene_item.audioClipS3Key:
@@ -932,14 +950,8 @@ async def get_project(project_id: str):
 
         # Scenes are already sorted by displaySequence from scene_items_list sorting above
 
-        # Generate presigned URLs for project assets
-        character_url = None
-        if project_item.characterImageS3Key:
-            character_url = s3_service.generate_presigned_url(project_item.characterImageS3Key)
-
-        product_url = None
-        if project_item.productImageS3Key:
-            product_url = s3_service.generate_presigned_url(project_item.productImageS3Key)
+        # Generate presigned URLs for remaining project assets
+        # Note: character_url and product_url already generated above for reuse optimization
 
         audio_url = None
         if project_item.audioBackingTrackS3Key:

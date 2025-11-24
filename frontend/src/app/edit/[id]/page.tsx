@@ -266,7 +266,9 @@ export default function EditPage({ params }: { params: { id: string } }) {
     }
 
     triggerGeneration()
-  }, [project, loading, isGeneratingScenes, params.id, refetch, toast])
+    // Note: refetch and toast are stable function references (useCallback/module-level)
+    // They don't need to be in dependencies - effect should only re-run on data changes
+  }, [project, loading, isGeneratingScenes, params.id])
 
   // Poll for composition completion
   useEffect(() => {
