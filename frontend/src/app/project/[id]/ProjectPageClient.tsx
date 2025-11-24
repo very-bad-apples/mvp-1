@@ -198,7 +198,7 @@ function SceneCard({
       <div className="relative aspect-video overflow-hidden bg-gray-900/50">
         {hasVideo && (scene.originalVideoClipUrl || scene.videoClipUrl) ? (
           <video
-            src={scene.originalVideoClipUrl ?? scene.videoClipUrl}
+            src={(scene.originalVideoClipUrl ?? scene.videoClipUrl) ?? undefined}
             className="object-cover w-full h-full"
             muted
             loop
