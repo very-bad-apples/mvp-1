@@ -565,6 +565,56 @@ export async function updateScene(
 }
 
 /**
+ * Add a new scene to a project
+ * @param projectId Project identifier
+ * @param sceneConcept Scene concept/description
+ * @returns Created scene response
+ */
+export async function addScene(
+  projectId: string,
+  sceneConcept: string
+): Promise<ProjectScene> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes`
+  return apiFetch<ProjectScene>(url, {
+    method: 'POST',
+    body: JSON.stringify({ sceneConcept }),
+  })
+}
+
+/**
+ * Delete a scene from a project
+ * @param projectId Project identifier
+ * @param sequence Scene sequence number
+ * @returns Success response
+ */
+export async function deleteScene(
+  projectId: string,
+  sequence: number
+): Promise<{ message: string }> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/${sequence}`
+  return apiFetch<{ message: string }>(url, {
+    method: 'DELETE',
+  })
+}
+
+/**
+ * Reorder scenes in a project
+ * @param projectId Project identifier
+ * @param sceneOrder Array of scene sequence numbers in new order
+ * @returns Success response
+ */
+export async function reorderScenes(
+  projectId: string,
+  sceneOrder: number[]
+): Promise<{ message: string; scenes: ProjectScene[] }> {
+  const url = `${getAPIUrl()}/api/mv/projects/${projectId}/scenes/reorder`
+  return apiFetch<{ message: string; scenes: ProjectScene[] }>(url, {
+    method: 'PATCH',
+    body: JSON.stringify({ sceneOrder }),
+  })
+}
+
+/**
  * Generate video for a specific scene
  * @param projectId Project identifier
  * @param sequence Scene sequence number

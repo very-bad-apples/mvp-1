@@ -2080,19 +2080,244 @@
         "recommendedSubtasks": 2,
         "expansionPrompt": "Consider subtasks for API client function implementation and error handling.",
         "updatedAt": "2025-11-23T04:25:00.202Z"
+      },
+      {
+        "id": 64,
+        "title": "Create Backend API Endpoint for Scene Reordering",
+        "description": "Develop a PATCH endpoint to reorder scenes within a project based on a provided sequence.",
+        "details": "Implement a PATCH endpoint at /api/mv/projects/{project_id}/scenes/reorder. The endpoint should accept a JSON body containing a 'sceneOrder' array with scene sequence IDs in the desired order. Validate that all existing scenes are included, no duplicates exist, and all sequence IDs are valid. Update the 'displaySequence' field for each scene accordingly. Ensure atomic updates to prevent partial reordering in case of errors. Use transactions to maintain data integrity. Consider using ORM methods for efficient database operations.",
+        "testStrategy": "1. Test with valid 'sceneOrder' array to ensure scenes are reordered correctly.\n2. Test with missing scene IDs to verify validation errors are returned.\n3. Test with duplicate scene IDs to ensure proper error handling.\n4. Test with invalid scene IDs to confirm validation catches errors.\n5. Verify that the response returns updated scenes sorted by new 'displaySequence'.\n6. Perform concurrency tests to ensure atomicity and data integrity during simultaneous requests.",
+        "status": "done",
+        "dependencies": [
+          "23",
+          "24"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement PATCH Endpoint for Scene Reordering",
+            "description": "Develop the PATCH endpoint at /api/mv/projects/{project_id}/scenes/reorder.",
+            "dependencies": [],
+            "details": "Create the endpoint to accept a JSON body with 'sceneOrder'. Use ORM methods for efficient database operations.",
+            "status": "done",
+            "testStrategy": "Test endpoint accessibility and response with valid input.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-23T23:28:40.722Z"
+          },
+          {
+            "id": 2,
+            "title": "Develop Validation Logic for Scene Order",
+            "description": "Implement validation to ensure all scenes are included, no duplicates, and IDs are valid.",
+            "dependencies": [
+              1
+            ],
+            "details": "Check the 'sceneOrder' array for completeness, uniqueness, and validity. Return errors for invalid input.",
+            "status": "done",
+            "testStrategy": "Test with missing, duplicate, and invalid scene IDs to ensure proper error handling.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-23T23:28:40.725Z"
+          },
+          {
+            "id": 3,
+            "title": "Implement Transaction Management for Atomic Updates",
+            "description": "Ensure atomic updates using transactions to maintain data integrity.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Use database transactions to prevent partial updates. Rollback changes in case of errors.",
+            "status": "done",
+            "testStrategy": "Simulate errors during update to verify transaction rollback and data integrity.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-23T23:28:40.727Z"
+          }
+        ],
+        "complexity": 8,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Break down the task into subtasks focusing on endpoint creation, validation logic, and transaction management.",
+        "updatedAt": "2025-11-23T23:28:40.727Z"
+      },
+      {
+        "id": 65,
+        "title": "Implement 'Add Scene' Functionality in Edit Page Sidebar",
+        "description": "Add a button to the ScenesPanel header to open a modal for adding a new scene.",
+        "details": "1. Add a button labeled 'Add Scene' to the header of the ScenesPanel component.\n2. Implement a modal dialog that opens when the button is clicked. Use Kibo UI MCP components for consistency.\n3. Inside the modal, create a form with a 'Scene Concept' textarea field (1-2000 characters) and a submit button.\n4. On form submission, call the POST /api/mv/projects/{project_id}/scenes endpoint with the sceneConcept parameter.\n5. Implement loading states to indicate the submission process.\n6. Handle errors by displaying toast notifications using the error handling system from Task 25.\n7. Upon successful scene creation, refresh the scene list to reflect the new addition.",
+        "testStrategy": "1. Verify the 'Add Scene' button is present and correctly opens the modal.\n2. Test the form validation for the 'Scene Concept' field to ensure it accepts 1-2000 characters.\n3. Simulate form submission and check that the POST request is correctly formatted and sent.\n4. Test loading states by simulating network delays.\n5. Trigger error scenarios to ensure toast notifications display appropriate messages.\n6. Confirm the scene list refreshes automatically after a successful scene creation.",
+        "status": "done",
+        "dependencies": [
+          "25"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create 'Add Scene' Button and Modal UI",
+            "description": "Develop the UI components for the 'Add Scene' button and modal in the ScenesPanel header.",
+            "dependencies": [],
+            "details": "Add a button labeled 'Add Scene' to the ScenesPanel header. Implement a modal dialog using Kibo UI MCP components. The modal should contain a form with a 'Scene Concept' textarea and a submit button.",
+            "status": "done",
+            "testStrategy": "Verify the button opens the modal. Test form validation for the 'Scene Concept' field.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Integrate API for Scene Submission",
+            "description": "Implement the API integration for submitting the new scene from the modal form.",
+            "dependencies": [
+              1
+            ],
+            "details": "On form submission, call the POST /api/mv/projects/{project_id}/scenes endpoint with the sceneConcept parameter. Implement loading states and handle errors using the system from Task 25. Refresh the scene list upon successful submission.",
+            "status": "done",
+            "testStrategy": "Simulate form submission and check the POST request. Test loading states and error handling.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 6,
+        "recommendedSubtasks": 2,
+        "expansionPrompt": "Divide the task into subtasks for UI component creation and API integration."
+      },
+      {
+        "id": 66,
+        "title": "Implement 'Delete Scene' Functionality in Scene Cards",
+        "description": "Add a trash icon to each scene card for deleting scenes with confirmation and error handling.",
+        "details": "1. Add a trash icon button to each scene card in the ScenesPanel component.\n2. Implement a confirmation dialog that appears when the delete button is clicked, warning users about permanent deletion and restrictions (cannot delete the last scene or during composition).\n3. On confirmation, call the DELETE /api/mv/projects/{project_id}/scenes/{sequence} endpoint.\n4. Implement loading states to indicate the deletion process is underway.\n5. Handle errors by displaying descriptive toast messages using the error handling system from Task 25.\n6. Refresh the scene list automatically upon successful deletion to reflect changes.",
+        "testStrategy": "1. Verify the presence of the trash icon on each scene card.\n2. Test the confirmation dialog appears with correct warnings when the delete button is clicked.\n3. Simulate a successful deletion and ensure the scene list refreshes automatically.\n4. Test error scenarios by simulating API failures and ensure descriptive toast messages are displayed.\n5. Verify that deletion is prevented when attempting to delete the last scene or during composition.",
+        "status": "done",
+        "dependencies": [
+          "25",
+          "65"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Add Trash Icon to Scene Cards",
+            "description": "Integrate a trash icon button into each scene card within the ScenesPanel component.",
+            "dependencies": [],
+            "details": "Update the ScenesPanel component to include a trash icon button on each scene card. Ensure the icon is styled consistently with the existing UI.",
+            "status": "done",
+            "testStrategy": "Verify the presence and correct styling of the trash icon on each scene card.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Confirmation Dialog for Deletion",
+            "description": "Create a confirmation dialog that appears when the delete button is clicked, warning users about permanent deletion and restrictions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop a modal dialog that triggers on clicking the trash icon. Include warnings about permanent deletion and restrictions, such as not deleting the last scene or during composition.",
+            "status": "done",
+            "testStrategy": "Test the dialog appears with correct warnings when the delete button is clicked.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Handle Deletion Errors and Refresh Scene List",
+            "description": "Implement error handling and automatic refresh of the scene list upon successful deletion.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Use the error handling system from Task 25 to display descriptive toast messages for errors. Ensure the scene list refreshes automatically after a successful deletion.",
+            "status": "done",
+            "testStrategy": "Simulate API failures to test error handling and verify the scene list refreshes automatically upon successful deletion.",
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 7,
+        "recommendedSubtasks": 3,
+        "expansionPrompt": "Create subtasks for UI updates, confirmation dialog implementation, and error handling."
+      },
+      {
+        "id": 67,
+        "title": "Implement Drag-and-Drop Scene Reordering in ScenesPanel",
+        "description": "Enable drag-and-drop functionality for reordering scenes in the ScenesPanel using @dnd-kit/core.",
+        "details": "1. Install and configure the @dnd-kit/core library to support drag-and-drop operations with accessibility and touch support.\n2. Modify the ScenesPanel component to make scene cards draggable and define drop zones for reordering.\n3. Implement visual feedback during drag operations, including a ghost element and drop indicators.\n4. On drag completion, calculate the new order of scenes and call the PATCH /api/mv/projects/{project_id}/scenes/reorder endpoint.\n5. Implement optimistic UI updates to reflect the new order immediately while the API call is processed.\n6. Handle errors by rolling back to the original order if the API call fails, utilizing the error handling system from Task 25.",
+        "testStrategy": "1. Verify that scene cards can be dragged and dropped to new positions within the ScenesPanel.\n2. Test visual feedback elements (ghost element, drop indicators) appear correctly during drag operations.\n3. Simulate a successful drag-and-drop operation and ensure the PATCH request is sent with the correct new order.\n4. Test optimistic UI updates by observing immediate changes in scene order upon drop.\n5. Simulate API failure scenarios to ensure the UI rolls back to the original order and displays an error message using the error handling system.",
+        "status": "done",
+        "dependencies": [
+          "25",
+          "65"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Install and Configure @dnd-kit/core Library",
+            "description": "Set up the @dnd-kit/core library to enable drag-and-drop functionality.",
+            "dependencies": [],
+            "details": "Install the @dnd-kit/core library via npm. Configure it to support drag-and-drop operations with accessibility and touch support.",
+            "status": "done",
+            "testStrategy": "Verify library installation and basic drag-and-drop functionality.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Modify ScenesPanel for Draggable Scene Cards",
+            "description": "Update the ScenesPanel component to make scene cards draggable and define drop zones.",
+            "dependencies": [
+              1
+            ],
+            "details": "Enhance the ScenesPanel component to allow scene cards to be draggable. Define drop zones for reordering scenes.",
+            "status": "done",
+            "testStrategy": "Test dragging scene cards and ensure they can be reordered.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement Visual Feedback for Drag Operations",
+            "description": "Add visual feedback elements during drag operations, including ghost elements and drop indicators.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create ghost elements and drop indicators to provide visual feedback during drag operations. Ensure these elements are responsive and accessible.",
+            "status": "done",
+            "testStrategy": "Check the appearance and behavior of visual feedback elements during drag-and-drop.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Calculate New Order and Implement Optimistic UI Updates",
+            "description": "On drag completion, calculate the new scene order array and update the UI optimistically while calling the reorder API.",
+            "details": "When a scene card is dropped, calculate the new order of scenes based on the drop position. Create an array of sequence IDs in the new display order. Immediately update the local state to show the new order (optimistic update). Call PATCH /api/mv/projects/{project_id}/scenes/reorder with the sceneOrder array. Store the original order in case rollback is needed.",
+            "status": "done",
+            "dependencies": [
+              "67.3"
+            ],
+            "parentTaskId": 67,
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "Implement Error Handling with Rollback",
+            "description": "Handle API failures by rolling back to the original scene order and displaying error messages.",
+            "details": "If the PATCH /api/mv/projects/{project_id}/scenes/reorder API call fails, restore the scenes to their original order using the stored state. Display a descriptive error toast notification using the error handling system from Task 25. Handle network errors, validation errors, and server errors gracefully. Ensure the UI remains interactive during error scenarios.",
+            "status": "done",
+            "dependencies": [
+              "67.3"
+            ],
+            "parentTaskId": 67,
+            "parentId": "undefined"
+          }
+        ],
+        "complexity": 9,
+        "recommendedSubtasks": 4,
+        "expansionPrompt": "Outline subtasks for drag-and-drop implementation, visual feedback, API integration, and error handling."
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-11-23T04:28:19.230Z",
-      "taskCount": 56,
-      "completedCount": 48,
+      "lastModified": "2025-11-23T23:28:40.727Z",
+      "taskCount": 60,
+      "completedCount": 51,
       "tags": [
         "master"
       ],
-      "created": "2025-11-23T11:18:08.244Z",
+      "created": "2025-11-23T23:35:49.509Z",
       "description": "Tasks for master context",
-      "updated": "2025-11-23T11:25:06.202Z"
+      "updated": "2025-11-23T23:35:49.660Z"
     }
   }
 }

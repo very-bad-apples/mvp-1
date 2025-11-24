@@ -407,11 +407,16 @@ def generate_lipsync(
                     storage = get_storage_backend()
                     urls = {}
 
+                    # Import cleanup function
+                    from services.s3_storage import delete_local_file_after_upload
+
                     # Upload video
                     urls["video"] = await storage.upload_file(
                         str(video_path),
                         f"mv/jobs/{output_video_id}/video.mp4"
                     )
+                    # Delete local video file after successful upload
+                    delete_local_file_after_upload(str(video_path))
 
                     return urls
 

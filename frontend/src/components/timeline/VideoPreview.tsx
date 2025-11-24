@@ -159,7 +159,7 @@ export function VideoPreview({
       video.addEventListener('loadeddata', handleLoadedData)
       video.addEventListener('error', handleError)
 
-      // Only reload if URL actually changed and videoUrl is a valid string
+      // Only reload if URL actually changed
       if (videoUrl && video.src !== videoUrl) {
         video.src = videoUrl
         video.load()

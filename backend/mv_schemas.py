@@ -63,7 +63,7 @@ class SceneResponse(BaseModel):
 
 class SceneUpdateRequest(BaseModel):
     """Request model for updating a scene's editable fields."""
-    prompt: Optional[str] = Field(None, min_length=1, max_length=2000, description="Updated scene prompt")
+    prompt: Optional[str] = Field(None, min_length=1, max_length=5000, description="Updated scene prompt")
     negativePrompt: Optional[str] = Field(None, max_length=1000, description="Updated negative prompt")
 
     class Config:
@@ -110,7 +110,7 @@ class TrimSceneRequest(BaseModel):
 
 class AddSceneRequest(BaseModel):
     """Request model for adding a new scene to an existing project."""
-    sceneConcept: str = Field(..., min_length=1, max_length=2000, description="User's concept for the new scene")
+    sceneConcept: str = Field(..., min_length=10, max_length=1000, description="User's concept for the new scene")
 
     class Config:
         json_schema_extra = {
@@ -164,7 +164,7 @@ class DeleteSceneResponse(BaseModel):
 class ProjectCreateRequest(BaseModel):
     """Request model for creating a new project."""
     mode: str = Field(..., description="Generation mode: 'ad-creative' or 'music-video'")
-    prompt: str = Field(..., min_length=1, description="Video concept description")
+    prompt: str = Field(..., min_length=10, max_length=1000, description="Video concept description")
     characterDescription: str = Field(..., min_length=1, description="Character description")
     characterReferenceImageId: Optional[str] = Field(None, description="UUID of selected character image")
     productDescription: Optional[str] = Field(None, description="Product description (for ad-creative mode)")
@@ -317,7 +317,7 @@ class ComposeResponse(BaseModel):
 class FinalVideoResponse(BaseModel):
     """
     Response model for final video retrieval.
-    
+
     Note: videoUrl contains a presigned S3 URL, NOT an S3 object key.
     The URL expires after expiresInSeconds.
     """
@@ -331,5 +331,63 @@ class FinalVideoResponse(BaseModel):
                 "projectId": "550e8400-e29b-41d4-a716-446655440000",
                 "videoUrl": "https://s3.amazonaws.com/...",
                 "expiresInSeconds": 3600
+            }
+        }
+
+
+class SceneReorderRequest(BaseModel):
+    """Request model for reordering scenes in a project."""
+    sceneOrder: List[int] = Field(
+        ...,
+        min_length=1,
+        description="Array of scene sequence IDs in desired display order"
+    )
+
+    @field_validator('sceneOrder')
+    @classmethod
+    def validate_scene_order(cls, v):
+        """Validate scene order array."""
+        if not v:
+            raise ValueError("sceneOrder cannot be empty")
+
+        # Check for duplicates
+        if len(v) != len(set(v)):
+            raise ValueError("sceneOrder contains duplicate sequence IDs")
+
+        # Check all values are positive integers
+        if any(seq < 1 for seq in v):
+            raise ValueError("All sequence IDs must be >= 1")
+
+        return v
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "sceneOrder": [3, 1, 4, 2]
+            }
+        }
+
+
+class SceneReorderResponse(BaseModel):
+    """Response model for scene reordering operation."""
+    message: str = Field(default="Scenes reordered successfully", description="Success message")
+    scenes: List[SceneResponse] = Field(..., description="All scenes in new display order")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Scenes reordered successfully",
+                "scenes": [
+                    {
+                        "sequence": 3,
+                        "status": "completed",
+                        "prompt": "Scene 3 description",
+                        "duration": 8.0,
+                        "needsLipSync": True,
+                        "retryCount": 0,
+                        "createdAt": "2025-11-17T10:00:00Z",
+                        "updatedAt": "2025-11-17T10:15:00Z"
+                    }
+                ]
             }
         }
