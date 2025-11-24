@@ -208,7 +208,7 @@ export default function CreatePage() {
       case 1:
         return true // Video type always valid (has default)
       case 2:
-        return prompt.trim() !== '' && personality.trim() !== ''
+        return prompt.trim().length >= 10 && personality.trim() !== ''
       case 3:
         if (imageSource === 'upload') {
           return uploadedCharacterImage !== null
@@ -630,11 +630,17 @@ export default function CreatePage() {
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
                         className="min-h-32 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:border-gray-600"
+                        maxLength={1000}
                         required
                       />
-                      <p className="text-xs text-gray-400">
-                        Be specific about scenes, camera angles, and visual style
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-400">
+                          Be specific about scenes, camera angles, and visual style
+                        </p>
+                        <span className={`text-xs ${prompt.length < 10 || prompt.length > 900 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {prompt.length}/1000 characters {prompt.length > 0 && prompt.length < 10 && '(min: 10)'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Personality */}

@@ -227,37 +227,52 @@ export function SceneEditModal({
 
   /**
    * Enforce trim boundaries during playback
+   * Uses local trimPoints state to respect real-time edits, not just saved values
    */
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !scene.trimPoints) return
+    if (!video || !trimPoints || videoDuration === 0) return
 
     const handleTimeUpdate = () => {
-      if (video.currentTime < scene.trimPoints!.in) {
-        video.currentTime = scene.trimPoints!.in
-      } else if (video.currentTime > scene.trimPoints!.out) {
-        video.currentTime = scene.trimPoints!.in
+      if (video.currentTime < trimPoints.in) {
+        video.currentTime = trimPoints.in
+      } else if (video.currentTime > trimPoints.out) {
+        video.currentTime = trimPoints.in
         video.pause()
         setIsPlaying(false)
       }
     }
 
     const handleSeeking = () => {
-      if (video.currentTime < scene.trimPoints!.in) {
-        video.currentTime = scene.trimPoints!.in
-      } else if (video.currentTime > scene.trimPoints!.out) {
-        video.currentTime = scene.trimPoints!.out
+      if (video.currentTime < trimPoints.in) {
+        video.currentTime = trimPoints.in
+      } else if (video.currentTime > trimPoints.out) {
+        video.currentTime = trimPoints.out
+      }
+    }
+
+    const handleLoadedMetadata = () => {
+      // Set initial playback position to the in point when video loads
+      if (video.currentTime < trimPoints.in || video.currentTime > trimPoints.out) {
+        video.currentTime = trimPoints.in
       }
     }
 
     video.addEventListener('timeupdate', handleTimeUpdate)
     video.addEventListener('seeking', handleSeeking)
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+
+    // Set initial position immediately if video is already loaded
+    if (video.readyState >= 2 && (video.currentTime < trimPoints.in || video.currentTime > trimPoints.out)) {
+      video.currentTime = trimPoints.in
+    }
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('seeking', handleSeeking)
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
     }
-  }, [scene.trimPoints])
+  }, [trimPoints, videoDuration])
 
   /**
    * Apply trim points by calling the API
@@ -521,9 +536,9 @@ export function SceneEditModal({
                   </Label>
                   <span className={cn(
                     "text-xs",
-                    editedPrompt.length > 450 ? "text-destructive" : "text-muted-foreground"
+                    editedPrompt.length > 4950 ? "text-destructive" : "text-muted-foreground"
                   )}>
-                    {editedPrompt.length} / 500 characters
+                    {editedPrompt.length} / 5000 characters
                   </span>
                 </div>
                 <Textarea
@@ -532,7 +547,7 @@ export function SceneEditModal({
                   onChange={(e) => setEditedPrompt(e.target.value)}
                   placeholder="Enter scene description, visual details, camera angles, lighting, mood..."
                   className="min-h-[120px] resize-none"
-                  maxLength={500}
+                  maxLength={5000}
                   aria-describedby="scene-prompt-help"
                 />
                 <p id="scene-prompt-help" className="text-xs text-muted-foreground">
@@ -548,9 +563,9 @@ export function SceneEditModal({
                   </Label>
                   <span className={cn(
                     "text-xs",
-                    editedNegativePrompt.length > 450 ? "text-destructive" : "text-muted-foreground"
+                    editedNegativePrompt.length > 950 ? "text-destructive" : "text-muted-foreground"
                   )}>
-                    {editedNegativePrompt.length} / 500 characters
+                    {editedNegativePrompt.length} / 1000 characters
                   </span>
                 </div>
                 <Textarea
@@ -559,7 +574,7 @@ export function SceneEditModal({
                   onChange={(e) => setEditedNegativePrompt(e.target.value)}
                   placeholder="Enter elements to avoid in the scene (e.g., blur, distortion, low quality)..."
                   className="min-h-[100px] resize-none"
-                  maxLength={500}
+                  maxLength={1000}
                   aria-describedby="negative-prompt-help"
                 />
                 <p id="negative-prompt-help" className="text-xs text-muted-foreground">

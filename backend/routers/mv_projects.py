@@ -31,6 +31,8 @@ from mv_schemas import (
     ComposeResponse,
     FinalVideoResponse,
     SceneResponse,
+    SceneReorderRequest,
+    SceneReorderResponse,
 )
 from mv_models import (
     MVProjectItem,
@@ -1057,6 +1059,291 @@ async def update_project(project_id: str, update_data: ProjectUpdateRequest):
             }
         )
 
+
+@router.patch(
+    "/projects/{project_id}/scenes/reorder",
+    response_model=SceneReorderResponse,
+    summary="Reorder Scenes",
+    description="""
+Reorder scenes in a project by updating their displaySequence values.
+
+This endpoint:
+1. Validates all existing scenes are included in the reorder request
+2. Validates no duplicate sequence IDs
+3. Validates all sequence IDs correspond to existing scenes
+4. Updates displaySequence for all scenes atomically
+5. Returns all scenes sorted by new displaySequence
+
+**Important Notes:**
+- The `sequence` field (part of SK) is immutable and never changes
+- The `displaySequence` field controls UI ordering and is updated by this endpoint
+- All existing scenes must be included in the reorder request
+- The operation uses individual scene updates (PynamoDB doesn't support multi-item transactions)
+- If any update fails, previously updated scenes will retain their new displaySequence values
+
+**Validation:**
+- All existing scene sequence IDs must be present in sceneOrder
+- No duplicate sequence IDs allowed
+- All sequence IDs must be valid (>= 1)
+- All sequence IDs must correspond to existing scenes
+
+**Example Request:**
+```json
+{
+  "sceneOrder": [3, 1, 4, 2]
+}
+```
+
+This will reorder scenes so that:
+- Scene 3 displays first (displaySequence=1)
+- Scene 1 displays second (displaySequence=2)
+- Scene 4 displays third (displaySequence=3)
+- Scene 2 displays fourth (displaySequence=4)
+"""
+)
+async def reorder_scenes(
+    project_id: str,
+    reorder_request: SceneReorderRequest
+):
+    """
+    Reorder scenes in a project.
+
+    Args:
+        project_id: Project UUID
+        reorder_request: New scene order
+
+    Returns:
+        SceneReorderResponse with all scenes in new display order
+
+    Raises:
+        404: Project not found
+        400: Validation error (missing scenes, duplicates, invalid IDs)
+        500: Database or internal error
+    """
+    try:
+        logger.info(
+            "reorder_scenes_request",
+            project_id=project_id,
+            scene_order=reorder_request.sceneOrder
+        )
+
+        # Validate project_id format
+        try:
+            project_id = str(uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Invalid project ID format",
+                    "details": "Project ID must be a valid UUID"
+                }
+            )
+
+        # Validate project exists
+        pk = f"PROJECT#{project_id}"
+        try:
+            project_item = MVProjectItem.get(pk, "METADATA")
+        except DoesNotExist:
+            logger.warning("project_not_found_for_reorder", project_id=project_id)
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NotFound",
+                    "message": f"Project {project_id} not found",
+                    "details": "The specified project does not exist"
+                }
+            )
+
+        # Query all scenes for this project
+        scenes = list(MVProjectItem.query(
+            pk,
+            MVProjectItem.SK.startswith("SCENE#")
+        ))
+
+        if not scenes:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Project has no scenes to reorder",
+                    "details": "Cannot reorder scenes for a project with no scenes"
+                }
+            )
+
+        # Ensure all scenes have displaySequence set (migration)
+        for scene in scenes:
+            if scene.displaySequence is None:
+                scene.displaySequence = scene.sequence
+                scene.updatedAt = datetime.now(timezone.utc)
+                scene.save()
+
+        # Build mapping of displaySequence -> scene item
+        # Use displaySequence as the identifier since that's what the user sees
+        display_seq_to_scene = {
+            scene.displaySequence: scene for scene in scenes
+        }
+
+        existing_display_sequences = set(display_seq_to_scene.keys())
+        requested_sequences = set(reorder_request.sceneOrder)
+
+        # Validation: Check all existing scenes are included
+        if existing_display_sequences != requested_sequences:
+            missing = existing_display_sequences - requested_sequences
+            extra = requested_sequences - existing_display_sequences
+
+            error_details = []
+            if missing:
+                error_details.append(f"Missing scene IDs: {sorted(missing)}")
+            if extra:
+                error_details.append(f"Invalid scene IDs (not found): {sorted(extra)}")
+
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ValidationError",
+                    "message": "Scene order mismatch",
+                    "details": ". ".join(error_details),
+                    "existingScenes": sorted(existing_display_sequences),
+                    "requestedScenes": sorted(requested_sequences)
+                }
+            )
+
+        logger.info(
+            "reorder_validation_passed",
+            project_id=project_id,
+            scene_count=len(scenes),
+            existing_sequences=sorted(existing_display_sequences),
+            new_order=reorder_request.sceneOrder
+        )
+
+        # Update displaySequence for all scenes
+        # Map requested order to new displaySequence values (1-indexed)
+        updated_scenes = []
+        update_errors = []
+
+        for new_display_seq, old_display_seq in enumerate(reorder_request.sceneOrder, start=1):
+            scene = display_seq_to_scene[old_display_seq]
+
+            # Only update if displaySequence actually changed
+            if scene.displaySequence != new_display_seq:
+                try:
+                    scene.displaySequence = new_display_seq
+                    scene.updatedAt = datetime.now(timezone.utc)
+                    scene.save()
+                    logger.debug(
+                        "scene_display_sequence_updated",
+                        project_id=project_id,
+                        scene_sequence=scene.sequence,
+                        old_display_seq=old_display_seq,
+                        new_display_seq=new_display_seq
+                    )
+                except Exception as e:
+                    error_msg = f"Failed to update scene {scene.sequence}: {str(e)}"
+                    update_errors.append(error_msg)
+                    logger.error(
+                        "scene_update_failed",
+                        project_id=project_id,
+                        scene_sequence=scene.sequence,
+                        error=str(e),
+                        exc_info=True
+                    )
+
+            updated_scenes.append(scene)
+
+        # If any updates failed, raise error
+        if update_errors:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "DatabaseError",
+                    "message": "Failed to update some scenes",
+                    "details": "; ".join(update_errors)
+                }
+            )
+
+        logger.info(
+            "scenes_reordered_successfully",
+            project_id=project_id,
+            scene_count=len(updated_scenes)
+        )
+
+        # Build response with scenes sorted by new displaySequence
+        s3_service = get_s3_storage_service()
+        scene_responses = []
+
+        # Sort by new displaySequence
+        updated_scenes.sort(key=lambda s: s.displaySequence)
+
+        for scene in updated_scenes:
+            # Generate presigned URLs
+            reference_urls = []
+            if scene.referenceImageS3Keys:
+                for key in scene.referenceImageS3Keys:
+                    reference_urls.append(s3_service.generate_presigned_url(key))
+
+            audio_url = None
+            if scene.audioClipS3Key:
+                audio_url = s3_service.generate_presigned_url(scene.audioClipS3Key)
+
+            original_video_url = None
+            if scene.originalVideoClipS3Key:
+                original_video_url = s3_service.generate_presigned_url(scene.originalVideoClipS3Key)
+
+            working_video_url = None
+            if scene.workingVideoClipS3Key:
+                working_video_url = s3_service.generate_presigned_url(scene.workingVideoClipS3Key)
+
+            lipsynced_url = None
+            if scene.lipSyncedVideoClipS3Key:
+                lipsynced_url = s3_service.generate_presigned_url(scene.lipSyncedVideoClipS3Key)
+
+            trim_points = None
+            if scene.trimPoints:
+                trim_points = json.loads(scene.trimPoints)
+
+            scene_responses.append(SceneResponse(
+                sequence=scene.displaySequence,
+                status=scene.status,
+                prompt=scene.prompt,
+                negativePrompt=scene.negativePrompt,
+                duration=scene.duration,
+                referenceImageUrls=reference_urls,
+                audioClipUrl=audio_url,
+                originalVideoClipUrl=original_video_url,
+                workingVideoClipUrl=working_video_url,
+                videoClipUrl=working_video_url,  # Backward compatibility
+                trimPoints=trim_points,
+                needsLipSync=scene.needsLipSync or False,
+                lipSyncedVideoClipUrl=lipsynced_url,
+                retryCount=scene.retryCount or 0,
+                errorMessage=scene.errorMessage,
+                createdAt=scene.createdAt,
+                updatedAt=scene.updatedAt
+            ))
+
+        return SceneReorderResponse(
+            message="Scenes reordered successfully",
+            scenes=scene_responses
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "reorder_scenes_error",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "InternalError",
+                "message": "Failed to reorder scenes",
+                "details": str(e)
+            }
+        )
 
 @router.patch(
     "/projects/{project_id}/scenes/{sequence}",
@@ -2482,6 +2769,7 @@ async def get_final_video(project_id: str):
                 "details": str(e)
             }
         )
+
 
 
 
