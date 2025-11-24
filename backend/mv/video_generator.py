@@ -416,25 +416,19 @@ def generate_video(
                 storage = get_storage_backend()
                 urls = {}
 
-                # Import cleanup function
-                from services.s3_storage import delete_local_file_after_upload
-
                 # Upload video
                 urls["video"] = await storage.upload_file(
                     str(video_path),
                     f"mv/jobs/{video_id}/video.mp4"
                 )
-                # Delete local video file after successful upload
-                delete_local_file_after_upload(str(video_path))
-                delete_local_file_after_upload(str(video_path_compat))
+                # NOTE: Local files NOT deleted here - router may need them for scene-specific upload
+                # Cleanup happens in router after all uploads are complete
 
                 # Upload metadata
                 urls["metadata"] = await storage.upload_file(
                     str(metadata_path),
                     f"mv/jobs/{video_id}/metadata.json"
                 )
-                # Delete local metadata file after successful upload
-                delete_local_file_after_upload(str(metadata_path))
 
                 # Upload reference image if exists
                 ref_image_path = job_dir / "reference_image.jpg"
@@ -443,25 +437,8 @@ def generate_video(
                         str(ref_image_path),
                         f"mv/jobs/{video_id}/reference_image.jpg"
                     )
-                    # Delete local reference image after successful upload
-                    delete_local_file_after_upload(str(ref_image_path))
 
-                # Delete the empty job directory after all files are uploaded and deleted
-                try:
-                    import shutil
-                    if job_dir.exists():
-                        shutil.rmtree(str(job_dir))
-                        logger.info(
-                            "job_directory_deleted_after_upload",
-                            job_dir=str(job_dir)
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "failed_to_delete_job_directory",
-                        job_dir=str(job_dir),
-                        error=str(e)
-                    )
-
+                # NOTE: Job directory cleanup also deferred to router
                 return urls
             
             # Run async upload - handle both sync and async contexts

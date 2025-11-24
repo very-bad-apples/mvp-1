@@ -1987,6 +1987,50 @@ async def generate_video_endpoint(request: GenerateVideoRequest):
                     exc_info=True
                 )
 
+        # Cleanup local files after all S3 uploads are complete
+        # This happens after both job-level (in video_generator) and scene-level (above) uploads
+        if settings.STORAGE_BUCKET:
+            try:
+                from services.s3_storage import delete_local_file_after_upload
+                from pathlib import Path
+
+                # Delete video files
+                delete_local_file_after_upload(video_path)
+
+                # Delete compatibility video path if different
+                video_id_from_path = video_path.split('/')[-2] if '/jobs/' in video_path else None
+                if video_id_from_path:
+                    video_path_compat = str(Path(video_path).parent.parent.parent / "videos" / f"{video_id_from_path}.mp4")
+                    if os.path.exists(video_path_compat):
+                        delete_local_file_after_upload(video_path_compat)
+
+                # Delete metadata.json
+                metadata_path = str(Path(video_path).parent / "metadata.json")
+                if os.path.exists(metadata_path):
+                    delete_local_file_after_upload(metadata_path)
+
+                # Delete reference_image.jpg if exists
+                ref_image_path = str(Path(video_path).parent / "reference_image.jpg")
+                if os.path.exists(ref_image_path):
+                    delete_local_file_after_upload(ref_image_path)
+
+                # Delete the empty job directory
+                job_dir = Path(video_path).parent
+                if job_dir.exists() and not any(job_dir.iterdir()):
+                    import shutil
+                    shutil.rmtree(str(job_dir))
+                    logger.info(
+                        "job_directory_deleted_after_all_uploads",
+                        job_dir=str(job_dir)
+                    )
+            except Exception as cleanup_error:
+                # Log but don't fail the request on cleanup errors
+                logger.warning(
+                    "failed_to_cleanup_local_files",
+                    video_path=video_path,
+                    error=str(cleanup_error)
+                )
+
         response = GenerateVideoResponse(
             video_id=video_id,
             video_path=video_path,
