@@ -393,23 +393,28 @@ export function SceneEditModal({
 
       sceneToast.showSuccess(scene, 'Prompt Update')
 
-      // Step 2: Trigger video regeneration with updated prompts (fire and forget - runs in background)
+      // Step 2: Trigger video regeneration with updated prompts
+      console.log('[SceneEditModal] Step 2: Starting video regeneration', {
+        projectId,
+        sequence: scene.sequence,
+        backend: 'replicate'
+      })
+
       setIsGeneratingVideo(true)
       sceneToast.showProgress(scene, 'Video Regeneration')
 
-      // Start video regeneration but don't wait for it to complete
-      // The polling system will update the UI when the video is ready
-      generateSceneVideo(projectId, scene.sequence, 'replicate')
-        .then(() => {
-          sceneToast.showSuccess(scene, 'Video Regeneration')
-        })
-        .catch((videoError) => {
-          console.error('Failed to regenerate video:', videoError)
-          sceneToast.showError(scene, 'Video Regeneration', videoError)
-        })
-        .finally(() => {
-          setIsGeneratingVideo(false)
-        })
+      try {
+        console.log('[SceneEditModal] Calling generateSceneVideo...')
+        const result = await generateSceneVideo(projectId, scene.sequence, 'replicate')
+        console.log('[SceneEditModal] Video generation SUCCESS:', result)
+        sceneToast.showSuccess(scene, 'Video Regeneration')
+      } catch (videoError) {
+        console.error('[SceneEditModal] Video generation FAILED:', videoError)
+        sceneToast.showError(scene, 'Video Regeneration', videoError)
+        // Don't fail the whole operation - prompts were saved successfully
+      } finally {
+        setIsGeneratingVideo(false)
+      }
 
       // Call the callback to trigger a refresh in parent component
       if (onSceneUpdate) {

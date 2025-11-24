@@ -214,12 +214,32 @@ export default function EditPage({ params }: { params: { id: string } }) {
   // Calculate number of scenes missing videos
   const scenesWithoutVideos = useMemo(() => {
     if (!project?.scenes) return []
-    return project.scenes.filter(scene => !scene.originalVideoClipUrl)
+
+    // Debug: Log scene video URL status
+    console.log('[Video Detection] Checking scenes:', project.scenes.map(s => ({
+      sequence: s.sequence,
+      originalVideoClipUrl: s.originalVideoClipUrl,
+      type: typeof s.originalVideoClipUrl,
+      isArray: Array.isArray(s.originalVideoClipUrl),
+      hasVideo: !!s.originalVideoClipUrl
+    })))
+
+    return project.scenes.filter(scene => {
+      // Robust check: handle empty arrays, empty strings, null, undefined
+      const hasVideo = scene.originalVideoClipUrl &&
+                      !Array.isArray(scene.originalVideoClipUrl) &&
+                      scene.originalVideoClipUrl !== ''
+      return !hasVideo
+    })
   }, [project?.scenes])
 
   // Handle manual video generation
   const handleGenerateVideos = async () => {
+    console.log('[handleGenerateVideos] Button clicked, scenesWithoutVideos:', scenesWithoutVideos.length)
+    console.log('[handleGenerateVideos] Scenes needing videos:', scenesWithoutVideos.map(s => s.sequence))
+
     if (scenesWithoutVideos.length === 0) {
+      console.log('[handleGenerateVideos] No videos needed - all scenes have videos')
       toast({
         title: "All Videos Complete",
         description: "All scenes already have videos generated.",
@@ -227,6 +247,7 @@ export default function EditPage({ params }: { params: { id: string } }) {
       return
     }
 
+    console.log('[handleGenerateVideos] Starting generation for', scenesWithoutVideos.length, 'scenes')
     toast({
       title: "Generating Videos",
       description: `Starting video generation for ${scenesWithoutVideos.length} scene${scenesWithoutVideos.length > 1 ? 's' : ''}...`,

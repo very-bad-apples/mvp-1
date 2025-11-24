@@ -105,6 +105,7 @@ interface RetryConfig {
   maxDelayMs: number
   backoffMultiplier: number
   retryableStatusCodes: number[]
+  timeoutMs?: number
 }
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
@@ -113,6 +114,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelayMs: 10000,
   backoffMultiplier: 2,
   retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+  timeoutMs: 15000, // 15 seconds default
 }
 
 /**
@@ -292,7 +294,7 @@ async function apiFetch<T>(
 
       // Add timeout to prevent hanging requests
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs || 15000)
 
       let response: Response
       try {
@@ -652,22 +654,50 @@ export async function generateSceneVideo(
   }
 }> {
   const url = `${getAPIUrl()}/api/mv/generate_scene_video/${projectId}/${sequence}?write_to_db=true&backend=${backend}`
-  return apiFetch<{
-    videoUrl: string
-    s3Key: string
-    metadata: {
-      project_id: string
-      scene_sequence: number
-      backend: string
-      duration?: number
-      prompt?: string
-      write_to_db: boolean
-      reference_image_used: boolean
-      video_size_bytes: number
-    }
-  }>(url, {
-    method: 'POST',
+
+  console.log('[generateSceneVideo] CALLED:', {
+    projectId,
+    sequence,
+    backend,
+    url,
   })
+
+  try {
+    const result = await apiFetch<{
+      videoUrl: string
+      s3Key: string
+      metadata: {
+        project_id: string
+        scene_sequence: number
+        backend: string
+        duration?: number
+        prompt?: string
+        write_to_db: boolean
+        reference_image_used: boolean
+        video_size_bytes: number
+      }
+    }>(url, {
+      method: 'POST',
+    })
+
+    console.log('[generateSceneVideo] SUCCESS:', {
+      projectId,
+      sequence,
+      hasVideoUrl: !!result.videoUrl,
+      s3Key: result.s3Key,
+    })
+
+    return result
+  } catch (error) {
+    console.error('[generateSceneVideo] FAILED:', {
+      projectId,
+      sequence,
+      backend,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    throw error
+  }
 }
 
 /**
@@ -787,6 +817,7 @@ export async function generateScenes(
     },
     {
       maxRetries: 2, // Reduce retries for long-running operations
+      timeoutMs: 120000, // 2 minutes for scene generation (can take longer with AI)
     }
   )
 }
@@ -808,6 +839,7 @@ export async function generateCharacterReference(
     },
     {
       maxRetries: 2, // Reduce retries for long-running operations
+      timeoutMs: 120000, // 2 minutes for image generation
     }
   )
 }
@@ -862,16 +894,46 @@ export async function generateVideo(
   data: GenerateVideoRequest
 ): Promise<GenerateVideoResponse> {
   const url = `${getAPIUrl()}/api/mv/generate_video`
-  return apiFetch<GenerateVideoResponse>(
+
+  console.log('[generateVideo] CALLED:', {
     url,
-    {
-      method: 'POST',
-      body: JSON.stringify(data),
-    },
-    {
-      maxRetries: 1, // Minimal retries for very long-running operations
-    }
-  )
+    projectId: data.project_id,
+    sequence: data.sequence,
+    backend: data.backend,
+    hasPrompt: !!data.prompt,
+    promptLength: data.prompt?.length,
+  })
+
+  try {
+    const result = await apiFetch<GenerateVideoResponse>(
+      url,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+      {
+        maxRetries: 1, // Minimal retries for very long-running operations
+        timeoutMs: 300000, // 5 minutes for video generation (very long-running)
+      }
+    )
+
+    console.log('[generateVideo] SUCCESS:', {
+      projectId: data.project_id,
+      sequence: data.sequence,
+      hasVideoUrl: !!result.video_url,
+      videoId: result.video_id,
+    })
+
+    return result
+  } catch (error) {
+    console.error('[generateVideo] FAILED:', {
+      projectId: data.project_id,
+      sequence: data.sequence,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    throw error
+  }
 }
 
 /**
@@ -891,6 +953,7 @@ export async function generateLipSync(
     },
     {
       maxRetries: 1, // Minimal retries for very long-running operations
+      timeoutMs: 300000, // 5 minutes for lip-sync generation (very long-running)
     }
   )
 }
@@ -1024,6 +1087,7 @@ export async function composeVideo(
     },
     {
       maxRetries: 1, // Minimal retries for composition operations
+      timeoutMs: 300000, // 5 minutes for video composition (very long-running)
     }
   )
 }

@@ -208,6 +208,8 @@ export async function startFullGeneration(
 ): Promise<Project> {
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
+  console.log('[startFullGeneration] CALLED for project:', projectId)
+
   try {
     // Fetch current project state
     const projectResponse = await getProject(projectId)
@@ -216,6 +218,7 @@ export async function startFullGeneration(
     }
 
     let project = projectResponse
+    console.log('[startFullGeneration] Project fetched, scenes:', project.scenes.length)
 
     // Phase 1: Generate all scenes
     opts.onProgress('scenes', 0, project.scenes.length, 'Starting scene generation...')
@@ -278,7 +281,7 @@ export async function startFullGeneration(
 
     opts.onProgress('images', 1, 1, 'Character reference generated')
 
-    // Phase 3: Generate all videos (parallel - backend handles DB updates atomically)
+    // Phase 3: Generate videos (only for scenes without videos)
     // Only generate videos for scenes that don't already have videos
     const scenesNeedingVideos = project.scenes.filter(
       scene => !scene.originalVideoClipUrl
@@ -289,6 +292,13 @@ export async function startFullGeneration(
     } else {
       opts.onProgress('videos', 0, scenesNeedingVideos.length, `Starting video generation for ${scenesNeedingVideos.length} scenes...`)
       // Status already set to 'processing' in Phase 1 - no need to update again
+
+      console.log('[startFullGeneration] Phase 3: Generating videos for', scenesNeedingVideos.length, 'scenes')
+      console.log('[startFullGeneration] Scene details:', scenesNeedingVideos.map(s => ({
+        sequence: s.sequence,
+        prompt: s.prompt?.substring(0, 50),
+        hasOriginalVideo: !!s.originalVideoClipUrl
+      })))
 
       // Generate videos only for scenes that don't have videos yet
       // Backend updates each scene atomically in DynamoDB
@@ -306,21 +316,55 @@ export async function startFullGeneration(
               sequence: scene.sequence,
             }
 
+            console.log(`[orchestration] Generating video for scene ${scene.sequence}:`, {
+              prompt: scene.prompt?.substring(0, 100),
+              projectId,
+              sequence: scene.sequence
+            })
+
             const videoResponse = await generateVideo(videoRequest)
+
+            console.log(`[orchestration] Video generated successfully for scene ${scene.sequence}`)
 
             // Backend automatically updates the scene in DynamoDB with the video URL
             // No need to manually update - backend handles atomic updates per scene
 
-            return videoResponse
+            return { success: true, scene: scene.sequence, response: videoResponse }
           },
           `Generate video for scene ${scene.sequence}`,
           opts,
           'videos',
           scene.sequence
-        )
+        ).catch(error => {
+          // Catch individual video failures so Promise.allSettled can track them
+          console.error(`[orchestration] Video generation FAILED for scene ${scene.sequence}:`, error)
+          return { success: false, scene: scene.sequence, error }
+        })
       )
 
-      await Promise.all(videoPromises)
+      // Use allSettled instead of all - allows partial success
+      console.log('[orchestration] Waiting for all video generation tasks...')
+      const results = await Promise.allSettled(videoPromises)
+
+      // Count successes and failures
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length
+
+      console.log(`[orchestration] Video generation complete: ${successful} succeeded, ${failed} failed`)
+
+      // Log details of any failures
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[orchestration] Scene ${scenesNeedingVideos[index].sequence} rejected:`, result.reason)
+        } else if (result.status === 'fulfilled' && !result.value.success) {
+          console.error(`[orchestration] Scene ${result.value.scene} failed:`, result.value.error)
+        }
+      })
+
+      // Continue even if some videos failed - allow partial success
+      if (failed > 0) {
+        console.warn(`[orchestration] ${failed} video(s) failed, but continuing with successful ones`)
+      }
     }
 
     // Refetch project to get all updated scenes with video URLs
