@@ -403,6 +403,9 @@ def generate_video(
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
+    # Capture file size before upload for debug logging
+    video_file_size = os.path.getsize(video_path)
+
     # Upload entire job directory to cloud storage if configured
     cloud_urls = {}
     try:
@@ -412,19 +415,21 @@ def generate_video(
             async def upload_job_to_cloud():
                 storage = get_storage_backend()
                 urls = {}
-                
+
                 # Upload video
                 urls["video"] = await storage.upload_file(
                     str(video_path),
                     f"mv/jobs/{video_id}/video.mp4"
                 )
-                
+                # NOTE: Local files NOT deleted here - router may need them for scene-specific upload
+                # Cleanup happens in router after all uploads are complete
+
                 # Upload metadata
                 urls["metadata"] = await storage.upload_file(
                     str(metadata_path),
                     f"mv/jobs/{video_id}/metadata.json"
                 )
-                
+
                 # Upload reference image if exists
                 ref_image_path = job_dir / "reference_image.jpg"
                 if ref_image_path.exists():
@@ -432,7 +437,8 @@ def generate_video(
                         str(ref_image_path),
                         f"mv/jobs/{video_id}/reference_image.jpg"
                     )
-                
+
+                # NOTE: Job directory cleanup also deferred to router
                 return urls
             
             # Run async upload - handle both sync and async contexts
@@ -470,7 +476,7 @@ def generate_video(
             "video_id": video_id,
             "video_path": str(video_path),
             "processing_time_seconds": metadata["processing_time_seconds"],
-            "file_size_bytes": os.path.getsize(video_path),
+            "file_size_bytes": video_file_size,
             "character_reference_id": character_reference_id,
             "character_reference_path": character_reference_path,
         })

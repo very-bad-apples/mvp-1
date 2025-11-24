@@ -133,6 +133,10 @@ async def process_composition_job(project_id: str) -> Dict[str, Any]:
             content_type="video/mp4"
         )
 
+        # Delete local final video file after successful upload
+        from services.s3_storage import delete_local_file_after_upload
+        delete_local_file_after_upload(output_path)
+
         # Update project with final output (validate S3 key to ensure it's not a URL)
         from services.s3_storage import validate_s3_key
         project_item.finalOutputS3Key = validate_s3_key(final_s3_key, "finalOutputS3Key")
