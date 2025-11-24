@@ -68,6 +68,4 @@ notes.txt
 .devdocs/
 thoughts/
 dump.txt
-AUTO_VIDEO_GENERATION_PATTERNS.md
-DATABASE_MODEL_ANALYSIS.md
-VIDEO_GENERATION_FIXES.md
+CLAUDE.md
