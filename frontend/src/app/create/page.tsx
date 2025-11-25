@@ -315,9 +315,8 @@ export default function CreatePage() {
           blobUrls.push(image.cloud_url)
         } else {
           try {
-            const response = await fetch(`${API_URL}/api/mv/get_character_reference/${image.id}?redirect=false`, {
-              headers: API_KEY ? { 'X-API-Key': API_KEY } : {},
-            })
+            // Use relative URL to go through Next.js proxy (avoids CORS)
+            const response = await fetch(`/api/mv/get_character_reference/${image.id}?redirect=false`)
 
             if (!response.ok) {
               throw new Error(`Failed to fetch image ${image.id}`)
@@ -973,11 +972,11 @@ export default function CreatePage() {
 
                                 setIsConvertingAudio(true)
                                 try {
-                                  const response = await fetch(`${API_URL}/api/audio/convert-youtube`, {
+                                  // Use relative URL to go through Next.js proxy (avoids CORS)
+                                  const response = await fetch(`/api/audio/convert-youtube`, {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
-                                      'X-API-Key': API_KEY,
                                     },
                                     body: JSON.stringify({ url: youtubeUrl }),
                                   })
@@ -1198,11 +1197,11 @@ export default function CreatePage() {
                                   parameters.lyrics = aiMusicLyrics
                                 }
 
-                                const response = await fetch(`${API_URL}/api/audio/models/run`, {
+                                // Use relative URL to go through Next.js proxy (avoids CORS)
+                                const response = await fetch(`/api/audio/models/run`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',
-                                    ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
                                   },
                                   body: JSON.stringify({
                                     model_key: 'minimax_music_1_5',

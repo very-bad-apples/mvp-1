@@ -191,7 +191,8 @@ export default function QuickGenPage() {
       setCharacterImageError(false)
 
       try {
-        const response = await fetch(`${API_URL}/api/mv/get_character_reference/${imageId}?redirect=false&api_key=${API_KEY}`, {
+        // Use relative URL to go through Next.js proxy (avoids CORS)
+        const response = await fetch(`/api/mv/get_character_reference/${imageId}?redirect=false`, {
           headers: {
             'Content-Type': 'application/json'
           },
@@ -451,7 +452,8 @@ export default function QuickGenPage() {
         console.log(`[Scene ${sceneIndex + 1}] Using character reference image: ${requestBody.character_reference_id}`)
       }
 
-      const response = await fetch(`${API_URL}/api/mv/generate_video`, {
+      // Use relative URL to go through Next.js proxy (avoids CORS)
+      const response = await fetch(`/api/mv/generate_video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -642,11 +644,11 @@ export default function QuickGenPage() {
       const startTime = sceneIndex * 8
       const endTime = startTime + 8
 
-      const response = await fetch(`${API_URL}/api/mv/lipsync`, {
+      // Use relative URL to go through Next.js proxy (avoids CORS)
+      const response = await fetch(`/api/mv/lipsync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
           video_id: state.video.videoId,
@@ -717,11 +719,11 @@ export default function QuickGenPage() {
         requestBody.suppress_video_audio = true
       }
 
-      const response = await fetch(`${API_URL}/api/mv/stitch-videos`, {
+      // Use relative URL to go through Next.js proxy (avoids CORS)
+      const response = await fetch(`/api/mv/stitch-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
         },
         body: JSON.stringify(requestBody),
       })
