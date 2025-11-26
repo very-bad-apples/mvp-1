@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 import { VideoTrimmer } from '@/components/VideoTrimmer'
 import { trimScene, downloadSceneVideo, generateLipSync, updateScene, generateSceneVideo, uploadSceneVideo } from '@/lib/api/client'
 import { formatVideoTime, formatDuration } from '@/lib/utils/time'
-import { getSceneVideoUrl } from '@/lib/utils/video'
+import { getSceneVideoUrl, getVideoStableId } from '@/lib/utils/video'
 import { useSceneToast } from '@/hooks/useSceneToast'
 
 interface SceneEditModalProps {
@@ -95,8 +95,34 @@ export function SceneEditModal({
   // For the toggle: default shows original (for trimming), toggle shows working result
   const currentVideoUrl = showOriginal ? getSceneVideoUrl(scene, false) : originalVideoUrl
 
+  // Track last stable scene data to prevent unnecessary resets
+  const lastSceneStableIdRef = useRef<string | null>(null)
+  
+  // Calculate stable video ID (based on S3 key, not presigned URL)
+  const videoStableId = getVideoStableId(scene.originalVideoClipUrl ?? scene.videoClipUrl)
+  
+  // Calculate stable scene ID (memoized to prevent unnecessary recalculations)
+  const sceneStableId = useMemo(() => {
+    return `${scene.sequence}-${videoStableId}-${scene.status}-${scene.prompt}-${scene.negativePrompt}-${scene.duration}`
+  }, [
+    scene.sequence,
+    videoStableId,
+    scene.status,
+    scene.prompt,
+    scene.negativePrompt,
+    scene.duration,
+  ])
+  
   // Sync local state when scene changes
+  // Use stable IDs to prevent resets when only presigned URLs change during polling
   useEffect(() => {
+    // Only reset state if scene actually changed (not just presigned URL)
+    if (sceneStableId === lastSceneStableIdRef.current && lastSceneStableIdRef.current !== null) {
+      return // Skip reset if only presigned URL changed
+    }
+    
+    lastSceneStableIdRef.current = sceneStableId
+    
     setEditedPrompt(scene.prompt || '')
     setEditedNegativePrompt(scene.negativePrompt || '')
     // Don't initialize trim points here - wait for video metadata to load
@@ -107,7 +133,7 @@ export function SceneEditModal({
     setLipSyncStatus('idle')
     // Reset original video duration
     setOriginalVideoDuration(0)
-  }, [scene.sequence, scene.duration, scene.originalVideoClipUrl, scene.videoClipUrl, open]) // Re-sync when modal opens or video URLs change
+  }, [sceneStableId, scene.prompt, scene.negativePrompt, open]) // Re-sync when modal opens or actual scene data changes
 
   /**
    * Handle video metadata loaded - sets up trimmer with original video duration

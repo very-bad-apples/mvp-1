@@ -52,6 +52,7 @@ export function VideoPreview({
   const [showSpeedIndicator, setShowSpeedIndicator] = useState(false)
   const lastSeekTimeRef = useRef<number>(0)
   const isSeekingRef = useRef(false)
+  const isTransitioningRef = useRef(false)
   const speedIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   // Track the last stable video ID to prevent reloads when only presigned URL changes
   const lastVideoStableIdRef = useRef<string | null>(null)
@@ -98,20 +99,28 @@ export function VideoPreview({
     for (let i = 0; i < sceneTimings.length; i++) {
       const timing = sceneTimings[i]
       if (time >= timing.startTime && time < timing.endTime) {
+        // Calculate local time within the scene (0 to scene.duration)
+        const sceneLocalTime = time - timing.startTime
+
+        // If scene has trim points, add the trim offset to get actual video time
+        const trimOffset = timing.scene.trimPoints?.in || 0
+        const videoTime = sceneLocalTime + trimOffset
+
         return {
           index: i,
           timing,
-          localTime: time - timing.startTime,
+          localTime: videoTime, // This is the actual video time including trim offset
         }
       }
     }
     // If beyond all scenes, return last scene
     if (sceneTimings.length > 0) {
       const lastTiming = sceneTimings[sceneTimings.length - 1]
+      const trimOffset = lastTiming.scene.trimPoints?.in || 0
       return {
         index: sceneTimings.length - 1,
         timing: lastTiming,
-        localTime: lastTiming.scene.duration || 0,
+        localTime: (lastTiming.scene.duration || 0) + trimOffset,
       }
     }
     return null
@@ -124,6 +133,12 @@ export function VideoPreview({
 
     // If scene changed, update the current scene index
     if (sceneInfo.index !== currentSceneIndex) {
+      console.log('[VideoPreview] Scene change detected:', {
+        currentTime,
+        oldSceneIndex: currentSceneIndex,
+        newSceneIndex: sceneInfo.index,
+        timing: sceneInfo.timing
+      })
       setCurrentSceneIndex(sceneInfo.index)
       setIsVideoLoaded(false)
       setVideoError(null)
@@ -244,6 +259,9 @@ export function VideoPreview({
     const handleLoadedMetadata = () => {
       setIsVideoLoaded(true)
       setVideoError(null)
+      // Clear transitioning flag now that new video has loaded
+      isTransitioningRef.current = false
+      console.log('[VideoPreview] Video loaded, cleared transitioning flag')
       // Initial seek will be handled by the sync effect
       // Enforce muted state when muted prop is true
       if (muted) {
@@ -315,12 +333,22 @@ export function VideoPreview({
     const sceneInfo = getCurrentSceneInfo(currentTime)
     if (!sceneInfo || sceneInfo.index !== currentSceneIndex) return
 
+    const currentScene = validScenes[currentSceneIndex]
+
     // Only seek if there's a significant difference (>0.1s) to avoid micro-adjustments
     const diff = Math.abs(video.currentTime - sceneInfo.localTime)
     if (diff > 0.1) {
+      console.log('[VideoPreview] Syncing video time:', {
+        currentTime,
+        sceneIndex: currentSceneIndex,
+        videoCurrentTime: video.currentTime,
+        targetTime: sceneInfo.localTime,
+        trimPoints: currentScene?.trimPoints,
+        diff
+      })
       video.currentTime = sceneInfo.localTime
     }
-  }, [currentTime, currentSceneIndex, isVideoLoaded, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl])
+  }, [currentTime, currentSceneIndex, isVideoLoaded, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl, validScenes])
 
   // Handle video timeupdate event to sync parent currentTime (only for normal sequential playback)
   useEffect(() => {
@@ -328,7 +356,7 @@ export function VideoPreview({
     if (!video) return
 
     const handleTimeUpdate = () => {
-      if (isSeekingRef.current) return
+      if (isSeekingRef.current || isTransitioningRef.current) return
 
       // Skip updating parent timeline when in scene preview mode or viewing final video
       if ((isScenePreviewMode && selectedScene) || (showFinalVideo && project.finalOutputUrl)) return
@@ -336,7 +364,10 @@ export function VideoPreview({
       const sceneInfo = sceneTimings[currentSceneIndex]
       if (!sceneInfo) return
 
-      const globalTime = sceneInfo.startTime + video.currentTime
+      // Calculate scene-local time by subtracting trim offset from video time
+      const trimOffset = sceneInfo.scene.trimPoints?.in || 0
+      const sceneLocalTime = video.currentTime - trimOffset
+      const globalTime = sceneInfo.startTime + sceneLocalTime
 
       // Only update if there's a meaningful difference to avoid excessive updates
       if (Math.abs(globalTime - currentTime) > 0.05) {
@@ -347,6 +378,62 @@ export function VideoPreview({
     video.addEventListener('timeupdate', handleTimeUpdate)
     return () => video.removeEventListener('timeupdate', handleTimeUpdate)
   }, [currentSceneIndex, currentTime, onSeek, sceneTimings, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl])
+
+  // Enforce trim boundaries during playback (only for normal sequential playback)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !isVideoLoaded) return
+
+    // Skip when in scene preview mode or viewing final video
+    if ((isScenePreviewMode && selectedScene) || (showFinalVideo && project.finalOutputUrl)) return
+
+    const sceneInfo = sceneTimings[currentSceneIndex]
+    if (!sceneInfo || !sceneInfo.scene.trimPoints) return
+
+    const trimPoints = sceneInfo.scene.trimPoints
+
+    const handleTimeUpdate = () => {
+      // Only enforce the OUT boundary - if video goes past trim out point, transition to next scene
+      // Don't enforce IN boundary here since that's handled by the initial seek in getCurrentSceneInfo
+      if (video.currentTime >= trimPoints.out - 0.1) {
+        console.log('[VideoPreview] Trim boundary reached:', {
+          sceneIndex: currentSceneIndex,
+          videoTime: video.currentTime,
+          trimOut: trimPoints.out,
+          hasNextScene: currentSceneIndex < validScenes.length - 1
+        })
+
+        // Set transitioning flag to prevent timeupdate handler from interfering
+        isTransitioningRef.current = true
+
+        // Remove the event listener immediately to prevent multiple triggers
+        video.removeEventListener('timeupdate', handleTimeUpdate)
+
+        // Reached end of trim, move to next scene
+        if (currentSceneIndex < validScenes.length - 1) {
+          const nextSceneIndex = currentSceneIndex + 1
+          const nextSceneTiming = sceneTimings[nextSceneIndex]
+          console.log('[VideoPreview] Transitioning to next scene:', {
+            from: currentSceneIndex,
+            to: nextSceneIndex,
+            nextStartTime: nextSceneTiming.startTime
+          })
+          setCurrentSceneIndex(nextSceneIndex)
+          setIsVideoLoaded(false)
+          onSeek(nextSceneTiming.startTime)
+        } else {
+          // End of all scenes - stop playback
+          console.log('[VideoPreview] End of all scenes, stopping playback')
+          onPlayPause()
+          setCurrentSceneIndex(0)
+          onSeek(0)
+        }
+      }
+    }
+
+    video.addEventListener('timeupdate', handleTimeUpdate)
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [currentSceneIndex, isVideoLoaded, sceneTimings, validScenes.length, onSeek, onPlayPause, isScenePreviewMode, selectedScene, showFinalVideo, project.finalOutputUrl])
 
   // Handle automatic scene transitions when video ends
   useEffect(() => {

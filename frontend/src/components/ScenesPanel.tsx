@@ -308,11 +308,59 @@ export function ScenesPanel({
     onProjectUpdate()
   }
 
+  // Track the last stable scene data to prevent unnecessary re-renders
+  const lastStableSceneRef = useRef<ProjectScene | null>(null)
+  
   // Get the fresh scene data from the project when it updates
-  // This ensures the modal always shows the latest scene data including newly generated videos
-  const freshSceneForEdit = selectedSceneForEdit
-    ? project.scenes.find(s => s.sequence === selectedSceneForEdit.sequence) || selectedSceneForEdit
-    : null
+  // Memoize to prevent unnecessary re-renders when only presigned URLs change
+  // Only update when actual scene data changes (status, prompts, video S3 keys, etc.)
+  const freshSceneForEdit = useMemo(() => {
+    if (!selectedSceneForEdit) {
+      lastStableSceneRef.current = null
+      return null
+    }
+    
+    const currentScene = project.scenes.find(s => s.sequence === selectedSceneForEdit.sequence)
+    if (!currentScene) {
+      lastStableSceneRef.current = selectedSceneForEdit
+      return selectedSceneForEdit
+    }
+    
+    // Compare stable IDs to detect actual changes (not just presigned URL regeneration)
+    const oldVideoStableId = getVideoStableId(
+      lastStableSceneRef.current?.originalVideoClipUrl ?? lastStableSceneRef.current?.videoClipUrl
+    )
+    const newVideoStableId = getVideoStableId(
+      currentScene.originalVideoClipUrl ?? currentScene.videoClipUrl
+    )
+    
+    // Only return new scene if actual data changed (not just presigned URLs)
+    const videoChanged = oldVideoStableId !== newVideoStableId
+    const statusChanged = lastStableSceneRef.current?.status !== currentScene.status
+    const promptChanged = lastStableSceneRef.current?.prompt !== currentScene.prompt
+    const negativePromptChanged = lastStableSceneRef.current?.negativePrompt !== currentScene.negativePrompt
+    const durationChanged = lastStableSceneRef.current?.duration !== currentScene.duration
+    const trimPointsChanged = JSON.stringify(lastStableSceneRef.current?.trimPoints) !== JSON.stringify(currentScene.trimPoints)
+    
+    // If nothing meaningful changed, return the last stable scene to prevent re-render
+    if (lastStableSceneRef.current && !videoChanged && !statusChanged && !promptChanged && !negativePromptChanged && !durationChanged && !trimPointsChanged) {
+      return lastStableSceneRef.current
+    }
+    
+    // Update ref and return new scene only if actual data changed
+    lastStableSceneRef.current = currentScene
+    return currentScene
+  }, [
+    selectedSceneForEdit?.sequence,
+    project.scenes,
+  ])
+  
+  // Reset ref when scene selection changes
+  useEffect(() => {
+    if (!selectedSceneForEdit) {
+      lastStableSceneRef.current = null
+    }
+  }, [selectedSceneForEdit?.sequence])
 
   const handleDeleteClick = (scene: ProjectScene) => {
     setSceneToDelete(scene)
